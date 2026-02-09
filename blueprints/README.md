@@ -12,6 +12,53 @@ Each blueprint includes:
 
 ---
 
+## 🚀 NEW: Intelligent Scaffolding System
+
+A breakthrough system that achieves **LLM-like intelligence without AI** by combining three approaches:
+
+### 1. Constraint Solver (`constraint_solver.py`)
+Logical deduction engine with 15+ architectural rules. Your requirements → derived architecture.
+
+```powershell
+python constraint_solver.py --offline --multi-user --explain
+```
+
+**Example**: "needs offline" + "multi-user" → automatically deduces CRDT sync, conflict resolution, auth backend
+
+### 2. Compositional Blocks (`blocks.py`)
+Code LEGOs that declare what they `require` and `provide`. Blocks auto-assemble based on constraints.
+
+```powershell
+python blocks.py --list              # See all blocks
+python blocks.py --auth --offline    # Assemble matching blocks
+```
+
+**Blocks**: Auth, CRDT Sync, JSON Storage, SQLite Storage, CRUD Routes
+
+### 3. Bidirectional Contracts (`contracts.py`)
+**The life-changing part**: Spec and code are THE SAME THING. Define once, generate:
+- Python dataclasses with validation
+- Flask routes with contract enforcement
+- TypeScript interfaces with schemas
+- Human-readable Markdown specs
+
+```powershell
+python contracts.py --demo      # See all 4 views from one contract
+python contracts.py --generate  # Generate all files
+```
+
+### Unified Pipeline (`intelligent_scaffold.py`)
+
+```powershell
+python intelligent_scaffold.py --demo
+```
+
+Takes natural requirements → constraint solving → block selection → contract generation → working code.
+
+**Demo output**: From 4 requirements ("needs multiple users", "offline", "auth", "sync") → generates 19 files including models, routes, types, and specs.
+
+---
+
 ## Available Blueprints
 
 | Blueprint | Description | Complexity |
@@ -29,12 +76,74 @@ Each blueprint includes:
 
 ## How to Use These Blueprints
 
-### Option A: Scaffold a Project (Fastest Start)
+### Option A: Intelligent Scaffold (Recommended)
 
-Generate a working project skeleton with one command:
+Generate a complete project with logical deduction:
 
 ```powershell
 cd blueprints
+python intelligent_scaffold.py --demo
+```
+
+Or specify your own requirements:
+
+```powershell
+python intelligent_scaffold.py \
+  --requirement "needs offline support" \
+  --requirement "multiple users" \
+  --entity "Task:title,description,priority" \
+  --output my_project
+```
+
+### Option B: Template-Based Generation (No AI Required)
+
+Generate working code from pre-built templates:
+
+```powershell
+python scaffold.py learning-app --name MyBookTracker --stack flask --generate
+```
+
+This creates:
+- ✅ Directory structure from the blueprint
+- ✅ Model files with actual code (not just stubs)
+- ✅ Route handlers with CRUD operations
+- ✅ Frontend components (React)
+- ✅ Package/requirements file
+
+**Available stacks:** flask, fastapi, react, express
+
+### Option C: Blueprint Advisor (Interactive)
+
+Not sure where to start? Use the keyword-based advisor:
+
+```powershell
+python advisor.py
+```
+
+Describe your app idea and get recommendations for:
+- Which blueprint to start from
+- Which features to include
+- Suggested tech stack
+
+### Option D: Menu-Driven Builder
+
+Build a blueprint interactively with pre-curated options:
+
+```powershell
+python builder.py
+```
+
+Choose from:
+- **Feature Library**: 50+ common features organized by category
+- **Model Library**: Pre-built data models (User, Task, Note, etc.)
+- **Screen Library**: Common UI patterns
+- **Flow Library**: User journey templates
+
+### Option E: Scaffold Structure Only
+
+Generate project structure without implementation code:
+
+```powershell
 python scaffold.py learning-app --name MyBookTracker --stack flask
 ```
 
@@ -45,8 +154,6 @@ This creates:
 - ✅ Package/requirements file
 - ✅ README with next steps
 
-**Available stacks:** flask, fastapi, react, express
-
 ```powershell
 # List all blueprints
 python scaffold.py --list
@@ -55,21 +162,7 @@ python scaffold.py --list
 python scaffold.py task-manager --name QuickTodo --dry-run
 ```
 
-### Option B: Socratic Blueprint Advisor
-
-Not sure which blueprint to pick? Let the advisor guide you through dialogue:
-
-```powershell
-cd projects/socratic-learner
-python blueprint_advisor.py
-```
-
-The advisor asks questions to help you discover:
-- Which blueprint fits your actual needs
-- Which features truly matter for your context
-- How to scope your MVP appropriately
-
-### Option C: Choose Manually
+### Option F: Choose Manually
 
 ### Step 1: Pick Your Blueprint
 Choose the one closest to what you want to build.
@@ -143,12 +236,62 @@ Optional starter snippets and patterns to reduce setup time.
 
 ---
 
-## When You Have AI Access Again
+## Architecture
+
+```
+blueprints/
+├── README.md              # This file
+├── *.md                   # Blueprint specifications
+├── templates/             # Code templates for generation
+│   ├── flask/
+│   ├── fastapi/
+│   ├── react/
+│   └── express/
+│
+├── # Core Tools
+├── scaffold.py            # Project scaffolder
+├── template_engine.py     # Template-based code generator
+├── advisor.py             # Keyword-based blueprint advisor
+├── builder.py             # Menu-driven blueprint builder
+│
+├── # Intelligent Scaffolding System
+├── constraint_solver.py   # Logical deduction engine
+├── blocks.py              # Compositional code blocks
+├── contracts.py           # Bidirectional spec/code contracts
+├── intelligent_scaffold.py # Unified pipeline
+├── test_system.py         # Comprehensive test suite (41 tests)
+│
+└── output/                # Demo generated project
+```
+
+---
+
+## How It Works (No AI Required)
+
+The intelligent scaffolding system achieves LLM-like results through:
+
+| Approach | What LLMs Do | What We Do Instead |
+|----------|--------------|-------------------|
+| **Understanding** | Statistical inference | Logical constraint propagation |
+| **Generation** | Token prediction | Compositional block assembly |
+| **Correctness** | Probabilistic | Verified contracts |
+
+### The Three Breakthroughs
+
+1. **Constraint Solving**: Rules like "if offline + multi_user → CRDT sync" let us deduce architecture without guessing
+
+2. **Compositional Blocks**: Code pieces that declare `requires: [storage]` and `provides: [auth]` auto-assemble correctly
+
+3. **Bidirectional Contracts**: Spec and code are projections of the same entity — they literally cannot disagree
+
+---
+
+## When You Have AI Access
 
 Use it to:
 1. Generate new blueprints for app types not listed
 2. Expand existing blueprints with more detail
-3. Create actual code from these specs
-4. Debug issues you hit during implementation
+3. Create custom blocks for domain-specific needs
+4. Debug complex issues
 
-**The goal:** These blueprints let you make real progress without AI. Then use AI time strategically.
+**The goal:** These tools let you make real progress without AI. Then use AI time strategically.
