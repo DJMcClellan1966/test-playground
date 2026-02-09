@@ -680,6 +680,7 @@
                     <button class="sidebar-tab" onclick="showSidebarTab('entities')">Entities</button>
                     <button class="sidebar-tab" onclick="showSidebarTab('files')">Files</button>
                     <button class="sidebar-tab" onclick="showSidebarTab('logic')">Logic</button>
+                    <button class="sidebar-tab" onclick="showSidebarTab('learn')">Learn</button>
                     <button class="sidebar-tab" onclick="showSidebarTab('ai')">AI</button>
                 </div>
                 
@@ -813,6 +814,57 @@
                                 <button class="quick-prompt" onclick="askQuick('What blocks do I need for a blog?')">Blog</button>
                                 <button class="quick-prompt" onclick="askQuick('How do I add authentication?')">Auth</button>
                                 <button class="quick-prompt" onclick="askQuick('How do I add offline support?')">Offline</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="sidebar-content hidden" id="learn-panel">
+                    <div style="display: flex; flex-direction: column; height: 100%; gap: 12px;">
+                        <!-- Level & XP Display -->
+                        <div style="background: linear-gradient(135deg, rgba(0,184,148,0.2) 0%, rgba(0,206,201,0.1) 100%); padding: 15px; border-radius: 10px; border: 1px solid rgba(0,184,148,0.3);">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <span style="font-size: 11px; text-transform: uppercase; color: var(--text-secondary);">Level</span>
+                                    <div id="learn-level" style="font-size: 20px; font-weight: bold; color: var(--accent); text-transform: capitalize;">Beginner</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <span style="font-size: 11px; text-transform: uppercase; color: var(--text-secondary);">XP</span>
+                                    <div style="font-size: 16px; font-weight: bold;"><span id="learn-xp">0</span> / <span id="learn-next-xp">100</span></div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 10px; height: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden;">
+                                <div id="learn-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), #00cec9); transition: width 0.5s;"></div>
+                            </div>
+                            <div style="margin-top: 5px; font-size: 11px; color: var(--text-secondary);">
+                                <span id="learn-projects">0</span> projects completed
+                            </div>
+                        </div>
+                        
+                        <!-- Available Projects -->
+                        <div style="flex: 1; overflow-y: auto;">
+                            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px; display: flex; justify-content: space-between;">
+                                <span>Working Code Projects</span>
+                                <span id="learn-project-count"></span>
+                            </div>
+                            <div id="learn-projects-list" style="display: flex; flex-direction: column; gap: 8px;">
+                                <p style="color: var(--text-secondary); font-size: 12px;">Loading projects...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Level-Gated Blocks Info -->
+                        <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px;">
+                            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px;">Next Unlocks</div>
+                            <div id="learn-next-unlocks" style="font-size: 12px;">
+                                <p style="color: var(--text-secondary);">Loading...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Concepts Learned -->
+                        <div style="border-top: 1px solid var(--border); padding-top: 10px;">
+                            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px;">Concepts Learned</div>
+                            <div id="learn-concepts" style="display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px;">
+                                <span style="color: var(--text-secondary);">None yet - start a project!</span>
                             </div>
                         </div>
                     </div>
@@ -994,6 +1046,7 @@
             setupDragDrop();
             checkServerConnection();
             loadOutputPath();
+            loadLearningStatus();
             setInterval(checkServerConnection, 5000);
         });
 
@@ -1996,6 +2049,8 @@
             originalShowSidebarTab(tabName);
             if (tabName === 'logic') {
                 analyzeLogic();
+            } else if (tabName === 'learn') {
+                loadLearningStatus();
             }
         };
         
@@ -2004,6 +2059,232 @@
             div.textContent = text || '';
             return div.innerHTML;
         }
+        
+        // ========================================================================
+        // LEARNING SYSTEM - Level-gated blocks with XP progression
+        // ========================================================================
+        
+        async function loadLearningStatus() {
+            try {
+                const [statusRes, projectsRes, blocksRes] = await Promise.all([
+                    fetch('/api/learning/status', { method: 'POST', headers: { 'Content-Type': 'application/json' } }),
+                    fetch('/api/learning/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' } }),
+                    fetch('/api/learning/blocks', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                ]);
+                
+                const status = await statusRes.json();
+                const projects = await projectsRes.json();
+                const blocks = await blocksRes.json();
+                
+                if (status.success) {
+                    updateLearningUI(status, projects, blocks);
+                }
+            } catch (e) {
+                console.error('Failed to load learning status:', e);
+                document.getElementById('learn-projects-list').innerHTML = 
+                    '<p style="color: var(--text-secondary); font-size: 12px;">Server not connected</p>';
+            }
+        }
+        
+        function updateLearningUI(status, projects, blocks) {
+            // Update level and XP
+            document.getElementById('learn-level').textContent = status.level || 'beginner';
+            document.getElementById('learn-xp').textContent = status.xp || 0;
+            document.getElementById('learn-next-xp').textContent = status.next_level_at || 100;
+            document.getElementById('learn-projects').textContent = status.projects_completed || 0;
+            
+            // Update progress bar
+            const progress = status.progress_percent || 0;
+            document.getElementById('learn-progress-bar').style.width = progress + '%';
+            
+            // Update available projects
+            const projectsList = document.getElementById('learn-projects-list');
+            if (projects.available && Object.keys(projects.available).length > 0) {
+                projectsList.innerHTML = Object.entries(projects.available).map(([id, proj]) => `
+                    <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s; border-left: 3px solid var(--accent);"
+                         onclick="getProjectCode('${id}')"
+                         onmouseover="this.style.transform='translateX(3px)'"
+                         onmouseout="this.style.transform='none'">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 600; font-size: 13px;">${escapeHtml(proj.name)}</span>
+                            <span style="font-size: 11px; color: var(--accent);">+${proj.xp_reward} XP</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${escapeHtml(proj.description)}</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;">
+                            ${proj.teaches.slice(0, 3).map(t => `<span style="font-size: 10px; background: rgba(0,184,148,0.2); padding: 2px 6px; border-radius: 3px; color: var(--accent);">${t}</span>`).join('')}
+                        </div>
+                    </div>
+                `).join('');
+                document.getElementById('learn-project-count').textContent = Object.keys(projects.available).length + ' available';
+            } else {
+                projectsList.innerHTML = '<p style="color: var(--text-secondary); font-size: 12px;">No projects available at your level yet.</p>';
+            }
+            
+            // Update locked projects (next unlocks)
+            const nextUnlocks = document.getElementById('learn-next-unlocks');
+            if (projects.locked && Object.keys(projects.locked).length > 0) {
+                const locked = Object.entries(projects.locked).slice(0, 2);
+                nextUnlocks.innerHTML = locked.map(([id, proj]) => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; opacity: 0.6;">
+                        <span>🔒 ${escapeHtml(proj.name)}</span>
+                        <span style="font-size: 10px; color: var(--text-secondary);">${proj.requires_level}</span>
+                    </div>
+                `).join('');
+            } else {
+                nextUnlocks.innerHTML = '<span style="color: var(--accent);">All projects unlocked!</span>';
+            }
+            
+            // Update concepts learned
+            const conceptsDiv = document.getElementById('learn-concepts');
+            if (status.concepts_learned && status.concepts_learned.length > 0) {
+                conceptsDiv.innerHTML = status.concepts_learned.map(c => 
+                    `<span style="background: rgba(0,184,148,0.2); color: var(--accent); padding: 2px 6px; border-radius: 3px;">${c}</span>`
+                ).join('');
+            } else {
+                conceptsDiv.innerHTML = '<span style="color: var(--text-secondary);">None yet - start a project!</span>';
+            }
+        }
+        
+        async function getProjectCode(projectId) {
+            try {
+                const response = await fetch('/api/learning/get-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: projectId })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.available) {
+                    // Show the code in the code display area
+                    showProjectCode(data);
+                    
+                    // Check for level up
+                    if (data.leveled_up) {
+                        setTimeout(() => {
+                            notify(`🎉 LEVEL UP! You're now ${data.level}!`, 'success');
+                        }, 500);
+                    }
+                    
+                    // Refresh learning UI
+                    loadLearningStatus();
+                } else if (data.available === false) {
+                    notify(`Project locked - requires ${data.requires_level} level`, 'error');
+                } else {
+                    notify('Failed to get project code', 'error');
+                }
+            } catch (e) {
+                console.error('Failed to get project code:', e);
+                notify('Failed to get project code', 'error');
+            }
+        }
+        
+        function showProjectCode(data) {
+            // Create a modal to show the code
+            const modal = document.createElement('div');
+            modal.id = 'code-modal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.8); display: flex; align-items: center;
+                justify-content: center; z-index: 1000;
+            `;
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                background: var(--bg-secondary); border-radius: 12px;
+                max-width: 800px; width: 90%; max-height: 80vh;
+                display: flex; flex-direction: column; overflow: hidden;
+            `;
+            
+            content.innerHTML = `
+                <div style="padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h3 style="margin: 0; color: var(--text-primary);">${escapeHtml(data.name)}</h3>
+                        <div style="font-size: 12px; color: var(--accent); margin-top: 4px;">
+                            +${data.xp_gained} XP earned • Total: ${data.total_xp} XP
+                        </div>
+                    </div>
+                    <button onclick="this.closest('#code-modal').remove()" style="background: none; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer;">×</button>
+                </div>
+                <div style="padding: 10px 20px; background: rgba(0,184,148,0.1); border-bottom: 1px solid var(--border);">
+                    <span style="font-size: 11px; color: var(--text-secondary);">Concepts learned:</span>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
+                        ${data.teaches.map(t => `<span style="background: rgba(0,184,148,0.2); color: var(--accent); padding: 2px 6px; border-radius: 3px; font-size: 11px;">${t}</span>`).join('')}
+                    </div>
+                </div>
+                <div style="flex: 1; overflow: auto; padding: 0;">
+                    <pre style="margin: 0; padding: 15px; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; line-height: 1.5; background: #1a1a2e; color: #e0e0e0; overflow-x: auto;"><code>${escapeHtml(data.code)}</code></pre>
+                </div>
+                <div style="padding: 15px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="copyCode()" style="flex: 1;">Copy Code</button>
+                    <button class="btn btn-secondary" onclick="saveProjectFile('${escapeHtml(data.name).replace(/[^a-z0-9]/gi, '_').toLowerCase()}.py')" style="flex: 1;">Save to File</button>
+                    <button class="btn btn-secondary" onclick="this.closest('#code-modal').remove()">Close</button>
+                </div>
+            `;
+            
+            // Store code for copy function
+            content.dataset.code = data.code;
+            
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+        }
+        
+        function copyCode() {
+            const modal = document.getElementById('code-modal');
+            if (modal) {
+                const code = modal.querySelector('div').dataset.code;
+                navigator.clipboard.writeText(code).then(() => {
+                    notify('Code copied to clipboard!', 'success');
+                }).catch(() => {
+                    notify('Failed to copy code', 'error');
+                });
+            }
+        }
+        
+        async function saveProjectFile(filename) {
+            const modal = document.getElementById('code-modal');
+            if (modal) {
+                const code = modal.querySelector('div').dataset.code;
+                try {
+                    const response = await fetch('/api/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            path: filename,
+                            content: code
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        notify(`Saved to workspace/${filename}`, 'success');
+                        // Record project completion for XP
+                        await fetch('/api/learning/complete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        loadLearningStatus();
+                    } else {
+                        notify('Failed to save: ' + (data.error || 'unknown'), 'error');
+                    }
+                } catch (e) {
+                    notify('Failed to save file', 'error');
+                }
+            }
+        }
+        
+        // Track block usage for learning XP
+        const originalAddBlock = addBlock;
+        addBlock = function(type, x, y) {
+            originalAddBlock(type, x, y);
+            // Record block use in learning system
+            fetch('/api/learning/use-block', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ block: type })
+            }).catch(() => {}); // Silent fail if server not running
+        };
     </script>
 </body>
 </html>

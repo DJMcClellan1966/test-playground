@@ -36,6 +36,12 @@ from csp_constraint_solver import (
     ArchitectureCSP, validate_block_configuration, 
     suggest_blocks_for_requirements, BLOCK_SPECS
 )
+from learning_integration import (
+    get_learning_status, get_available_blocks as get_learning_blocks,
+    get_available_projects, get_project_code, record_block_use,
+    complete_project as complete_learning_project,
+    get_oracle_advice, get_all_oracle_rules
+)
 
 # Configuration
 PORT = 8088
@@ -143,6 +149,38 @@ class BuilderAPIHandler(SimpleHTTPRequestHandler):
         
         elif parsed.path == '/api/csp/solve':
             result = self.csp_solve(data)
+            self.send_json(result)
+        
+        elif parsed.path == '/api/learning/status':
+            result = self.learning_status()
+            self.send_json(result)
+        
+        elif parsed.path == '/api/learning/blocks':
+            result = self.learning_blocks()
+            self.send_json(result)
+        
+        elif parsed.path == '/api/learning/projects':
+            result = self.learning_projects()
+            self.send_json(result)
+        
+        elif parsed.path == '/api/learning/get-code':
+            result = self.learning_get_code(data)
+            self.send_json(result)
+        
+        elif parsed.path == '/api/learning/use-block':
+            result = self.learning_use_block(data)
+            self.send_json(result)
+        
+        elif parsed.path == '/api/learning/complete':
+            result = self.learning_complete()
+            self.send_json(result)
+        
+        elif parsed.path == '/api/learning/oracle':
+            result = self.learning_oracle(data)
+            self.send_json(result)
+        
+        elif parsed.path == '/api/learning/oracle-rules':
+            result = self.learning_oracle_rules()
             self.send_json(result)
         
         elif parsed.path == '/api/set-output':
@@ -591,6 +629,62 @@ class BuilderAPIHandler(SimpleHTTPRequestHandler):
         }
         
         return mappings.get(block_type)
+    
+    # ========================================================================
+    # LEARNING API METHODS
+    # ========================================================================
+    
+    def learning_status(self):
+        """Get current learning status (level, XP, progress)."""
+        return {'success': True, **get_learning_status()}
+    
+    def learning_blocks(self):
+        """Get blocks available at current skill level."""
+        return {'success': True, **get_learning_blocks()}
+    
+    def learning_projects(self):
+        """Get code projects available at current skill level."""
+        return {'success': True, **get_available_projects()}
+    
+    def learning_get_code(self, data):
+        """Get code for a specific project."""
+        project_id = data.get('project_id', '')
+        if not project_id:
+            return {'success': False, 'error': 'project_id required'}
+        
+        result = get_project_code(project_id)
+        if result is None:
+            return {'success': False, 'error': f'Unknown project: {project_id}'}
+        
+        return {'success': True, **result}
+    
+    def learning_use_block(self, data):
+        """Record that a block was used (grants XP)."""
+        block_name = data.get('block', '')
+        if not block_name:
+            return {'success': False, 'error': 'block name required'}
+        
+        result = record_block_use(block_name)
+        return {'success': True, **result}
+    
+    def learning_complete(self):
+        """Mark a project as completed (grants XP)."""
+        result = complete_learning_project()
+        return {'success': True, **result}
+    
+    def learning_oracle(self, data):
+        """Query the oracle for pattern advice based on problem profile."""
+        profile_tags = data.get('profile', [])
+        if not profile_tags:
+            return {'success': False, 'error': 'No profile tags provided'}
+        
+        result = get_oracle_advice(profile_tags)
+        return {'success': True, **result}
+    
+    def learning_oracle_rules(self):
+        """Get all available oracle rules."""
+        result = get_all_oracle_rules()
+        return {'success': True, **result}
     
     def scaffold_from_blocks(self, data):
         """Generate a full project from block configuration."""

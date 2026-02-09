@@ -99,6 +99,107 @@ Takes natural requirements → constraint solving → block selection → contra
 
 ---
 
+## 📚 Learning System - Beginner-Friendly Progression
+
+A **level-based learning system** (`learning_integration.py`) that helps beginners grow with the platform:
+
+```powershell
+python learning_integration.py  # Run demo
+```
+
+### Why a Learning System?
+
+| Problem | Solution |
+|---------|----------|
+| Beginners overwhelmed by all options | Level-gated blocks - start simple |
+| No clear path forward | XP progression + unlock previews |
+| Generic scaffolding vs learning | Real working code patterns |
+| No reward for progress | XP, level ups, concept tracking |
+
+### Features
+
+1. **Level-Gated Blocks**
+   - **Beginner**: JSON Storage, Basic CRUD, Console UI
+   - **Intermediate**: SQLite, Flask Routes, Auth, HTML UI
+   - **Advanced**: PostgreSQL, OAuth, CRDT Sync, WebSocket
+   - **Expert**: Kubernetes, GraphQL
+
+2. **Working Code Projects** (18 total - not scaffolds, real apps!)
+   
+   **Beginner:**
+   - Guess the Number (+20 XP) - loops, conditionals
+   - Calculator (+15 XP) - functions, operators
+   - Todo List (+30 XP) - classes, persistence
+   - Tic-Tac-Toe (+35 XP) - 2D arrays, game logic
+   - Binary Search (+30 XP) - divide & conquer
+   
+   **Intermediate:**
+   - Flask Todo API (+50 XP) - REST, HTTP
+   - Cross-Validation (+40 XP) - ML evaluation
+   - LCG Random Generator (+40 XP) - number theory
+   - Fisher-Yates Shuffle (+35 XP) - randomization
+   - Kadane's Algorithm (+40 XP) - dynamic programming
+   - Sliding Puzzle Game (+65 XP) - HTML/CSS/JS, game logic
+   - Greedy Algorithms (+35 XP) - optimization patterns
+   
+   **Advanced:**
+   - SQLite CRUD (+45 XP) - SQL, databases
+   - Heapsort (+50 XP) - sorting, data structures
+   - Backtracking Template (+55 XP) - constraint satisfaction
+   - DP Templates (+60 XP) - memoization, tabulation
+   - Information Entropy (+45 XP) - Shannon theory
+   - Bias-Variance Tradeoff (+50 XP) - ML fundamentals
+
+3. **Adaptive Progression**
+   - Track concepts learned
+   - Prerequisites before advanced blocks
+   - XP thresholds: Beginner(0) → Intermediate(100) → Advanced(300) → Expert(600)
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/learning/status` | POST | Get level, XP, concepts learned |
+| `/api/learning/blocks` | POST | Get blocks available at current level |
+| `/api/learning/projects` | POST | Get code projects available |
+| `/api/learning/get-code` | POST | Get working code for a project (+XP) |
+| `/api/learning/use-block` | POST | Record block usage (+XP) |
+| `/api/learning/complete` | POST | Mark project complete (+50 XP) |
+| `/api/learning/oracle` | POST | Query algorithm oracle for pattern advice |
+| `/api/learning/oracle-rules` | POST | Get all available oracle rules |
+
+### Algorithm Oracle (Pattern Advisor)
+
+The learning system includes an **Algorithm Oracle** with 10 rules from classic sources:
+
+| Profile | Pattern | Source |
+|---------|---------|--------|
+| `text + safety_critical` | Rule-Based + Ensemble | Content moderation |
+| `high_dim + few_samples` | Regularized Linear + PCA | Curse of dimensionality |
+| `imbalanced` | SMOTE + Class Weights | Classification |
+| `streaming` | Online Learning + Sliding Window | Real-time data |
+| `nonlinear` | Gradient Boosting → Neural Net | Complex patterns |
+| `need_interpretability` | Decision Tree → SHAP | Explainable AI |
+
+```python
+# Query the oracle
+from learning_integration import get_oracle_advice
+advice = get_oracle_advice(['imbalanced', 'binary_classification'])
+print(advice['top_recommendation']['pattern'])  # "SMOTE + Class Weights + Threshold Tuning"
+```
+
+### Usage in Builder
+
+Open the **Learn** tab in the builder sidebar:
+- See your current level and XP progress
+- Browse available working code projects (18 total)
+- Click a project to view full, runnable code
+- Copy or save code to workspace
+- Watch concepts unlock and level up!
+- Query the Algorithm Oracle for ML/algorithm pattern guidance
+
+---
+
 ## 🧠 Logic Advisor - Deterministic Guidance
 
 A **rule-based advisor** that provides instant, explainable recommendations without AI (`logic_advisor.py`):
@@ -464,6 +565,7 @@ blueprints/
 ├── intelligent_scaffold.py # Unified pipeline
 ├── beyond_belief.py       # Advanced features (cross-lang, synthesis)
 ├── logic_advisor.py       # Deterministic advisor (no AI, instant)
+├── learning_integration.py # Level-gated learning system
 ├── test_system.py         # Comprehensive test suite (41 tests)
 │
 ├── # Builder Dev Server
