@@ -1,0 +1,344 @@
+"""
+{{PROJECT_NAME}} - FastAPI Application
+
+Auto-generated from {{BLUEPRINT_NAME}} blueprint.
+Template-based generation - no LLM required.
+"""
+
+from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+import json
+import os
+
+# ==============================================================================
+# App Configuration
+# ==============================================================================
+
+app = FastAPI(
+    title="{{PROJECT_NAME}}",
+    description="Generated from {{BLUEPRINT_NAME}} blueprint",
+    version="0.1.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ==============================================================================
+# Data Storage (Simple JSON file database)
+# ==============================================================================
+
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+
+def get_db_path(entity: str) -> str:
+    """Get path to entity's JSON file."""
+    return os.path.join(DATA_DIR, f"{entity}.json")
+
+
+def load_data(entity: str) -> List[Dict]:
+    """Load all items for an entity."""
+    path = get_db_path(entity)
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            return json.load(f)
+    return []
+
+
+def save_data(entity: str, items: List[Dict]):
+    """Save all items for an entity."""
+    with open(get_db_path(entity), "w") as f:
+        json.dump(items, f, indent=2, default=str)
+
+
+def find_item(items: List[Dict], item_id: str) -> Optional[Dict]:
+    """Find an item by ID."""
+    for item in items:
+        if item.get("id") == item_id:
+            return item
+    return None
+
+
+def generate_id(items: List[Dict]) -> str:
+    """Generate next ID."""
+    return str(len(items) + 1).zfill(4)
+
+
+# ==============================================================================
+# Pydantic Schemas
+# ==============================================================================
+
+class ItemBase(BaseModel):
+    """Base schema for items."""
+    pass
+
+
+class ItemCreate(ItemBase):
+    """Schema for creating items."""
+    class Config:
+        extra = "allow"
+
+
+class ItemUpdate(ItemBase):
+    """Schema for updating items."""
+    class Config:
+        extra = "allow"
+
+
+class Item(ItemBase):
+    """Full item schema with metadata."""
+    id: str
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        extra = "allow"
+
+
+class PaginatedResponse(BaseModel):
+    """Paginated response wrapper."""
+    items: List[Dict[str, Any]]
+    total: int
+    page: int
+    per_page: int
+    pages: int
+
+
+class BulkCreateRequest(BaseModel):
+    """Request for bulk creation."""
+    items: List[Dict[str, Any]]
+
+
+class BulkDeleteRequest(BaseModel):
+    """Request for bulk deletion."""
+    ids: List[str]
+
+
+class BulkResponse(BaseModel):
+    """Response for bulk operations."""
+    count: int
+    items: Optional[List[Dict[str, Any]]] = None
+
+
+# ==============================================================================
+# Health & Root Endpoints
+# ==============================================================================
+
+@app.get("/")
+async def root():
+    """Root endpoint with app info."""
+    return {
+        "app": "{{PROJECT_NAME}}",
+        "version": "0.1.0",
+        "status": "running",
+        "blueprint": "{{BLUEPRINT_NAME}}",
+        "docs": "/docs"
+    }
+
+
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    return {
+        "status": "ok",
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+# ==============================================================================
+# Generic CRUD for {{ENTITY_UPPER}}
+# ==============================================================================
+
+ENTITY = "{{ENTITY_LOWER}}"
+
+
+@app.get(f"/api/{ENTITY}", response_model=PaginatedResponse)
+async def list_items(
+    search: Optional[str] = Query(None, description="Search text"),
+    sort: Optional[str] = Query("created_at", description="Sort field (- prefix for desc)"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(20, ge=1, le=100, description="Items per page")
+):
+    """List all {{ENTITY_LOWER}} items with search, sort, and pagination."""
+    items = load_data(ENTITY)
+    
+    # Text search
+    if search:
+        search_lower = search.lower()
+        items = [
+            item for item in items
+            if search_lower in json.dumps(item).lower()
+        ]
+    
+    # Sorting
+    reverse = sort.startswith("-")
+    sort_field = sort[1:] if reverse else sort
+    
+    try:
+        items.sort(key=lambda x: x.get(sort_field, ""), reverse=reverse)
+    except TypeError:
+        pass
+    
+    # Pagination
+    total = len(items)
+    start = (page - 1) * per_page
+    items = items[start:start + per_page]
+    
+    return PaginatedResponse(
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+        pages=(total + per_page - 1) // per_page
+    )
+
+
+@app.post(f"/api/{ENTITY}", status_code=201)
+async def create_item(data: ItemCreate):
+    """Create a new {{ENTITY_LOWER}}."""
+    items = load_data(ENTITY)
+    
+    now = datetime.now().isoformat()
+    new_item = {
+        "id": generate_id(items),
+        "created_at": now,
+        "updated_at": now,
+        **data.model_dump()
+    }
+    
+    items.append(new_item)
+    save_data(ENTITY, items)
+    
+    return new_item
+
+
+@app.get(f"/api/{ENTITY}/{{item_id}}")
+async def get_item(item_id: str):
+    """Get a single {{ENTITY_LOWER}} by ID."""
+    items = load_data(ENTITY)
+    item = find_item(items, item_id)
+    
+    if not item:
+        raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
+    
+    return item
+
+
+@app.put(f"/api/{ENTITY}/{{item_id}}")
+async def update_item(item_id: str, data: ItemUpdate):
+    """Update a {{ENTITY_LOWER}} (full replacement)."""
+    items = load_data(ENTITY)
+    item = find_item(items, item_id)
+    
+    if not item:
+        raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
+    
+    # Update with new data, preserve id and created_at
+    updated = {
+        "id": item_id,
+        "created_at": item["created_at"],
+        "updated_at": datetime.now().isoformat(),
+        **data.model_dump()
+    }
+    
+    # Replace in list
+    items = [updated if i.get("id") == item_id else i for i in items]
+    save_data(ENTITY, items)
+    
+    return updated
+
+
+@app.patch(f"/api/{ENTITY}/{{item_id}}")
+async def patch_item(item_id: str, data: ItemUpdate):
+    """Partially update a {{ENTITY_LOWER}}."""
+    items = load_data(ENTITY)
+    item = find_item(items, item_id)
+    
+    if not item:
+        raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
+    
+    # Merge with existing
+    item.update(data.model_dump(exclude_unset=True))
+    item["updated_at"] = datetime.now().isoformat()
+    
+    save_data(ENTITY, items)
+    
+    return item
+
+
+@app.delete(f"/api/{ENTITY}/{{item_id}}", status_code=204)
+async def delete_item(item_id: str):
+    """Delete a {{ENTITY_LOWER}}."""
+    items = load_data(ENTITY)
+    original_len = len(items)
+    
+    items = [i for i in items if i.get("id") != item_id]
+    
+    if len(items) == original_len:
+        raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
+    
+    save_data(ENTITY, items)
+    return None
+
+
+# ==============================================================================
+# Bulk Operations
+# ==============================================================================
+
+@app.post(f"/api/{ENTITY}/bulk", status_code=201, response_model=BulkResponse)
+async def bulk_create(request: BulkCreateRequest):
+    """Create multiple items at once."""
+    items = load_data(ENTITY)
+    created = []
+    now = datetime.now().isoformat()
+    
+    for item_data in request.items:
+        new_item = {
+            "id": generate_id(items + created),
+            "created_at": now,
+            "updated_at": now,
+            **item_data
+        }
+        created.append(new_item)
+    
+    items.extend(created)
+    save_data(ENTITY, items)
+    
+    return BulkResponse(count=len(created), items=created)
+
+
+@app.delete(f"/api/{ENTITY}/bulk", response_model=BulkResponse)
+async def bulk_delete(request: BulkDeleteRequest):
+    """Delete multiple items at once."""
+    items = load_data(ENTITY)
+    original_len = len(items)
+    
+    items = [i for i in items if i.get("id") not in request.ids]
+    
+    deleted = original_len - len(items)
+    save_data(ENTITY, items)
+    
+    return BulkResponse(count=deleted)
+
+
+# ==============================================================================
+# Run Application
+# ==============================================================================
+
+if __name__ == "__main__":
+    import uvicorn
+    print(f"🚀 Starting {{PROJECT_NAME}}...")
+    print(f"📋 Blueprint: {{BLUEPRINT_NAME}}")
+    print(f"📚 Docs: http://localhost:8000/docs")
+    uvicorn.run(app, host="0.0.0.0", port=8000)

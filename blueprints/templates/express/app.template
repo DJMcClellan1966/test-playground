@@ -1,0 +1,309 @@
+/**
+ * {{PROJECT_NAME}} - Express Application
+ * 
+ * Auto-generated from {{BLUEPRINT_NAME}} blueprint.
+ * Template-based generation - no LLM required.
+ */
+
+const express = require('express');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Request logging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
+  next();
+});
+
+// ==============================================================================
+// Data Storage (Simple JSON file database)
+// ==============================================================================
+
+const DATA_DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+function getDbPath(entity) {
+  return path.join(DATA_DIR, `${entity}.json`);
+}
+
+function loadData(entity) {
+  const dbPath = getDbPath(entity);
+  if (fs.existsSync(dbPath)) {
+    return JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
+  }
+  return [];
+}
+
+function saveData(entity, items) {
+  fs.writeFileSync(getDbPath(entity), JSON.stringify(items, null, 2));
+}
+
+function findItem(items, id) {
+  return items.find(item => item.id === id);
+}
+
+function generateId(items) {
+  return String(items.length + 1).padStart(4, '0');
+}
+
+// ==============================================================================
+// Health & Root Endpoints
+// ==============================================================================
+
+app.get('/', (req, res) => {
+  res.json({
+    app: '{{PROJECT_NAME}}',
+    version: '0.1.0',
+    status: 'running',
+    blueprint: '{{BLUEPRINT_NAME}}',
+    endpoints: {
+      health: '/health',
+      api: '/api/{{ENTITY_LOWER}}'
+    }
+  });
+});
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ==============================================================================
+// Generic CRUD for {{ENTITY_UPPER}}
+// ==============================================================================
+
+const ENTITY = '{{ENTITY_LOWER}}';
+
+// List all with search, sort, pagination
+app.get(`/api/${ENTITY}`, (req, res) => {
+  let items = loadData(ENTITY);
+  
+  // Search
+  const search = (req.query.search || '').toLowerCase();
+  if (search) {
+    items = items.filter(item => 
+      JSON.stringify(item).toLowerCase().includes(search)
+    );
+  }
+  
+  // Sort
+  const sort = req.query.sort || 'created_at';
+  const reverse = sort.startsWith('-');
+  const sortField = reverse ? sort.slice(1) : sort;
+  
+  items.sort((a, b) => {
+    const aVal = a[sortField] || '';
+    const bVal = b[sortField] || '';
+    const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+    return reverse ? -cmp : cmp;
+  });
+  
+  // Pagination
+  const total = items.length;
+  const page = parseInt(req.query.page) || 1;
+  const perPage = Math.min(parseInt(req.query.per_page) || 20, 100);
+  const start = (page - 1) * perPage;
+  
+  items = items.slice(start, start + perPage);
+  
+  res.json({
+    items,
+    total,
+    page,
+    per_page: perPage,
+    pages: Math.ceil(total / perPage)
+  });
+});
+
+// Create
+app.post(`/api/${ENTITY}`, (req, res) => {
+  const items = loadData(ENTITY);
+  const now = new Date().toISOString();
+  
+  const newItem = {
+    id: generateId(items),
+    created_at: now,
+    updated_at: now,
+    ...req.body
+  };
+  
+  items.push(newItem);
+  saveData(ENTITY, items);
+  
+  res.status(201).json(newItem);
+});
+
+// Get one
+app.get(`/api/${ENTITY}/:id`, (req, res) => {
+  const items = loadData(ENTITY);
+  const item = findItem(items, req.params.id);
+  
+  if (!item) {
+    return res.status(404).json({ 
+      error: 'Not Found',
+      message: `Item ${req.params.id} not found`
+    });
+  }
+  
+  res.json(item);
+});
+
+// Update (full)
+app.put(`/api/${ENTITY}/:id`, (req, res) => {
+  let items = loadData(ENTITY);
+  const item = findItem(items, req.params.id);
+  
+  if (!item) {
+    return res.status(404).json({
+      error: 'Not Found',
+      message: `Item ${req.params.id} not found`
+    });
+  }
+  
+  const updated = {
+    id: req.params.id,
+    created_at: item.created_at,
+    updated_at: new Date().toISOString(),
+    ...req.body
+  };
+  
+  items = items.map(i => i.id === req.params.id ? updated : i);
+  saveData(ENTITY, items);
+  
+  res.json(updated);
+});
+
+// Update (partial)
+app.patch(`/api/${ENTITY}/:id`, (req, res) => {
+  const items = loadData(ENTITY);
+  const item = findItem(items, req.params.id);
+  
+  if (!item) {
+    return res.status(404).json({
+      error: 'Not Found',
+      message: `Item ${req.params.id} not found`
+    });
+  }
+  
+  Object.assign(item, req.body, { updated_at: new Date().toISOString() });
+  saveData(ENTITY, items);
+  
+  res.json(item);
+});
+
+// Delete
+app.delete(`/api/${ENTITY}/:id`, (req, res) => {
+  let items = loadData(ENTITY);
+  const originalLen = items.length;
+  
+  items = items.filter(i => i.id !== req.params.id);
+  
+  if (items.length === originalLen) {
+    return res.status(404).json({
+      error: 'Not Found',
+      message: `Item ${req.params.id} not found`
+    });
+  }
+  
+  saveData(ENTITY, items);
+  res.status(204).send();
+});
+
+// ==============================================================================
+// Bulk Operations
+// ==============================================================================
+
+app.post(`/api/${ENTITY}/bulk`, (req, res) => {
+  if (!req.body.items || !Array.isArray(req.body.items)) {
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'Request body must have "items" array'
+    });
+  }
+  
+  const items = loadData(ENTITY);
+  const now = new Date().toISOString();
+  const created = [];
+  
+  for (const itemData of req.body.items) {
+    const newItem = {
+      id: generateId([...items, ...created]),
+      created_at: now,
+      updated_at: now,
+      ...itemData
+    };
+    created.push(newItem);
+  }
+  
+  items.push(...created);
+  saveData(ENTITY, items);
+  
+  res.status(201).json({
+    count: created.length,
+    items: created
+  });
+});
+
+app.delete(`/api/${ENTITY}/bulk`, (req, res) => {
+  if (!req.body.ids || !Array.isArray(req.body.ids)) {
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'Request body must have "ids" array'
+    });
+  }
+  
+  let items = loadData(ENTITY);
+  const originalLen = items.length;
+  
+  items = items.filter(i => !req.body.ids.includes(i.id));
+  saveData(ENTITY, items);
+  
+  res.json({
+    count: originalLen - items.length
+  });
+});
+
+// ==============================================================================
+// Error Handling
+// ==============================================================================
+
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: err.message
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: `Route ${req.method} ${req.url} not found`
+  });
+});
+
+// ==============================================================================
+// Start Server
+// ==============================================================================
+
+app.listen(PORT, () => {
+  console.log(`🚀 {{PROJECT_NAME}} started`);
+  console.log(`📋 Blueprint: {{BLUEPRINT_NAME}}`);
+  console.log(`🌐 http://localhost:${PORT}`);
+});
+
+module.exports = app;

@@ -1,0 +1,115 @@
+/**
+ * API Service
+ * 
+ * Centralized API client for {{PROJECT_NAME}}.
+ * Auto-generated from {{BLUEPRINT_NAME}} blueprint.
+ */
+
+// Configuration
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
+/**
+ * Simple fetch wrapper with error handling.
+ */
+class ApiClient {
+  constructor(baseUrl = API_BASE_URL) {
+    this.baseUrl = baseUrl;
+  }
+
+  async request(method, path, data = null, options = {}) {
+    const url = `${this.baseUrl}${path}`;
+    
+    const config = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    if (data && method !== 'GET') {
+      config.body = JSON.stringify(data);
+    }
+
+    try {
+      const response = await fetch(url, config);
+      
+      // Handle no-content responses
+      if (response.status === 204) {
+        return { data: null, status: 204 };
+      }
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        const error = new Error(responseData.message || responseData.error || 'Request failed');
+        error.response = { status: response.status, data: responseData };
+        throw error;
+      }
+
+      return { data: responseData, status: response.status };
+    } catch (error) {
+      if (error.response) {
+        throw error; // Re-throw API errors
+      }
+      // Network or parsing error
+      throw new Error(`Network error: ${error.message}`);
+    }
+  }
+
+  get(path, options = {}) {
+    return this.request('GET', path, null, options);
+  }
+
+  post(path, data, options = {}) {
+    return this.request('POST', path, data, options);
+  }
+
+  put(path, data, options = {}) {
+    return this.request('PUT', path, data, options);
+  }
+
+  patch(path, data, options = {}) {
+    return this.request('PATCH', path, data, options);
+  }
+
+  delete(path, options = {}) {
+    return this.request('DELETE', path, null, options);
+  }
+}
+
+// Export singleton instance
+export const api = new ApiClient();
+
+// Export for custom instances
+export { ApiClient };
+
+
+// ==============================================================================
+// Entity-specific helpers
+// ==============================================================================
+
+export const {{ENTITY_LOWER}}Api = {
+  list: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return api.get(`/api/{{ENTITY_LOWER}}${query ? '?' + query : ''}`);
+  },
+
+  get: (id) => api.get(`/api/{{ENTITY_LOWER}}/${id}`),
+  
+  create: (data) => api.post('/api/{{ENTITY_LOWER}}', data),
+  
+  update: (id, data) => api.put(`/api/{{ENTITY_LOWER}}/${id}`, data),
+  
+  patch: (id, data) => api.patch(`/api/{{ENTITY_LOWER}}/${id}`, data),
+  
+  delete: (id) => api.delete(`/api/{{ENTITY_LOWER}}/${id}`),
+  
+  bulkCreate: (items) => api.post('/api/{{ENTITY_LOWER}}/bulk', { items }),
+  
+  bulkDelete: (ids) => api.delete('/api/{{ENTITY_LOWER}}/bulk', { 
+    headers: {},
+    body: JSON.stringify({ ids }) 
+  }),
+};

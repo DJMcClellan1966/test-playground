@@ -1,0 +1,142 @@
+/**
+ * {{ENTITY_NAME}} Detail Page
+ * 
+ * Displays a single {{ENTITY_LOWER}} item.
+ * Auto-generated from {{BLUEPRINT_NAME}} blueprint.
+ */
+
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { api } from '../services/api';
+
+function {{ENTITY_NAME}}Detail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  
+  const [item, setItem] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchItem();
+  }, [id]);
+
+  const fetchItem = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get(`/api/{{ENTITY_LOWER}}/${id}`);
+      setItem(response.data);
+    } catch (err) {
+      if (err.response?.status === 404) {
+        setError('Item not found');
+      } else {
+        setError(err.message || 'Failed to load item');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this item?')) {
+      return;
+    }
+    
+    try {
+      await api.delete(`/api/{{ENTITY_LOWER}}/${id}`);
+      navigate('/{{ENTITY_LOWER}}');
+    } catch (err) {
+      setError(err.message || 'Failed to delete item');
+    }
+  };
+
+  if (loading) {
+    return <div className="loading">Loading...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="error-page">
+        <h2>Error</h2>
+        <p>{error}</p>
+        <Link to="/{{ENTITY_LOWER}}" className="btn">Back to List</Link>
+      </div>
+    );
+  }
+
+  if (!item) {
+    return (
+      <div className="not-found">
+        <h2>Item Not Found</h2>
+        <Link to="/{{ENTITY_LOWER}}" className="btn">Back to List</Link>
+      </div>
+    );
+  }
+
+  // Get all fields except metadata
+  const dataFields = Object.entries(item).filter(
+    ([key]) => !['id', 'created_at', 'updated_at'].includes(key)
+  );
+
+  return (
+    <div className="{{ENTITY_LOWER}}-detail">
+      <div className="page-header">
+        <div className="header-left">
+          <Link to="/{{ENTITY_LOWER}}" className="back-link">
+            ← Back to List
+          </Link>
+          <h1>{{ENTITY_NAME}} #{item.id}</h1>
+        </div>
+        <div className="header-actions">
+          <Link to={`/{{ENTITY_LOWER}}/${id}/edit`} className="btn btn-primary">
+            Edit
+          </Link>
+          <button onClick={handleDelete} className="btn btn-danger">
+            Delete
+          </button>
+        </div>
+      </div>
+
+      <div className="detail-card">
+        {/* Metadata */}
+        <div className="metadata">
+          <div className="meta-item">
+            <label>Created</label>
+            <span>{new Date(item.created_at).toLocaleString()}</span>
+          </div>
+          <div className="meta-item">
+            <label>Updated</label>
+            <span>{new Date(item.updated_at).toLocaleString()}</span>
+          </div>
+        </div>
+
+        {/* Data Fields */}
+        <div className="data-fields">
+          {dataFields.length === 0 ? (
+            <p className="no-data">No additional data</p>
+          ) : (
+            dataFields.map(([key, value]) => (
+              <div key={key} className="field">
+                <label>{key.replace(/_/g, ' ')}</label>
+                <div className="value">
+                  {typeof value === 'object' 
+                    ? JSON.stringify(value, null, 2)
+                    : String(value)
+                  }
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Raw JSON */}
+        <details className="raw-json">
+          <summary>Raw JSON</summary>
+          <pre>{JSON.stringify(item, null, 2)}</pre>
+        </details>
+      </div>
+    </div>
+  );
+}
+
+export default {{ENTITY_NAME}}Detail;

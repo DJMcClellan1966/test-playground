@@ -1,0 +1,57 @@
+/**
+ * {{PROJECT_NAME}} - React Application
+ * 
+ * Auto-generated from {{BLUEPRINT_NAME}} blueprint.
+ * Template-based generation - no LLM required.
+ */
+
+import React from 'react';
+import { BrowserRouter, Routes, Route, Link, NavLink } from 'react-router-dom';
+import './styles.css';
+
+// Import pages
+import HomePage from './pages/HomePage';
+import {{ENTITY_NAME}}List from './pages/{{ENTITY_NAME}}List';
+import {{ENTITY_NAME}}Detail from './pages/{{ENTITY_NAME}}Detail';
+import {{ENTITY_NAME}}Form from './pages/{{ENTITY_NAME}}Form';
+
+function App() {
+  return (
+    <BrowserRouter>
+      <div className="app">
+        {/* Navigation */}
+        <nav className="navbar">
+          <div className="nav-brand">
+            <Link to="/">{{PROJECT_NAME}}</Link>
+          </div>
+          <ul className="nav-links">
+            <li>
+              <NavLink to="/" end>Home</NavLink>
+            </li>
+            <li>
+              <NavLink to="/{{ENTITY_LOWER}}">{{ENTITY_NAME}}</NavLink>
+            </li>
+          </ul>
+        </nav>
+
+        {/* Main Content */}
+        <main className="main-content">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/{{ENTITY_LOWER}}" element={<{{ENTITY_NAME}}List />} />
+            <Route path="/{{ENTITY_LOWER}}/new" element={<{{ENTITY_NAME}}Form />} />
+            <Route path="/{{ENTITY_LOWER}}/:id" element={<{{ENTITY_NAME}}Detail />} />
+            <Route path="/{{ENTITY_LOWER}}/:id/edit" element={<{{ENTITY_NAME}}Form />} />
+          </Routes>
+        </main>
+
+        {/* Footer */}
+        <footer className="footer">
+          <p>Generated from {{BLUEPRINT_NAME}} blueprint</p>
+        </footer>
+      </div>
+    </BrowserRouter>
+  );
+}
+
+export default App;

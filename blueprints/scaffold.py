@@ -8,14 +8,18 @@ Reads a blueprint file and generates a complete project skeleton with:
 - README customized for the project
 
 With --generate flag:
-- Uses Ollama to generate ACTUAL working code
-- Implements models, routes, and components based on blueprint spec
+- Uses templates for ACTUAL working code (no LLM required!)
+- Falls back to Ollama LLM if templates don't cover the use case
 - Creates a runnable application, not just stubs
+
+With --llm flag:
+- Forces LLM-powered generation using Ollama
 
 Usage:
     python scaffold.py learning-app --name MyBookTracker
     python scaffold.py task-manager --name TodoMaster --stack flask
-    python scaffold.py learning-app --name MyApp --generate  # LLM-powered!
+    python scaffold.py learning-app --name MyApp --generate         # Template-based!
+    python scaffold.py learning-app --name MyApp --generate --llm   # Force LLM
 """
 
 import argparse
@@ -28,6 +32,14 @@ from typing import Dict, List, Optional, Tuple
 # Add socratic-learner to path for llm_client
 SOCRATIC_PATH = Path(__file__).parent.parent / "projects" / "socratic-learner"
 sys.path.insert(0, str(SOCRATIC_PATH))
+
+# Import template engine for LLM-free generation
+try:
+    from template_engine import TemplateCodeGenerator, list_available_templates
+    TEMPLATES_AVAILABLE = True
+except ImportError:
+    TEMPLATES_AVAILABLE = False
+    TemplateCodeGenerator = None
 
 
 # Path to blueprints directory
@@ -888,39 +900,65 @@ class Scaffolder:
         
         self.templates = STACK_TEMPLATES[stack]
         self.llm_generator = None  # Lazy-load when needed
+        self.template_generator = None  # Template-based generator
     
-    def scaffold(self, dry_run: bool = False, generate: bool = False) -> List[str]:
+    def scaffold(self, dry_run: bool = False, generate: bool = False, use_llm: bool = False) -> List[str]:
         """
         Generate the project structure.
         
         Args:
             dry_run: If True, just print what would be created
-            generate: If True, use LLM to generate actual implementations
+            generate: If True, generate actual implementations (templates or LLM)
+            use_llm: If True (with generate), use LLM instead of templates
             
         Returns:
             List of created file paths
         """
         created = []
         
-        mode = "🤖 LLM-Generated" if generate else "📝 Scaffolded"
+        # Determine generation mode
+        if generate:
+            if use_llm:
+                mode = "🤖 LLM-Generated"
+            else:
+                mode = "📦 Template-Generated"
+        else:
+            mode = "📝 Scaffolded"
+            
         print(f"\n🏗️  {mode}: {self.project_name}")
         print(f"   Blueprint: {self.blueprint['title']}")
         print(f"   Stack: {self.stack}")
         print(f"   Output: {self.output_path}")
         if generate:
-            print(f"   ⚡ Using Ollama for code generation")
+            if use_llm:
+                print(f"   ⚡ Using Ollama for code generation")
+            else:
+                print(f"   ⚡ Using templates (no LLM required)")
         print()
         
-        # Initialize LLM generator if needed
+        # Initialize generator if needed
         if generate and not dry_run:
-            try:
-                self.llm_generator = LLMCodeGenerator(
-                    self.blueprint, self.stack, self.project_name
-                )
-            except RuntimeError as e:
-                print(f"⚠️  {e}")
-                print("   Falling back to stub generation")
-                generate = False
+            if use_llm:
+                # Try LLM first
+                try:
+                    self.llm_generator = LLMCodeGenerator(
+                        self.blueprint, self.stack, self.project_name
+                    )
+                except RuntimeError as e:
+                    print(f"⚠️  {e}")
+                    print("   Falling back to template generation")
+                    use_llm = False
+            
+            # Use templates (either as primary or as fallback)
+            if not use_llm and TEMPLATES_AVAILABLE:
+                try:
+                    self.template_generator = TemplateCodeGenerator(
+                        self.blueprint, self.stack, self.project_name
+                    )
+                except Exception as e:
+                    print(f"⚠️  Template error: {e}")
+                    print("   Falling back to stub generation")
+                    generate = False
         
         # Create output directory
         if not dry_run:
@@ -1077,15 +1115,20 @@ See File Structure section in the blueprint for the complete layout.
         
         path = self.output_path / subdir / filename
         
-        # Use LLM generation if enabled
+        # Priority: LLM > Templates > Stub
         if generate and self.llm_generator:
+            # LLM generation
             model_section = self._find_section("Data Model")
             entities = []
             if model_section:
                 models = parse_data_models(model_section)
                 entities = [m["name"] for m in models]
             content = self.llm_generator.generate_app_entry(entities)
+        elif generate and self.template_generator:
+            # Template generation
+            content = self.template_generator.generate_app()
         else:
+            # Stub generation
             content = template.format(
                 project_name=self.project_name,
                 blueprint_name=self.blueprint["title"],
@@ -1111,9 +1154,11 @@ See File Structure section in the blueprint for the complete layout.
         model_name = model["name"]
         name_lower = model_name.lower()
         
-        # Use LLM generation if enabled
+        # Priority: LLM > Templates > Stub
         if generate and self.llm_generator:
             content = self.llm_generator.generate_model(model)
+        elif generate and self.template_generator:
+            content = self.template_generator.generate_model(model)
         else:
             # Format fields as comments
             fields_lines = []
@@ -1151,20 +1196,23 @@ See File Structure section in the blueprint for the complete layout.
     
     def _create_route(self, model: Dict, dry_run: bool) -> Optional[str]:
         """Create a route file for a model (only used in generate mode)."""
-        if not self.llm_generator:
+        if not self.llm_generator and not self.template_generator:
             return None
         
         ext = self.templates.get("extension", ".py")
         model_name = model["name"]
         name_lower = model_name.lower()
         
-        # Build model spec for the prompt
-        fields_text = "\n".join(
-            f"  {f['name']}: {f['type']}" for f in model.get("fields", [])
-        )
-        model_spec = f"{model_name}:\n{fields_text}"
-        
-        content = self.llm_generator.generate_routes(model_name, model_spec)
+        # Priority: LLM > Templates
+        if self.llm_generator:
+            # Build model spec for the prompt
+            fields_text = "\n".join(
+                f"  {f['name']}: {f['type']}" for f in model.get("fields", [])
+            )
+            model_spec = f"{model_name}:\n{fields_text}"
+            content = self.llm_generator.generate_routes(model_name, model_spec)
+        elif self.template_generator:
+            content = self.template_generator.generate_routes(model_name)
         
         if self.stack in ("flask", "fastapi"):
             subdir = "src/routes"
@@ -1297,7 +1345,13 @@ def main():
     parser.add_argument(
         "--generate", "-g",
         action="store_true",
-        help="Use Ollama LLM to generate actual working code (not just stubs)"
+        help="Generate actual working code using templates (no LLM required)"
+    )
+    
+    parser.add_argument(
+        "--llm",
+        action="store_true",
+        help="Use Ollama LLM instead of templates for code generation (requires --generate)"
     )
     
     args = parser.parse_args()
@@ -1305,7 +1359,11 @@ def main():
     if args.list or not args.blueprint:
         list_blueprints()
         print("Available stacks:", ", ".join(STACK_TEMPLATES.keys()))
-        print("\n💡 Add --generate to use LLM for actual code generation")
+        if TEMPLATES_AVAILABLE:
+            print("\n💡 Add --generate for working code from templates (no LLM needed)")
+            print("   Add --generate --llm to use Ollama LLM instead")
+        else:
+            print("\n💡 Add --generate --llm to use Ollama for code generation")
         print()
         return
     
@@ -1318,7 +1376,11 @@ def main():
             project_name=project_name,
             stack=args.stack
         )
-        scaffolder.scaffold(dry_run=args.dry_run, generate=args.generate)
+        scaffolder.scaffold(
+            dry_run=args.dry_run, 
+            generate=args.generate,
+            use_llm=args.llm
+        )
         
         if not args.dry_run:
             print(f"\n🚀 Next steps:")

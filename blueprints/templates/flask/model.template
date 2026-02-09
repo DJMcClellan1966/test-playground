@@ -1,0 +1,106 @@
+"""
+{{MODEL_NAME}} Model
+
+Auto-generated from {{BLUEPRINT_NAME}} blueprint.
+"""
+
+from dataclasses import dataclass, field, asdict
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+from uuid import uuid4
+
+
+@dataclass
+class {{MODEL_NAME}}:
+    """
+    {{MODEL_NAME}} entity.
+    
+    Generated from blueprint data model.
+{{FIELDS_DOC}}
+    """
+    
+    # Core fields
+    id: str = field(default_factory=lambda: str(uuid4()))
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
+    
+    # Entity-specific fields
+{{FIELDS_DEFINITION}}
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        data = asdict(self)
+        data["created_at"] = self.created_at.isoformat()
+        data["updated_at"] = self.updated_at.isoformat()
+        return data
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "{{MODEL_NAME}}":
+        """Create instance from dictionary."""
+        if "created_at" in data and isinstance(data["created_at"], str):
+            data["created_at"] = datetime.fromisoformat(data["created_at"])
+        if "updated_at" in data and isinstance(data["updated_at"], str):
+            data["updated_at"] = datetime.fromisoformat(data["updated_at"])
+        return cls(**data)
+    
+    def update(self, **kwargs):
+        """Update fields and set updated_at timestamp."""
+        for key, value in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+        self.updated_at = datetime.now()
+
+
+class {{MODEL_NAME}}Repository:
+    """
+    Simple in-memory repository for {{MODEL_NAME}}.
+    
+    Replace with database implementation for production.
+    """
+    
+    def __init__(self):
+        self._items: Dict[str, {{MODEL_NAME}}] = {}
+    
+    def create(self, item: {{MODEL_NAME}}) -> {{MODEL_NAME}}:
+        """Add a new item to the repository."""
+        self._items[item.id] = item
+        return item
+    
+    def get(self, item_id: str) -> Optional[{{MODEL_NAME}}]:
+        """Get an item by ID."""
+        return self._items.get(item_id)
+    
+    def get_all(self) -> List[{{MODEL_NAME}}]:
+        """Get all items."""
+        return list(self._items.values())
+    
+    def update(self, item_id: str, **kwargs) -> Optional[{{MODEL_NAME}}]:
+        """Update an item by ID."""
+        item = self._items.get(item_id)
+        if item:
+            item.update(**kwargs)
+        return item
+    
+    def delete(self, item_id: str) -> bool:
+        """Delete an item by ID."""
+        if item_id in self._items:
+            del self._items[item_id]
+            return True
+        return False
+    
+    def find(self, **criteria) -> List[{{MODEL_NAME}}]:
+        """Find items matching criteria."""
+        results = []
+        for item in self._items.values():
+            match = True
+            for key, value in criteria.items():
+                if not hasattr(item, key) or getattr(item, key) != value:
+                    match = False
+                    break
+            if match:
+                results.append(item)
+        return results
+
+
+# Singleton repository instance
+{{MODEL_LOWER}}_repo = {{MODEL_NAME}}Repository()

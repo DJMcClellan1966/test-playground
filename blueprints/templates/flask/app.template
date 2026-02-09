@@ -1,0 +1,206 @@
+"""
+{{PROJECT_NAME}} - Flask Application
+
+Auto-generated from {{BLUEPRINT_NAME}} blueprint.
+Template-based generation - no LLM required.
+"""
+
+from flask import Flask, render_template, jsonify, request, abort
+from flask_cors import CORS
+from datetime import datetime
+import json
+import os
+
+app = Flask(__name__)
+CORS(app)
+
+# Simple JSON file database (replace with SQLAlchemy for production)
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+
+def get_db_path(entity: str) -> str:
+    """Get path to entity's JSON file."""
+    return os.path.join(DATA_DIR, f"{entity}.json")
+
+
+def load_data(entity: str) -> list:
+    """Load all items for an entity."""
+    path = get_db_path(entity)
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            return json.load(f)
+    return []
+
+
+def save_data(entity: str, items: list):
+    """Save all items for an entity."""
+    with open(get_db_path(entity), "w") as f:
+        json.dump(items, f, indent=2, default=str)
+
+
+def find_item(items: list, item_id: str):
+    """Find an item by ID."""
+    for item in items:
+        if item.get("id") == item_id:
+            return item
+    return None
+
+
+# ==============================================================================
+# Health & Home
+# ==============================================================================
+
+@app.route("/")
+def index():
+    """Home page."""
+    return jsonify({
+        "app": "{{PROJECT_NAME}}",
+        "version": "0.1.0",
+        "status": "running",
+        "blueprint": "{{BLUEPRINT_NAME}}"
+    })
+
+
+@app.route("/health")
+def health():
+    """Health check endpoint."""
+    return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
+
+
+# ==============================================================================
+# Generic CRUD Endpoints ({{ENTITY_UPPER}} entity)
+# ==============================================================================
+
+@app.route("/api/{{ENTITY_LOWER}}", methods=["GET"])
+def list_{{ENTITY_LOWER}}():
+    """List all {{ENTITY_LOWER}} items with optional filtering."""
+    items = load_data("{{ENTITY_LOWER}}")
+    
+    # Optional search filter
+    search = request.args.get("search", "").lower()
+    if search:
+        items = [
+            item for item in items 
+            if search in json.dumps(item).lower()
+        ]
+    
+    # Optional pagination
+    page = request.args.get("page", type=int)
+    per_page = request.args.get("per_page", 10, type=int)
+    
+    if page:
+        start = (page - 1) * per_page
+        items = items[start:start + per_page]
+    
+    return jsonify({
+        "items": items,
+        "total": len(load_data("{{ENTITY_LOWER}}")),
+        "page": page or 1,
+        "per_page": per_page
+    })
+
+
+@app.route("/api/{{ENTITY_LOWER}}/<item_id>", methods=["GET"])
+def get_{{ENTITY_LOWER}}(item_id):
+    """Get a single {{ENTITY_LOWER}} by ID."""
+    items = load_data("{{ENTITY_LOWER}}")
+    item = find_item(items, item_id)
+    
+    if not item:
+        abort(404, description="Item not found")
+    
+    return jsonify(item)
+
+
+@app.route("/api/{{ENTITY_LOWER}}", methods=["POST"])
+def create_{{ENTITY_LOWER}}():
+    """Create a new {{ENTITY_LOWER}}."""
+    data = request.get_json()
+    
+    if not data:
+        abort(400, description="No data provided")
+    
+    items = load_data("{{ENTITY_LOWER}}")
+    
+    # Generate ID and timestamps
+    new_item = {
+        "id": str(len(items) + 1).zfill(4),
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
+        **data
+    }
+    
+    items.append(new_item)
+    save_data("{{ENTITY_LOWER}}", items)
+    
+    return jsonify(new_item), 201
+
+
+@app.route("/api/{{ENTITY_LOWER}}/<item_id>", methods=["PUT"])
+def update_{{ENTITY_LOWER}}(item_id):
+    """Update an existing {{ENTITY_LOWER}}."""
+    data = request.get_json()
+    
+    if not data:
+        abort(400, description="No data provided")
+    
+    items = load_data("{{ENTITY_LOWER}}")
+    item = find_item(items, item_id)
+    
+    if not item:
+        abort(404, description="Item not found")
+    
+    # Update item
+    item.update(data)
+    item["updated_at"] = datetime.now().isoformat()
+    
+    save_data("{{ENTITY_LOWER}}", items)
+    
+    return jsonify(item)
+
+
+@app.route("/api/{{ENTITY_LOWER}}/<item_id>", methods=["DELETE"])
+def delete_{{ENTITY_LOWER}}(item_id):
+    """Delete a {{ENTITY_LOWER}}."""
+    items = load_data("{{ENTITY_LOWER}}")
+    original_len = len(items)
+    
+    items = [item for item in items if item.get("id") != item_id]
+    
+    if len(items) == original_len:
+        abort(404, description="Item not found")
+    
+    save_data("{{ENTITY_LOWER}}", items)
+    
+    return "", 204
+
+
+# ==============================================================================
+# Error Handlers
+# ==============================================================================
+
+@app.errorhandler(400)
+def bad_request(error):
+    return jsonify({"error": "Bad Request", "message": str(error)}), 400
+
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({"error": "Not Found", "message": str(error)}), 404
+
+
+@app.errorhandler(500)
+def server_error(error):
+    return jsonify({"error": "Server Error", "message": str(error)}), 500
+
+
+# ==============================================================================
+# Run Application
+# ==============================================================================
+
+if __name__ == "__main__":
+    print(f"🚀 Starting {{PROJECT_NAME}}...")
+    print(f"📋 Blueprint: {{BLUEPRINT_NAME}}")
+    print(f"🌐 http://localhost:5000")
+    app.run(debug=True, port=5000)

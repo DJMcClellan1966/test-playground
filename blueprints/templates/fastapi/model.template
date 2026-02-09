@@ -1,0 +1,144 @@
+"""
+{{MODEL_NAME}} Model
+
+Auto-generated from {{BLUEPRINT_NAME}} blueprint.
+Pydantic models for FastAPI.
+"""
+
+from pydantic import BaseModel, Field
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+from uuid import uuid4
+
+
+class {{MODEL_NAME}}Base(BaseModel):
+    """
+    Base schema for {{MODEL_NAME}}.
+    
+    Contains fields from blueprint:
+{{FIELDS_DOC}}
+    """
+{{FIELDS_DEFINITION}}
+
+
+class {{MODEL_NAME}}Create({{MODEL_NAME}}Base):
+    """Schema for creating a new {{MODEL_NAME}}."""
+    pass
+
+
+class {{MODEL_NAME}}Update(BaseModel):
+    """Schema for updating {{MODEL_NAME}} (all fields optional)."""
+{{FIELDS_OPTIONAL}}
+
+
+class {{MODEL_NAME}}({{MODEL_NAME}}Base):
+    """
+    Full {{MODEL_NAME}} schema with metadata.
+    """
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+    
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "id": "0001",
+                "created_at": "2024-01-01T00:00:00",
+                "updated_at": "2024-01-01T00:00:00"
+            }
+        }
+
+
+class {{MODEL_NAME}}List(BaseModel):
+    """Paginated list of {{MODEL_NAME}} items."""
+    items: List[{{MODEL_NAME}}]
+    total: int
+    page: int
+    per_page: int
+    pages: int
+
+
+# ==============================================================================
+# In-Memory Repository (Replace with SQLAlchemy for production)
+# ==============================================================================
+
+class {{MODEL_NAME}}Repository:
+    """
+    Simple in-memory repository for {{MODEL_NAME}}.
+    """
+    
+    def __init__(self):
+        self._items: Dict[str, {{MODEL_NAME}}] = {}
+        self._next_id: int = 1
+    
+    def _generate_id(self) -> str:
+        """Generate sequential ID."""
+        item_id = str(self._next_id).zfill(4)
+        self._next_id += 1
+        return item_id
+    
+    def create(self, data: {{MODEL_NAME}}Create) -> {{MODEL_NAME}}:
+        """Create a new item."""
+        now = datetime.now()
+        item = {{MODEL_NAME}}(
+            id=self._generate_id(),
+            created_at=now,
+            updated_at=now,
+            **data.model_dump()
+        )
+        self._items[item.id] = item
+        return item
+    
+    def get(self, item_id: str) -> Optional[{{MODEL_NAME}}]:
+        """Get an item by ID."""
+        return self._items.get(item_id)
+    
+    def get_all(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        search: Optional[str] = None
+    ) -> tuple[List[{{MODEL_NAME}}], int]:
+        """Get all items with pagination and search."""
+        items = list(self._items.values())
+        
+        # Filter by search
+        if search:
+            search_lower = search.lower()
+            items = [
+                item for item in items
+                if search_lower in item.model_dump_json().lower()
+            ]
+        
+        total = len(items)
+        items = items[skip:skip + limit]
+        
+        return items, total
+    
+    def update(self, item_id: str, data: {{MODEL_NAME}}Update) -> Optional[{{MODEL_NAME}}]:
+        """Update an item."""
+        item = self._items.get(item_id)
+        if not item:
+            return None
+        
+        # Update only provided fields
+        update_data = data.model_dump(exclude_unset=True)
+        updated = item.model_copy(update={
+            **update_data,
+            "updated_at": datetime.now()
+        })
+        
+        self._items[item_id] = updated
+        return updated
+    
+    def delete(self, item_id: str) -> bool:
+        """Delete an item."""
+        if item_id in self._items:
+            del self._items[item_id]
+            return True
+        return False
+
+
+# Singleton repository instance
+{{MODEL_LOWER}}_repo = {{MODEL_NAME}}Repository()

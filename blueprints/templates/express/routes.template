@@ -1,0 +1,217 @@
+/**
+ * {{ENTITY_NAME}} Router
+ * 
+ * Auto-generated from {{BLUEPRINT_NAME}} blueprint.
+ * Express router with full CRUD operations.
+ */
+
+const express = require('express');
+const router = express.Router();
+
+// In-memory storage (replace with database in production)
+let storage = {};
+let nextId = 1;
+
+function generateId() {
+  return String(nextId++).padStart(4, '0');
+}
+
+// ==============================================================================
+// List with search, sort, pagination
+// ==============================================================================
+
+router.get('/', (req, res) => {
+  let items = Object.values(storage);
+  
+  // Search
+  const search = (req.query.search || '').toLowerCase();
+  if (search) {
+    items = items.filter(item =>
+      JSON.stringify(item).toLowerCase().includes(search)
+    );
+  }
+  
+  // Sort
+  const sort = req.query.sort || 'created_at';
+  const reverse = sort.startsWith('-');
+  const sortField = reverse ? sort.slice(1) : sort;
+  
+  items.sort((a, b) => {
+    const aVal = a[sortField] || '';
+    const bVal = b[sortField] || '';
+    const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+    return reverse ? -cmp : cmp;
+  });
+  
+  // Pagination
+  const total = items.length;
+  const page = parseInt(req.query.page) || 1;
+  const perPage = Math.min(parseInt(req.query.per_page) || 20, 100);
+  const start = (page - 1) * perPage;
+  
+  items = items.slice(start, start + perPage);
+  
+  res.json({
+    items,
+    total,
+    page,
+    per_page: perPage,
+    pages: Math.ceil(total / perPage)
+  });
+});
+
+// ==============================================================================
+// Create
+// ==============================================================================
+
+router.post('/', (req, res) => {
+  const now = new Date().toISOString();
+  const id = generateId();
+  
+  const item = {
+    id,
+    created_at: now,
+    updated_at: now,
+    ...req.body
+  };
+  
+  storage[id] = item;
+  res.status(201).json(item);
+});
+
+// ==============================================================================
+// Get One
+// ==============================================================================
+
+router.get('/:id', (req, res) => {
+  const item = storage[req.params.id];
+  
+  if (!item) {
+    return res.status(404).json({
+      error: 'Not Found',
+      message: `{{ENTITY_NAME}} ${req.params.id} not found`
+    });
+  }
+  
+  res.json(item);
+});
+
+// ==============================================================================
+// Update (full replacement)
+// ==============================================================================
+
+router.put('/:id', (req, res) => {
+  const item = storage[req.params.id];
+  
+  if (!item) {
+    return res.status(404).json({
+      error: 'Not Found',
+      message: `{{ENTITY_NAME}} ${req.params.id} not found`
+    });
+  }
+  
+  const updated = {
+    id: req.params.id,
+    created_at: item.created_at,
+    updated_at: new Date().toISOString(),
+    ...req.body
+  };
+  
+  storage[req.params.id] = updated;
+  res.json(updated);
+});
+
+// ==============================================================================
+// Update (partial)
+// ==============================================================================
+
+router.patch('/:id', (req, res) => {
+  const item = storage[req.params.id];
+  
+  if (!item) {
+    return res.status(404).json({
+      error: 'Not Found',
+      message: `{{ENTITY_NAME}} ${req.params.id} not found`
+    });
+  }
+  
+  Object.assign(item, req.body, {
+    updated_at: new Date().toISOString()
+  });
+  
+  res.json(item);
+});
+
+// ==============================================================================
+// Delete
+// ==============================================================================
+
+router.delete('/:id', (req, res) => {
+  if (!storage[req.params.id]) {
+    return res.status(404).json({
+      error: 'Not Found',
+      message: `{{ENTITY_NAME}} ${req.params.id} not found`
+    });
+  }
+  
+  delete storage[req.params.id];
+  res.status(204).send();
+});
+
+// ==============================================================================
+// Bulk Create
+// ==============================================================================
+
+router.post('/bulk', (req, res) => {
+  if (!req.body.items || !Array.isArray(req.body.items)) {
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'Request body must have "items" array'
+    });
+  }
+  
+  const now = new Date().toISOString();
+  const created = [];
+  
+  for (const itemData of req.body.items) {
+    const id = generateId();
+    const item = {
+      id,
+      created_at: now,
+      updated_at: now,
+      ...itemData
+    };
+    storage[id] = item;
+    created.push(item);
+  }
+  
+  res.status(201).json({
+    count: created.length,
+    items: created
+  });
+});
+
+// ==============================================================================
+// Bulk Delete
+// ==============================================================================
+
+router.delete('/bulk', (req, res) => {
+  if (!req.body.ids || !Array.isArray(req.body.ids)) {
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'Request body must have "ids" array'
+    });
+  }
+  
+  let deleted = 0;
+  for (const id of req.body.ids) {
+    if (storage[id]) {
+      delete storage[id];
+      deleted++;
+    }
+  }
+  
+  res.json({ count: deleted });
+});
+
+module.exports = router;

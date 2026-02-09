@@ -1,0 +1,172 @@
+"""
+{{ENTITY_NAME}} Router
+
+Auto-generated from {{BLUEPRINT_NAME}} blueprint.
+FastAPI router with full CRUD operations.
+"""
+
+from fastapi import APIRouter, HTTPException, Query, Depends
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+
+router = APIRouter(
+    prefix="/api/{{ENTITY_LOWER}}",
+    tags=["{{ENTITY_LOWER}}"]
+)
+
+
+# ==============================================================================
+# Schemas
+# ==============================================================================
+
+class {{ENTITY_NAME}}Base(BaseModel):
+    """Base schema - add your fields here."""
+    class Config:
+        extra = "allow"
+
+
+class {{ENTITY_NAME}}Create({{ENTITY_NAME}}Base):
+    """Schema for creation."""
+    pass
+
+
+class {{ENTITY_NAME}}Update(BaseModel):
+    """Schema for updates (partial)."""
+    class Config:
+        extra = "allow"
+
+
+class {{ENTITY_NAME}}({{ENTITY_NAME}}Base):
+    """Full schema with metadata."""
+    id: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class PaginatedResponse(BaseModel):
+    """Paginated list response."""
+    items: List[Dict[str, Any]]
+    total: int
+    page: int
+    per_page: int
+    pages: int
+
+
+# ==============================================================================
+# In-Memory Storage
+# ==============================================================================
+
+_storage: Dict[str, Dict[str, Any]] = {}
+_next_id = 1
+
+
+def _generate_id() -> str:
+    global _next_id
+    item_id = str(_next_id).zfill(4)
+    _next_id += 1
+    return item_id
+
+
+# ==============================================================================
+# Endpoints
+# ==============================================================================
+
+@router.get("", response_model=PaginatedResponse)
+@router.get("/", response_model=PaginatedResponse)
+async def list_all(
+    search: Optional[str] = Query(None),
+    sort: str = Query("created_at"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100)
+):
+    """List all {{ENTITY_NAME}} with pagination."""
+    items = list(_storage.values())
+    
+    # Search
+    if search:
+        search_lower = search.lower()
+        items = [i for i in items if search_lower in str(i).lower()]
+    
+    # Sort
+    reverse = sort.startswith("-")
+    sort_field = sort[1:] if reverse else sort
+    try:
+        items.sort(key=lambda x: x.get(sort_field, ""), reverse=reverse)
+    except TypeError:
+        pass
+    
+    # Paginate
+    total = len(items)
+    start = (page - 1) * per_page
+    items = items[start:start + per_page]
+    
+    return PaginatedResponse(
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+        pages=(total + per_page - 1) // per_page
+    )
+
+
+@router.post("", status_code=201)
+@router.post("/", status_code=201)
+async def create(data: {{ENTITY_NAME}}Create):
+    """Create a new {{ENTITY_NAME}}."""
+    now = datetime.now().isoformat()
+    item = {
+        "id": _generate_id(),
+        "created_at": now,
+        "updated_at": now,
+        **data.model_dump()
+    }
+    _storage[item["id"]] = item
+    return item
+
+
+@router.get("/{item_id}")
+async def get_one(item_id: str):
+    """Get {{ENTITY_NAME}} by ID."""
+    item = _storage.get(item_id)
+    if not item:
+        raise HTTPException(404, f"{{ENTITY_NAME}} {item_id} not found")
+    return item
+
+
+@router.put("/{item_id}")
+async def update_full(item_id: str, data: {{ENTITY_NAME}}Update):
+    """Replace {{ENTITY_NAME}}."""
+    if item_id not in _storage:
+        raise HTTPException(404, f"{{ENTITY_NAME}} {item_id} not found")
+    
+    item = _storage[item_id]
+    updated = {
+        "id": item_id,
+        "created_at": item["created_at"],
+        "updated_at": datetime.now().isoformat(),
+        **data.model_dump()
+    }
+    _storage[item_id] = updated
+    return updated
+
+
+@router.patch("/{item_id}")
+async def update_partial(item_id: str, data: {{ENTITY_NAME}}Update):
+    """Partially update {{ENTITY_NAME}}."""
+    if item_id not in _storage:
+        raise HTTPException(404, f"{{ENTITY_NAME}} {item_id} not found")
+    
+    item = _storage[item_id]
+    item.update(data.model_dump(exclude_unset=True))
+    item["updated_at"] = datetime.now().isoformat()
+    return item
+
+
+@router.delete("/{item_id}", status_code=204)
+async def delete(item_id: str):
+    """Delete {{ENTITY_NAME}}."""
+    if item_id not in _storage:
+        raise HTTPException(404, f"{{ENTITY_NAME}} {item_id} not found")
+    del _storage[item_id]
+    return None

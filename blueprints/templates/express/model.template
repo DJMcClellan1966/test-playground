@@ -1,0 +1,150 @@
+/**
+ * {{MODEL_NAME}} Model
+ * 
+ * Auto-generated from {{BLUEPRINT_NAME}} blueprint.
+ * Simple class-based model with validation.
+ */
+
+const { v4: uuidv4 } = require('uuid');
+
+class {{MODEL_NAME}} {
+  /**
+   * Create a new {{MODEL_NAME}}.
+   * 
+   * Fields from blueprint:
+{{FIELDS_DOC}}
+   */
+  constructor(data = {}) {
+    this.id = data.id || uuidv4();
+    this.created_at = data.created_at || new Date().toISOString();
+    this.updated_at = data.updated_at || new Date().toISOString();
+    
+    // Copy additional fields
+    Object.keys(data).forEach(key => {
+      if (!['id', 'created_at', 'updated_at'].includes(key)) {
+        this[key] = data[key];
+      }
+    });
+  }
+
+  /**
+   * Update the model with new data.
+   */
+  update(data) {
+    Object.keys(data).forEach(key => {
+      if (!['id', 'created_at'].includes(key)) {
+        this[key] = data[key];
+      }
+    });
+    this.updated_at = new Date().toISOString();
+    return this;
+  }
+
+  /**
+   * Convert to plain object.
+   */
+  toJSON() {
+    return { ...this };
+  }
+
+  /**
+   * Validate the model.
+   * Override in subclasses.
+   */
+  validate() {
+    const errors = [];
+    
+    if (!this.id) {
+      errors.push('id is required');
+    }
+    
+    return {
+      valid: errors.length === 0,
+      errors
+    };
+  }
+}
+
+// ==============================================================================
+// Repository (In-Memory)
+// ==============================================================================
+
+class {{MODEL_NAME}}Repository {
+  constructor() {
+    this.items = new Map();
+    this.nextId = 1;
+  }
+
+  _generateId() {
+    return String(this.nextId++).padStart(4, '0');
+  }
+
+  create(data) {
+    const item = new {{MODEL_NAME}}({
+      ...data,
+      id: this._generateId()
+    });
+    this.items.set(item.id, item);
+    return item;
+  }
+
+  findById(id) {
+    return this.items.get(id) || null;
+  }
+
+  findAll(options = {}) {
+    let items = Array.from(this.items.values());
+
+    // Search
+    if (options.search) {
+      const search = options.search.toLowerCase();
+      items = items.filter(item =>
+        JSON.stringify(item).toLowerCase().includes(search)
+      );
+    }
+
+    // Sort
+    if (options.sort) {
+      const reverse = options.sort.startsWith('-');
+      const field = reverse ? options.sort.slice(1) : options.sort;
+      items.sort((a, b) => {
+        const cmp = String(a[field] || '').localeCompare(String(b[field] || ''));
+        return reverse ? -cmp : cmp;
+      });
+    }
+
+    const total = items.length;
+
+    // Pagination
+    if (options.page) {
+      const perPage = options.per_page || 20;
+      const start = (options.page - 1) * perPage;
+      items = items.slice(start, start + perPage);
+    }
+
+    return { items, total };
+  }
+
+  update(id, data) {
+    const item = this.items.get(id);
+    if (!item) return null;
+    return item.update(data);
+  }
+
+  delete(id) {
+    return this.items.delete(id);
+  }
+
+  count() {
+    return this.items.size;
+  }
+}
+
+// Singleton repository
+const {{MODEL_LOWER}}Repository = new {{MODEL_NAME}}Repository();
+
+module.exports = {
+  {{MODEL_NAME}},
+  {{MODEL_NAME}}Repository,
+  {{MODEL_LOWER}}Repository
+};

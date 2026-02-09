@@ -1,0 +1,169 @@
+/**
+ * {{ENTITY_NAME}} Form Page
+ * 
+ * Create or edit a {{ENTITY_LOWER}} item.
+ * Auto-generated from {{BLUEPRINT_NAME}} blueprint.
+ */
+
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { api } from '../services/api';
+
+function {{ENTITY_NAME}}Form() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const isEdit = Boolean(id);
+  
+  const [formData, setFormData] = useState({});
+  const [loading, setLoading] = useState(isEdit);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [fieldList, setFieldList] = useState([]);
+
+  // Load existing item for edit
+  useEffect(() => {
+    if (isEdit) {
+      fetchItem();
+    }
+  }, [id]);
+
+  const fetchItem = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get(`/api/{{ENTITY_LOWER}}/${id}`);
+      const item = response.data;
+      
+      // Extract editable fields
+      const editFields = { ...item };
+      delete editFields.id;
+      delete editFields.created_at;
+      delete editFields.updated_at;
+      
+      setFormData(editFields);
+      setFieldList(Object.keys(editFields));
+    } catch (err) {
+      setError(err.message || 'Failed to load item');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const addField = () => {
+    const fieldName = prompt('Enter field name:');
+    if (fieldName && !fieldList.includes(fieldName)) {
+      setFieldList(prev => [...prev, fieldName]);
+      setFormData(prev => ({ ...prev, [fieldName]: '' }));
+    }
+  };
+
+  const removeField = (field) => {
+    setFieldList(prev => prev.filter(f => f !== field));
+    setFormData(prev => {
+      const newData = { ...prev };
+      delete newData[field];
+      return newData;
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      setSaving(true);
+      setError(null);
+      
+      if (isEdit) {
+        await api.put(`/api/{{ENTITY_LOWER}}/${id}`, formData);
+      } else {
+        await api.post('/api/{{ENTITY_LOWER}}', formData);
+      }
+      
+      navigate('/{{ENTITY_LOWER}}');
+    } catch (err) {
+      setError(err.message || 'Failed to save item');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="loading">Loading...</div>;
+  }
+
+  return (
+    <div className="{{ENTITY_LOWER}}-form">
+      <div className="page-header">
+        <div className="header-left">
+          <Link to="/{{ENTITY_LOWER}}" className="back-link">
+            ← Back to List
+          </Link>
+          <h1>{isEdit ? `Edit {{ENTITY_NAME}} #${id}` : 'New {{ENTITY_NAME}}'}</h1>
+        </div>
+      </div>
+
+      {error && (
+        <div className="alert alert-error">
+          {error}
+          <button onClick={() => setError(null)}>×</button>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="form-card">
+        {/* Dynamic Fields */}
+        {fieldList.map(field => (
+          <div key={field} className="form-group">
+            <label htmlFor={field}>
+              {field.replace(/_/g, ' ')}
+              <button 
+                type="button"
+                onClick={() => removeField(field)}
+                className="btn-remove-field"
+              >
+                ×
+              </button>
+            </label>
+            <input
+              type="text"
+              id={field}
+              value={formData[field] || ''}
+              onChange={(e) => handleChange(field, e.target.value)}
+              className="form-input"
+            />
+          </div>
+        ))}
+
+        {/* Add Field Button */}
+        <button 
+          type="button" 
+          onClick={addField}
+          className="btn btn-secondary add-field-btn"
+        >
+          + Add Field
+        </button>
+
+        {/* Submit */}
+        <div className="form-actions">
+          <Link to="/{{ENTITY_LOWER}}" className="btn btn-secondary">
+            Cancel
+          </Link>
+          <button 
+            type="submit" 
+            className="btn btn-primary"
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : (isEdit ? 'Update' : 'Create')}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+export default {{ENTITY_NAME}}Form;
