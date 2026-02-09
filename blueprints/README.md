@@ -25,6 +25,46 @@ python constraint_solver.py --offline --multi-user --explain
 
 **Example**: "needs offline" + "multi-user" → automatically deduces CRDT sync, conflict resolution, auth backend
 
+### 1b. CSP Constraint Solver (`csp_constraint_solver.py`) ⚡ NEW
+
+**Formal constraint satisfaction** that goes from "clever advisor" to "essential validator" — inspired by Rust's borrow checker:
+
+```powershell
+python csp_constraint_solver.py --demo  # See constraint validation in action
+python csp_constraint_solver.py --offline --multi-user --blocks crdt_sync
+```
+
+**Key Differences from Rule-Based Solver:**
+
+| Aspect | Old Solver | CSP Solver |
+|--------|------------|------------|
+| **Mode** | Advisory (suggests) | Essential (blocks invalid states) |
+| **Conflicts** | Ignores | Detects & explains |
+| **Missing deps** | Hints | Proves what's required |
+| **Foundation** | Hand-coded rules | Formal CSP with backtracking |
+
+**Example: Invalid Configuration Detection**
+```python
+from csp_constraint_solver import ArchitectureCSP
+
+solver = ArchitectureCSP()
+solver.add_block("crdt_sync")  # Requires backend + storage
+result = solver.validate()
+# result.valid = False
+# result.conflict.explanation = "Block 'crdt_sync' requires: storage, backend"
+# result.conflict.suggestions = ["Add backend_flask or backend_fastapi"]
+```
+
+**Example: Auto-Solve Dependencies**
+```python
+solver = ArchitectureCSP()
+solver.set_requirement("offline", True)
+solver.set_requirement("multi_user", True)
+result = solver.solve()
+# Automatically adds: auth_basic, backend_fastapi, storage_sqlite, crdt_sync
+# With full derivation trace explaining WHY each was added
+```
+
 ### 2. Compositional Blocks (`blocks.py`)
 Code LEGOs that declare what they `require` and `provide`. Blocks auto-assemble based on constraints.
 
@@ -98,6 +138,8 @@ Open the **Logic** tab in the builder sidebar:
 |----------|--------|-------------|
 | `/api/logic/analyze` | POST | Analyze blocks/entities, get suggestions |
 | `/api/logic/ask` | POST | Answer questions via pattern matching |
+| `/api/csp/validate` | POST | Validate block config against CSP constraints |
+| `/api/csp/solve` | POST | Auto-add required blocks to satisfy constraints |
 
 ---
 
@@ -415,7 +457,8 @@ blueprints/
 ├── builder.py             # Menu-driven blueprint builder
 │
 ├── # Intelligent Scaffolding System
-├── constraint_solver.py   # Logical deduction engine
+├── constraint_solver.py   # Logical deduction engine (rule-based)
+├── csp_constraint_solver.py # Formal CSP with conflict detection
 ├── blocks.py              # Compositional code blocks
 ├── contracts.py           # Bidirectional spec/code contracts
 ├── intelligent_scaffold.py # Unified pipeline

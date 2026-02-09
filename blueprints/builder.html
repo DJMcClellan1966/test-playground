@@ -744,6 +744,16 @@
 
                 <div class="sidebar-content hidden" id="logic-panel">
                     <div style="display: flex; flex-direction: column; height: 100%; gap: 12px;">
+                        <!-- CSP Constraint Validation -->
+                        <div id="csp-validation" style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; border-left: 3px solid var(--text-secondary);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-weight: bold; font-size: 13px;">Constraint Validation</span>
+                                <span id="csp-status" style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(255,255,255,0.1);">Checking...</span>
+                            </div>
+                            <div id="csp-details" style="font-size: 12px; color: var(--text-secondary);"></div>
+                            <div id="csp-suggestions" style="margin-top: 8px;"></div>
+                        </div>
+                        
                         <!-- Completeness Score -->
                         <div style="background: rgba(0,184,148,0.1); padding: 12px; border-radius: 8px;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1722,6 +1732,128 @@
             askAI();
         }
         
+        // CSP Constraint Validation
+        async function validateCSP(blocks, entities) {
+            const cspValidation = document.getElementById('csp-validation');
+            const cspStatus = document.getElementById('csp-status');
+            const cspDetails = document.getElementById('csp-details');
+            const cspSuggestions = document.getElementById('csp-suggestions');
+            
+            // Show loading state
+            cspStatus.textContent = 'Checking...';
+            cspStatus.style.background = 'rgba(255,255,255,0.1)';
+            cspValidation.style.borderLeftColor = 'var(--text-secondary)';
+            
+            try {
+                const response = await fetch('/api/csp/validate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        blocks: blocks.map(b => ({ type: b })),
+                        requirements: {} 
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.valid) {
+                    // Valid configuration
+                    cspStatus.textContent = '✓ Valid';
+                    cspStatus.style.background = 'rgba(0,184,148,0.3)';
+                    cspValidation.style.borderLeftColor = 'var(--accent)';
+                    
+                    const capList = Object.keys(data.capabilities || {})
+                        .filter(c => data.capabilities[c])
+                        .map(c => c.replace('cap_', ''))
+                        .join(', ');
+                    
+                    cspDetails.innerHTML = `
+                        <div style="color: var(--accent);">All constraints satisfied</div>
+                        ${capList ? `<div style="margin-top: 4px;">Provides: ${capList}</div>` : ''}
+                    `;
+                    cspSuggestions.innerHTML = '';
+                } else {
+                    // Invalid configuration - show conflicts
+                    cspStatus.textContent = '✗ Conflict';
+                    cspStatus.style.background = 'rgba(231,76,60,0.3)';
+                    cspValidation.style.borderLeftColor = '#e74c3c';
+                    
+                    cspDetails.innerHTML = `
+                        <div style="color: #e74c3c; font-weight: 500;">Constraint Violation</div>
+                        <div style="margin-top: 6px; font-size: 11px; white-space: pre-wrap;">${escapeHtml(data.conflicts || 'Unknown conflict')}</div>
+                    `;
+                    
+                    // Show fix suggestions
+                    if (data.suggestions && data.suggestions.length > 0) {
+                        cspSuggestions.innerHTML = `
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">How to fix:</div>
+                            ${data.suggestions.map(s => `
+                                <div style="background: rgba(0,184,148,0.1); padding: 6px 8px; border-radius: 4px; margin-bottom: 4px; font-size: 11px; cursor: pointer;"
+                                     onclick="autoFixCSP('${escapeHtml(s)}')">
+                                    <span style="color: var(--accent);">→</span> ${escapeHtml(s)}
+                                </div>
+                            `).join('')}
+                        `;
+                    }
+                }
+            } catch (e) {
+                console.error('CSP validation failed:', e);
+                cspStatus.textContent = 'Error';
+                cspStatus.style.background = 'rgba(255,255,255,0.1)';
+                cspDetails.innerHTML = '<div style="color: var(--text-secondary);">Could not validate</div>';
+            }
+        }
+        
+        // Auto-fix from CSP suggestion
+        function autoFixCSP(suggestion) {
+            // Parse the suggestion to determine what block to add
+            if (suggestion.includes('backend_flask') || suggestion.includes('backend_fastapi')) {
+                addBlockFromSuggestion('backend_flask');
+            } else if (suggestion.includes('storage_json') || suggestion.includes('storage_sqlite')) {
+                addBlockFromSuggestion('storage_sqlite');
+            } else if (suggestion.includes('auth_basic') || suggestion.includes('auth_oauth')) {
+                addBlockFromSuggestion('auth_basic');
+            } else if (suggestion.includes('crdt_sync')) {
+                addBlockFromSuggestion('sync_crdt');
+            } else if (suggestion.includes('Remove')) {
+                // For conflict removals, user needs to manually choose
+                alert('Please remove one of the conflicting blocks manually');
+            }
+        }
+        
+        // Solve CSP to auto-add required blocks
+        async function solveCSP() {
+            const blocks = placedBlocks.map(b => b.type);
+            
+            try {
+                const response = await fetch('/api/csp/solve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        blocks: blocks.map(b => ({ type: b })),
+                        requirements: {}
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.valid && data.autoAdded && data.autoAdded.length > 0) {
+                    // Add the required blocks
+                    for (const block of data.autoAdded) {
+                        addBlockFromSuggestion(block);
+                    }
+                    showStatus(`Added ${data.autoAdded.length} required block(s): ${data.autoAdded.join(', ')}`, 'success');
+                    analyzeLogic();
+                } else if (!data.valid) {
+                    showStatus('Could not solve constraints: ' + (data.conflicts || 'unknown issue'), 'error');
+                } else {
+                    showStatus('Configuration already complete', 'info');
+                }
+            } catch (e) {
+                console.error('CSP solve failed:', e);
+            }
+        }
+        
         // Logic Advisor Functions (Deterministic)
         async function analyzeLogic() {
             // Collect current state
@@ -1730,6 +1862,9 @@
                 name: e.name,
                 fields: e.fields
             }));
+            
+            // Run CSP validation in parallel with logic analysis
+            validateCSP(blocks, entityData);
             
             try {
                 const response = await fetch('/api/logic/analyze', {

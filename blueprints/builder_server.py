@@ -32,6 +32,10 @@ from blocks import BLOCKS, BlockAssembler
 from beyond_belief import CrossLanguageSynthesizer, LANGUAGE_TARGETS
 from advisor_ai import get_advice, quick_ask, check_ollama
 from logic_advisor import analyze_state, ask_question
+from csp_constraint_solver import (
+    ArchitectureCSP, validate_block_configuration, 
+    suggest_blocks_for_requirements, BLOCK_SPECS
+)
 
 # Configuration
 PORT = 8088
@@ -131,6 +135,14 @@ class BuilderAPIHandler(SimpleHTTPRequestHandler):
         
         elif parsed.path == '/api/logic/ask':
             result = self.logic_ask(data)
+            self.send_json(result)
+        
+        elif parsed.path == '/api/csp/validate':
+            result = self.csp_validate(data)
+            self.send_json(result)
+        
+        elif parsed.path == '/api/csp/solve':
+            result = self.csp_solve(data)
             self.send_json(result)
         
         elif parsed.path == '/api/set-output':
@@ -448,6 +460,137 @@ class BuilderAPIHandler(SimpleHTTPRequestHandler):
             'response': answer,
             'source': 'logic'  # Indicates this is rule-based, not AI
         }
+    
+    def csp_validate(self, data):
+        """
+        Validate block configuration using CSP constraint solver.
+        
+        Returns validation result with conflicts/suggestions if invalid.
+        """
+        blocks = data.get('blocks', [])
+        requirements = data.get('requirements', {})
+        
+        # Extract block types
+        block_types = [b.get('type', b) if isinstance(b, dict) else b for b in blocks]
+        
+        # Create CSP solver and add blocks
+        solver = ArchitectureCSP()
+        
+        # Add requirements
+        for k, v in requirements.items():
+            solver.set_requirement(k, v)
+        
+        # Add blocks
+        for block in block_types:
+            # Map canonical block names to CSP block specs
+            csp_block = self._map_to_csp_block(block)
+            if csp_block:
+                try:
+                    solver.add_block(csp_block)
+                except ValueError:
+                    pass  # Unknown block, skip
+        
+        # Validate
+        result = solver.validate()
+        
+        if result.valid:
+            return {
+                'success': True,
+                'valid': True,
+                'blocks': list(solver.selected_blocks),
+                'capabilities': {k: v for k, v in result.solution.items() 
+                               if k.startswith('cap_') and v},
+                'derivation': solver.explain()
+            }
+        else:
+            return {
+                'success': True,
+                'valid': False,
+                'conflicts': result.conflict.explanation if result.conflict else 'Unknown conflict',
+                'suggestions': result.conflict.suggestions if result.conflict else [],
+                'derivation': solver.explain()
+            }
+    
+    def csp_solve(self, data):
+        """
+        Solve for a valid configuration using CSP constraint propagation.
+        
+        Automatically adds required blocks to satisfy constraints.
+        """
+        blocks = data.get('blocks', [])
+        requirements = data.get('requirements', {})
+        
+        # Extract block types
+        block_types = [b.get('type', b) if isinstance(b, dict) else b for b in blocks]
+        
+        # Create CSP solver
+        solver = ArchitectureCSP()
+        
+        # Add requirements
+        for k, v in requirements.items():
+            solver.set_requirement(k, v)
+        
+        # Add user-selected blocks
+        for block in block_types:
+            csp_block = self._map_to_csp_block(block)
+            if csp_block:
+                try:
+                    solver.add_block(csp_block)
+                except ValueError:
+                    pass
+        
+        # Solve (auto-adds required blocks)
+        result = solver.solve()
+        
+        if result.valid:
+            # Compute what was auto-added
+            original_blocks = set(self._map_to_csp_block(b) for b in block_types if self._map_to_csp_block(b))
+            auto_added = solver.selected_blocks - original_blocks
+            
+            return {
+                'success': True,
+                'valid': True,
+                'blocks': list(solver.selected_blocks),
+                'autoAdded': list(auto_added),
+                'capabilities': {k.replace('cap_', ''): v for k, v in result.solution.items() 
+                               if k.startswith('cap_') and v},
+                'derivation': solver.explain(),
+                'requiredBlocks': list(solver.get_required_blocks())
+            }
+        else:
+            return {
+                'success': True,
+                'valid': False,
+                'conflicts': result.conflict.explanation if result.conflict else 'Unknown conflict',
+                'suggestions': result.conflict.suggestions if result.conflict else [],
+                'derivation': solver.explain()
+            }
+    
+    def _map_to_csp_block(self, block_type):
+        """Map visual editor block names to CSP block spec names."""
+        # Direct matches
+        if block_type in BLOCK_SPECS:
+            return block_type
+        
+        # Common mappings
+        mappings = {
+            'json_storage': 'storage_json',
+            'sqlite_storage': 'storage_sqlite',
+            'sqlite': 'storage_sqlite',
+            'json': 'storage_json',
+            'auth': 'auth_basic',
+            'basic_auth': 'auth_basic',
+            'oauth': 'auth_oauth',
+            'crdt': 'crdt_sync',
+            'sync': 'crdt_sync',
+            'crud': 'crud_routes',
+            'routes': 'crud_routes',
+            'flask': 'backend_flask',
+            'fastapi': 'backend_fastapi',
+            'ws': 'websocket',
+        }
+        
+        return mappings.get(block_type)
     
     def scaffold_from_blocks(self, data):
         """Generate a full project from block configuration."""
