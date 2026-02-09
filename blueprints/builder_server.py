@@ -40,7 +40,7 @@ from learning_integration import (
     get_learning_status, get_available_blocks as get_learning_blocks,
     get_available_projects, get_project_code, record_block_use,
     complete_project as complete_learning_project,
-    get_oracle_advice, get_all_oracle_rules
+    get_oracle_advice, get_all_oracle_rules, get_achievements
 )
 
 # Configuration
@@ -52,9 +52,37 @@ STATIC_DIR = Path(__file__).parent
 class BuilderAPIHandler(SimpleHTTPRequestHandler):
     """HTTP handler with API endpoints for the builder."""
     
+    # Route tables for cleaner dispatch
+    POST_ROUTES = {}  # Populated in __init_subclass__ or setup
+    GET_ROUTES = {}
+    
     def __init__(self, *args, **kwargs):
         self.project_dir = PROJECT_DIR
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
+    
+    def _get_post_routes(self):
+        """Return POST route table (method to allow data parameter)."""
+        return {
+            '/api/generate': lambda d: self.generate_project(d),
+            '/api/save': lambda d: self.save_file(d),
+            '/api/create-contract': lambda d: self.create_contract(d),
+            '/api/scaffold': lambda d: self.scaffold_from_blocks(d),
+            '/api/ask': lambda d: self.ask_ai(d),
+            '/api/logic/analyze': lambda d: self.logic_analyze(d),
+            '/api/logic/ask': lambda d: self.logic_ask(d),
+            '/api/csp/validate': lambda d: self.csp_validate(d),
+            '/api/csp/solve': lambda d: self.csp_solve(d),
+            '/api/learning/status': lambda d: self.learning_status(),
+            '/api/learning/blocks': lambda d: self.learning_blocks(),
+            '/api/learning/projects': lambda d: self.learning_projects(),
+            '/api/learning/get-code': lambda d: self.learning_get_code(d),
+            '/api/learning/use-block': lambda d: self.learning_use_block(d),
+            '/api/learning/complete': lambda d: self.learning_complete(),
+            '/api/learning/oracle': lambda d: self.learning_oracle(d),
+            '/api/learning/oracle-rules': lambda d: self.learning_oracle_rules(),
+            '/api/learning/achievements': lambda d: self.learning_achievements(),
+            '/api/set-output': lambda d: self.set_output_path(d),
+        }
     
     def do_OPTIONS(self):
         """Handle CORS preflight."""
@@ -105,7 +133,7 @@ class BuilderAPIHandler(SimpleHTTPRequestHandler):
             return super().do_GET()
     
     def do_POST(self):
-        """Handle POST requests."""
+        """Handle POST requests via route table."""
         parsed = urlparse(self.path)
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length).decode('utf-8')
@@ -115,78 +143,10 @@ class BuilderAPIHandler(SimpleHTTPRequestHandler):
         except json.JSONDecodeError:
             data = {}
         
-        if parsed.path == '/api/generate':
-            result = self.generate_project(data)
+        routes = self._get_post_routes()
+        if parsed.path in routes:
+            result = routes[parsed.path](data)
             self.send_json(result)
-        
-        elif parsed.path == '/api/save':
-            result = self.save_file(data)
-            self.send_json(result)
-        
-        elif parsed.path == '/api/create-contract':
-            result = self.create_contract(data)
-            self.send_json(result)
-        
-        elif parsed.path == '/api/scaffold':
-            result = self.scaffold_from_blocks(data)
-            self.send_json(result)
-        
-        elif parsed.path == '/api/ask':
-            result = self.ask_ai(data)
-            self.send_json(result)
-        
-        elif parsed.path == '/api/logic/analyze':
-            result = self.logic_analyze(data)
-            self.send_json(result)
-        
-        elif parsed.path == '/api/logic/ask':
-            result = self.logic_ask(data)
-            self.send_json(result)
-        
-        elif parsed.path == '/api/csp/validate':
-            result = self.csp_validate(data)
-            self.send_json(result)
-        
-        elif parsed.path == '/api/csp/solve':
-            result = self.csp_solve(data)
-            self.send_json(result)
-        
-        elif parsed.path == '/api/learning/status':
-            result = self.learning_status()
-            self.send_json(result)
-        
-        elif parsed.path == '/api/learning/blocks':
-            result = self.learning_blocks()
-            self.send_json(result)
-        
-        elif parsed.path == '/api/learning/projects':
-            result = self.learning_projects()
-            self.send_json(result)
-        
-        elif parsed.path == '/api/learning/get-code':
-            result = self.learning_get_code(data)
-            self.send_json(result)
-        
-        elif parsed.path == '/api/learning/use-block':
-            result = self.learning_use_block(data)
-            self.send_json(result)
-        
-        elif parsed.path == '/api/learning/complete':
-            result = self.learning_complete()
-            self.send_json(result)
-        
-        elif parsed.path == '/api/learning/oracle':
-            result = self.learning_oracle(data)
-            self.send_json(result)
-        
-        elif parsed.path == '/api/learning/oracle-rules':
-            result = self.learning_oracle_rules()
-            self.send_json(result)
-        
-        elif parsed.path == '/api/set-output':
-            result = self.set_output_path(data)
-            self.send_json(result)
-        
         else:
             self.send_error(404, "API endpoint not found")
     
@@ -684,6 +644,11 @@ class BuilderAPIHandler(SimpleHTTPRequestHandler):
     def learning_oracle_rules(self):
         """Get all available oracle rules."""
         result = get_all_oracle_rules()
+        return {'success': True, **result}
+    
+    def learning_achievements(self):
+        """Get achievements with earned status."""
+        result = get_achievements()
         return {'success': True, **result}
     
     def scaffold_from_blocks(self, data):

@@ -867,6 +867,46 @@
                                 <span style="color: var(--text-secondary);">None yet - start a project!</span>
                             </div>
                         </div>
+                        
+                        <!-- Algorithm Oracle -->
+                        <div style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px;">
+                            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px;">🔮 Algorithm Oracle</div>
+                            <div style="margin-bottom: 8px;">
+                                <select id="oracle-tags" multiple style="width: 100%; background: rgba(255,255,255,0.1); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); padding: 4px; font-size: 11px; min-height: 60px;">
+                                    <option value="binary_classification">Binary Classification</option>
+                                    <option value="regression">Regression</option>
+                                    <option value="multi_class">Multi-class</option>
+                                    <option value="imbalanced">Imbalanced Data</option>
+                                    <option value="high_dimensional">High Dimensional</option>
+                                    <option value="few_samples">Few Samples</option>
+                                    <option value="text">Text Data</option>
+                                    <option value="streaming">Streaming Data</option>
+                                    <option value="nonlinear">Nonlinear Patterns</option>
+                                    <option value="need_interpretability">Need Interpretability</option>
+                                    <option value="safety_critical">Safety Critical</option>
+                                </select>
+                            </div>
+                            <button onclick="queryOracle()" style="width: 100%; padding: 6px; background: linear-gradient(135deg, #6c5ce7, #a29bfe); border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px;">Ask Oracle</button>
+                            <div id="oracle-result" style="margin-top: 8px; font-size: 11px; display: none;">
+                                <div style="background: rgba(108, 92, 231, 0.2); padding: 8px; border-radius: 4px; border-left: 3px solid #6c5ce7;">
+                                    <div id="oracle-pattern" style="font-weight: bold; margin-bottom: 4px;"></div>
+                                    <div id="oracle-suggestion" style="color: var(--text-secondary); margin-bottom: 4px;"></div>
+                                    <div id="oracle-why" style="font-style: italic; color: var(--text-secondary); font-size: 10px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Achievements -->
+                        <div style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px;">
+                            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px;">🏆 Achievements</div>
+                            <div id="achievements-streak" style="font-size: 11px; color: var(--accent); margin-bottom: 6px;">
+                                🔥 0 day streak
+                            </div>
+                            <div id="achievements-earned" style="margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px;">
+                                <span style="color: var(--text-secondary); font-size: 11px;">Loading...</span>
+                            </div>
+                            <button onclick="loadAchievements()" style="width: 100%; padding: 6px; background: linear-gradient(135deg, #ffd93d, #ff9f43); border: none; border-radius: 4px; color: #333; cursor: pointer; font-size: 12px;">View All</button>
+                        </div>
                     </div>
                 </div>
             </aside>
@@ -2285,6 +2325,86 @@
                 body: JSON.stringify({ block: type })
             }).catch(() => {}); // Silent fail if server not running
         };
+        
+        // Algorithm Oracle - query for pattern advice
+        async function queryOracle() {
+            const select = document.getElementById('oracle-tags');
+            const selectedTags = Array.from(select.selectedOptions).map(opt => opt.value);
+            
+            if (selectedTags.length === 0) {
+                notify('Select at least one tag to query the oracle', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/learning/oracle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ profile: selectedTags })
+                });
+                
+                const data = await response.json();
+                const resultDiv = document.getElementById('oracle-result');
+                
+                if (data.success && data.top_recommendation) {
+                    const rec = data.top_recommendation;
+                    document.getElementById('oracle-pattern').textContent = '📋 ' + rec.pattern;
+                    document.getElementById('oracle-suggestion').textContent = rec.suggestion;
+                    document.getElementById('oracle-why').textContent = '💡 ' + rec.why;
+                    resultDiv.style.display = 'block';
+                } else if (data.matches && data.matches.length === 0) {
+                    document.getElementById('oracle-pattern').textContent = 'No matching patterns';
+                    document.getElementById('oracle-suggestion').textContent = 'Try different tags or combinations';
+                    document.getElementById('oracle-why').textContent = '';
+                    resultDiv.style.display = 'block';
+                } else {
+                    notify('Oracle query failed', 'error');
+                }
+            } catch (e) {
+                console.error('Oracle query failed:', e);
+                notify('Oracle query failed - server not connected', 'error');
+            }
+        }
+        
+        // Load and display achievements
+        async function loadAchievements() {
+            try {
+                const response = await fetch('/api/learning/achievements', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update streak display
+                    const streakEl = document.getElementById('achievements-streak');
+                    const days = data.streak_days || 0;
+                    streakEl.textContent = `🔥 ${days} day${days !== 1 ? 's' : ''} streak`;
+                    
+                    // Update earned achievements
+                    const earnedEl = document.getElementById('achievements-earned');
+                    if (data.earned && data.earned.length > 0) {
+                        earnedEl.innerHTML = data.earned.map(a => 
+                            `<span title="${a.description}" style="background: rgba(255, 217, 61, 0.2); padding: 2px 6px; border-radius: 4px; font-size: 10px; cursor: help;">${a.name}</span>`
+                        ).join('');
+                    } else {
+                        earnedEl.innerHTML = '<span style="color: var(--text-secondary); font-size: 11px;">No achievements yet</span>';
+                    }
+                    
+                    // Show progress
+                    const total = data.total_available || 0;
+                    const earned = data.total_earned || 0;
+                    notify(`Achievements: ${earned}/${total} earned`, 'success');
+                }
+            } catch (e) {
+                console.error('Failed to load achievements:', e);
+            }
+        }
+        
+        // Load achievements on page load
+        setTimeout(loadAchievements, 2000);
     </script>
 </body>
 </html>

@@ -1,0 +1,260 @@
+{
+  "guess_number": {
+    "level": "beginner",
+    "name": "Guess the Number",
+    "description": "Classic number guessing game",
+    "teaches": [
+      "loops",
+      "conditionals",
+      "random numbers",
+      "user input"
+    ],
+    "xp_reward": 20
+  },
+  "calculator": {
+    "level": "beginner",
+    "name": "Calculator",
+    "description": "Simple arithmetic calculator",
+    "teaches": [
+      "functions",
+      "operators",
+      "error handling"
+    ],
+    "xp_reward": 15
+  },
+  "todo_list": {
+    "level": "beginner",
+    "name": "Todo List",
+    "description": "Task management with persistence",
+    "teaches": [
+      "classes",
+      "lists",
+      "file I/O",
+      "JSON"
+    ],
+    "xp_reward": 30
+  },
+  "tic_tac_toe": {
+    "level": "beginner",
+    "name": "Tic-Tac-Toe",
+    "description": "Classic two-player game",
+    "teaches": [
+      "2D arrays",
+      "game logic",
+      "win detection"
+    ],
+    "xp_reward": 35
+  },
+  "flask_todo": {
+    "level": "intermediate",
+    "name": "Flask Todo API",
+    "description": "RESTful API with Flask",
+    "teaches": [
+      "REST API",
+      "Flask",
+      "HTTP methods",
+      "JSON API"
+    ],
+    "xp_reward": 50
+  },
+  "sqlite_crud": {
+    "level": "intermediate",
+    "name": "SQLite CRUD",
+    "description": "Database operations with SQLite",
+    "teaches": [
+      "SQL",
+      "SQLite",
+      "database design",
+      "CRUD"
+    ],
+    "xp_reward": 45
+  },
+  "knuth_lcg": {
+    "level": "intermediate",
+    "name": "Linear Congruential Generator",
+    "description": "Implement the classic LCG pseudo-random number generator from TAOCP",
+    "teaches": [
+      "algorithms",
+      "number_theory",
+      "modular_arithmetic"
+    ],
+    "xp_reward": 40
+  },
+  "knuth_fisher_yates": {
+    "level": "intermediate",
+    "name": "Fisher-Yates Shuffle",
+    "description": "The optimal O(n) algorithm for shuffling arrays in-place",
+    "teaches": [
+      "algorithms",
+      "randomization",
+      "in_place_algorithms"
+    ],
+    "xp_reward": 35
+  },
+  "knuth_binary_search": {
+    "level": "beginner",
+    "name": "Binary Search Variations",
+    "description": "Master binary search with lower/upper bound variants",
+    "teaches": [
+      "algorithms",
+      "searching",
+      "divide_and_conquer"
+    ],
+    "xp_reward": 30
+  },
+  "knuth_heapsort": {
+    "level": "advanced",
+    "name": "Heapsort Algorithm",
+    "description": "In-place O(n log n) sorting using the heap data structure",
+    "teaches": [
+      "algorithms",
+      "sorting",
+      "heap",
+      "data_structures"
+    ],
+    "xp_reward": 50
+  },
+  "kadane_algorithm": {
+    "level": "intermediate",
+    "name": "Kadane's Algorithm - Maximum Subarray",
+    "description": "The elegant O(n) solution to maximum subarray problem",
+    "teaches": [
+      "algorithms",
+      "dynamic_programming",
+      "optimization"
+    ],
+    "xp_reward": 40
+  },
+  "backtracking_template": {
+    "level": "advanced",
+    "name": "Backtracking Template",
+    "description": "The universal template for constraint satisfaction problems",
+    "teaches": [
+      "algorithms",
+      "backtracking",
+      "recursion",
+      "constraint_satisfaction"
+    ],
+    "xp_reward": 55
+  },
+  "dp_template": {
+    "level": "advanced",
+    "name": "Dynamic Programming Templates",
+    "description": "Common DP patterns: memoization, tabulation, and state design",
+    "teaches": [
+      "algorithms",
+      "dynamic_programming",
+      "optimization",
+      "memoization"
+    ],
+    "xp_reward": 60
+  },
+  "info_entropy": {
+    "level": "advanced",
+    "name": "Information Entropy",
+    "description": "Shannon entropy and information content measurement",
+    "teaches": [
+      "information_theory",
+      "entropy",
+      "probability",
+      "ml_fundamentals"
+    ],
+    "xp_reward": 45
+  },
+  "bias_variance": {
+    "level": "advanced",
+    "name": "Bias-Variance Tradeoff",
+    "description": "Understanding the fundamental ML tradeoff",
+    "teaches": [
+      "ml_fundamentals",
+      "model_selection",
+      "overfitting",
+      "regularization"
+    ],
+    "xp_reward": 50
+  },
+  "cross_validation": {
+    "level": "intermediate",
+    "name": "Cross-Validation",
+    "description": "Robust model evaluation with k-fold cross-validation",
+    "teaches": [
+      "ml_fundamentals",
+      "model_evaluation",
+      "validation"
+    ],
+    "xp_reward": 40
+  },
+  "sliding_puzzle": {
+    "level": "intermediate",
+    "name": "Sliding Puzzle Game",
+    "description": "Build a classic 15-puzzle game with HTML/CSS/JavaScript",
+    "teaches": [
+      "html",
+      "css",
+      "javascript",
+      "game_logic",
+      "arrays",
+      "event_handling"
+    ],
+    "xp_reward": 65
+  },
+  "greedy_algorithm": {
+    "level": "intermediate",
+    "name": "Greedy Algorithm Pattern",
+    "description": "When and how to apply greedy strategies",
+    "teaches": [
+      "algorithms",
+      "greedy",
+      "optimization"
+    ],
+    "xp_reward": 35
+  },
+  "graphql_api": {
+    "level": "expert",
+    "name": "GraphQL API Server",
+    "description": "Build a complete GraphQL API with resolvers, schema, and subscriptions",
+    "teaches": [
+      "graphql",
+      "api_design",
+      "schema_design",
+      "real_time"
+    ],
+    "xp_reward": 80
+  },
+  "distributed_consensus": {
+    "level": "expert",
+    "name": "Distributed Consensus (Raft)",
+    "description": "Implement the Raft consensus algorithm for distributed systems",
+    "teaches": [
+      "distributed_systems",
+      "consensus",
+      "fault_tolerance",
+      "state_machines"
+    ],
+    "xp_reward": 100
+  },
+  "event_sourcing": {
+    "level": "expert",
+    "name": "Event Sourcing Pattern",
+    "description": "Store state as a sequence of events instead of current snapshot",
+    "teaches": [
+      "architecture",
+      "event_sourcing",
+      "cqrs",
+      "audit_trail"
+    ],
+    "xp_reward": 75
+  },
+  "property_testing": {
+    "level": "expert",
+    "name": "Property-Based Testing",
+    "description": "Generate test cases automatically from properties",
+    "teaches": [
+      "testing",
+      "formal_methods",
+      "invariants",
+      "fuzzing"
+    ],
+    "xp_reward": 70
+  }
+}

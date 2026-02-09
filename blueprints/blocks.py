@@ -45,12 +45,6 @@ class Block:
     # Code templates per stack
     code: Dict[str, str] = field(default_factory=dict)  # stack -> code
     
-    # Integration instructions
-    integrations: Dict[str, str] = field(default_factory=dict)  # "with_block_id" -> how
-    
-    # Files this block creates
-    files: Dict[str, str] = field(default_factory=dict)  # filename -> content template
-    
     # Dependencies to add
     dependencies: Dict[str, List[str]] = field(default_factory=dict)  # stack -> [deps]
 
