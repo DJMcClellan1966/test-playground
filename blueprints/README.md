@@ -59,6 +59,124 @@ Takes natural requirements → constraint solving → block selection → contra
 
 ---
 
+## 🌟 Beyond Belief: Revolutionary Features
+
+Push the boundaries of what's possible without AI (`beyond_belief.py`):
+
+### 1. Cross-Language Synthesis
+One contract → Python, TypeScript, Go, Rust, Java. Write once, generate everywhere.
+
+```powershell
+python beyond_belief.py --cross-lang
+```
+
+Same `Task` contract generates:
+- Python dataclass with validation
+- TypeScript interface with branded types
+- Go struct with JSON tags
+- Rust struct with serde derives
+- Java class with getters/setters
+
+### 2. Refinement Types
+Types that encode their own invariants. Invalid values are **impossible to construct**.
+
+```python
+# "age: int where >= 0 and <= 150"
+age = Age(-5)  # Raises ValueError - can't create invalid age
+```
+
+### 3. Program Synthesis from Tests
+Give input→output examples, get working code:
+
+```python
+# Examples: (1→2), (5→10), (0→0)
+# Synthesized: def double(x): return x * 2
+```
+
+### 4. Inverse Scaffolding
+Point at existing code → extract implicit contracts → regenerate cleanly:
+
+```powershell
+python beyond_belief.py --inverse
+```
+
+Analyzes Python classes to extract fields, types, and validation invariants.
+
+### 5. Executable Specifications
+The spec **IS** the program. Define constraints, execute them directly:
+
+```python
+task_spec = (
+    ExecutableSpec("Task")
+    .field("title", "str where not empty")
+    .field("priority", "int where >= 1 and <= 5")
+)
+task_spec.create(title="Buy groceries", priority=2)  # Works
+task_spec.create(title="", priority=6)  # Rejected!
+```
+
+### 6. Visual Block Editor
+Drag-and-drop architecture builder (`visual_editor.html`):
+
+- Drag blocks from palette to canvas
+- Auto-connect based on provides/requires
+- Real-time constraint checking
+- One-click code generation
+
+Open `visual_editor.html` in a browser to try it!
+
+```powershell
+python beyond_belief.py --all  # Run all demos
+```
+
+---
+
+## 🔧 Builder Dev Server
+
+A **working development server** that makes the visual editor actually write files (`builder_server.py`):
+
+```powershell
+python builder_server.py
+# Opens http://localhost:8088 automatically
+```
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/blocks` | GET | List all available compositional blocks |
+| `/api/scaffold` | POST | Generate complete project from blocks + entities |
+| `/api/create-contract` | POST | Create type-safe contract with multi-language output |
+| `/api/save` | POST | Save individual files to workspace |
+| `/api/project` | GET | Get current project structure |
+
+### Example: Generate a Project
+
+```python
+import requests
+
+response = requests.post('http://localhost:8088/api/scaffold', json={
+    'name': 'my_todo_app',
+    'blocks': [{'type': 'storage_sqlite'}, {'type': 'crud_routes'}],
+    'entities': [{'name': 'Task', 'fields': [
+        {'name': 'title', 'type': 'string'},
+        {'name': 'done', 'type': 'boolean'}
+    ]}]
+})
+# Creates: app.py, models/task.py, routes/task_routes.py, types/task.ts, etc.
+```
+
+### Visual Builder UI
+
+Open `http://localhost:8088` to access the enhanced visual editor with:
+- **Blocks tab**: Drag compositional blocks onto canvas
+- **Entities tab**: Define data models with fields
+- **Files tab**: Browse generated project files
+- **Live preview**: See generated code in real-time
+- **Generate button**: Write actual files to `workspace/` directory
+
+---
+
 ## Available Blueprints
 
 | Blueprint | Description | Complexity |
@@ -259,8 +377,16 @@ blueprints/
 ├── blocks.py              # Compositional code blocks
 ├── contracts.py           # Bidirectional spec/code contracts
 ├── intelligent_scaffold.py # Unified pipeline
+├── beyond_belief.py       # Advanced features (cross-lang, synthesis)
 ├── test_system.py         # Comprehensive test suite (41 tests)
 │
+├── # Builder Dev Server
+├── builder_server.py      # HTTP API server for visual editor
+├── builder.html           # Enhanced visual editor with API integration
+├── visual_editor.html     # Standalone visual block editor
+├── test_server.py         # API endpoint tests
+│
+├── workspace/             # Generated projects output
 └── output/                # Demo generated project
 ```
 

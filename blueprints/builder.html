@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blueprint Builder - Visual Development Environment</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-tertiary: rgba(0, 0, 0, 0.3);
+            --accent: #00b894;
+            --accent-hover: #00cec9;
+            --danger: #e74c3c;
+            --warning: #f1c40f;
+            --text-primary: #e0e0e0;
+            --text-secondary: #888;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        /* Layout */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 20px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .logo svg {
+            width: 24px;
+            height: 24px;
+            fill: var(--accent);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: var(--bg-tertiary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-tab {
+            flex: 1;
+            padding: 10px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .sidebar-tab:hover {
+            color: var(--text-primary);
+        }
+
+        .sidebar-tab.active {
+            color: var(--accent);
+            border-bottom: 2px solid var(--accent);
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            margin: 15px 0 10px;
+        }
+
+        .section-title:first-child {
+            margin-top: 0;
+        }
+
+        /* Block Palette */
+        .palette-block {
+            background: linear-gradient(135deg, #2d3436 0%, #2c3e50 100%);
+            border: 2px solid #555;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            cursor: grab;
+            transition: all 0.2s;
+        }
+
+        .palette-block:hover {
+            transform: translateX(3px);
+            border-color: var(--accent);
+        }
+
+        .palette-block .name {
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .palette-block .desc {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 3px;
+        }
+
+        .palette-block.auth { border-left: 3px solid #e74c3c; }
+        .palette-block.storage { border-left: 3px solid #3498db; }
+        .palette-block.sync { border-left: 3px solid #9b59b6; }
+        .palette-block.api { border-left: 3px solid #2ecc71; }
+        .palette-block.feature { border-left: 3px solid #f1c40f; }
+
+        /* File Explorer */
+        .file-tree {
+            font-size: 13px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .file-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .file-item.folder {
+            color: var(--accent);
+        }
+
+        .file-item .icon {
+            font-size: 14px;
+        }
+
+        /* Canvas Area */
+        .canvas-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            padding: 10px 15px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger) 0%, #c0392b 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .toolbar-spacer {
+            flex: 1;
+        }
+
+        .project-name-input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: var(--text-primary);
+            font-size: 13px;
+            width: 200px;
+        }
+
+        /* Canvas */
+        .canvas {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: 
+                linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .canvas.drag-over {
+            background-color: rgba(0, 184, 148, 0.05);
+        }
+
+        .canvas-hint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #444;
+            pointer-events: none;
+        }
+
+        /* Placed Blocks */
+        .placed-block {
+            position: absolute;
+            background: linear-gradient(135deg, #2d3436 0%, #2c3e50 100%);
+            border: 2px solid #555;
+            border-radius: 10px;
+            padding: 12px 15px;
+            min-width: 160px;
+            cursor: move;
+            user-select: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .placed-block.selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(0, 184, 148, 0.3);
+        }
+
+        .placed-block.auth { border-color: #e74c3c; }
+        .placed-block.storage { border-color: #3498db; }
+        .placed-block.sync { border-color: #9b59b6; }
+        .placed-block.api { border-color: #2ecc71; }
+        .placed-block.feature { border-color: #f1c40f; }
+
+        .placed-block .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .placed-block .name {
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .delete-btn:hover {
+            background: rgba(231, 76, 60, 0.3);
+            color: var(--danger);
+        }
+
+        /* Ports */
+        .ports {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+        }
+
+        .port-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .port {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+
+        .port-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .port.requires .port-dot { background: var(--danger); }
+        .port.provides .port-dot { background: #2ecc71; }
+
+        /* Connections SVG */
+        .connections-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .connections-layer path {
+            fill: none;
+            stroke: var(--accent);
+            stroke-width: 2;
+            opacity: 0.6;
+        }
+
+        /* Right Panel */
+        .right-panel {
+            width: 350px;
+            background: var(--bg-tertiary);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .panel-tab {
+            flex: 1;
+            padding: 10px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .panel-tab:hover {
+            color: var(--text-primary);
+        }
+
+        .panel-tab.active {
+            color: var(--accent);
+            background: rgba(0, 184, 148, 0.1);
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        /* Code Output */
+        .code-output {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            max-height: 100%;
+        }
+
+        /* Entity Builder */
+        .entity-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .form-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .form-input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .fields-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .field-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .field-row input {
+            flex: 1;
+        }
+
+        .field-row select {
+            width: 100px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
+        .field-remove {
+            background: none;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        /* Preview Frame */
+        .preview-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: white;
+            border-radius: 8px;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 15px;
+            background: var(--bg-tertiary);
+            border-top: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #2ecc71;
+        }
+
+        .status-dot.disconnected {
+            background: var(--danger);
+        }
+
+        /* Notifications */
+        .notification {
+            position: fixed;
+            bottom: 60px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            animation: slideIn 0.3s ease;
+            z-index: 1000;
+            max-width: 350px;
+        }
+
+        .notification.success {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+        }
+
+        .notification.error {
+            background: linear-gradient(135deg, var(--danger) 0%, #c0392b 100%);
+        }
+
+        .notification.info {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 25px;
+            width: 500px;
+            max-width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 24px;
+        }
+
+        .modal-body {
+            margin-bottom: 20px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Hidden elements */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                <span>Blueprint Builder</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-secondary" onclick="saveProject()">
+                    💾 Save
+                </button>
+                <button class="btn btn-secondary" onclick="showNewProjectModal()">
+                    📁 New Project
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-tabs">
+                    <button class="sidebar-tab active" onclick="showSidebarTab('blocks')">Blocks</button>
+                    <button class="sidebar-tab" onclick="showSidebarTab('entities')">Entities</button>
+                    <button class="sidebar-tab" onclick="showSidebarTab('files')">Files</button>
+                </div>
+                
+                <div class="sidebar-content" id="blocks-panel">
+                    <div class="section-title">Authentication</div>
+                    <div class="palette-block auth" draggable="true" data-type="auth_basic">
+                        <div class="name">Basic Auth</div>
+                        <div class="desc">Username/password</div>
+                    </div>
+                    <div class="palette-block auth" draggable="true" data-type="auth_jwt">
+                        <div class="name">JWT Auth</div>
+                        <div class="desc">Token-based auth</div>
+                    </div>
+
+                    <div class="section-title">Storage</div>
+                    <div class="palette-block storage" draggable="true" data-type="storage_json">
+                        <div class="name">JSON Storage</div>
+                        <div class="desc">File-based JSON</div>
+                    </div>
+                    <div class="palette-block storage" draggable="true" data-type="storage_sqlite">
+                        <div class="name">SQLite</div>
+                        <div class="desc">Local database</div>
+                    </div>
+
+                    <div class="section-title">Sync</div>
+                    <div class="palette-block sync" draggable="true" data-type="sync_crdt">
+                        <div class="name">CRDT Sync</div>
+                        <div class="desc">Conflict-free sync</div>
+                    </div>
+
+                    <div class="section-title">API</div>
+                    <div class="palette-block api" draggable="true" data-type="crud_routes">
+                        <div class="name">CRUD API</div>
+                        <div class="desc">REST endpoints</div>
+                    </div>
+
+                    <div class="section-title">Features</div>
+                    <div class="palette-block feature" draggable="true" data-type="caching">
+                        <div class="name">Caching</div>
+                        <div class="desc">In-memory cache</div>
+                    </div>
+                    <div class="palette-block feature" draggable="true" data-type="logging">
+                        <div class="name">Logging</div>
+                        <div class="desc">Structured logs</div>
+                    </div>
+                </div>
+
+                <div class="sidebar-content hidden" id="entities-panel">
+                    <button class="btn btn-primary" style="width: 100%; margin-bottom: 15px;" onclick="showEntityModal()">
+                        + New Entity
+                    </button>
+                    <div id="entities-list">
+                        <p style="color: var(--text-secondary); font-size: 12px;">No entities defined yet</p>
+                    </div>
+                </div>
+
+                <div class="sidebar-content hidden" id="files-panel">
+                    <div id="file-tree">
+                        <p style="color: var(--text-secondary); font-size: 12px;">Generate a project to see files</p>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Canvas -->
+            <main class="canvas-container">
+                <div class="toolbar">
+                    <input type="text" class="project-name-input" id="project-name" value="my_project" placeholder="Project name">
+                    
+                    <div class="toolbar-spacer"></div>
+                    
+                    <button class="btn btn-secondary" onclick="autoConnect()">
+                        🔗 Auto-Connect
+                    </button>
+                    <button class="btn btn-secondary" onclick="checkConstraints()">
+                        ✓ Check
+                    </button>
+                    <button class="btn btn-primary" onclick="generateProject()">
+                        🚀 Generate Project
+                    </button>
+                    <button class="btn btn-danger" onclick="clearCanvas()">
+                        🗑️ Clear
+                    </button>
+                </div>
+                
+                <div class="canvas" id="canvas">
+                    <svg class="connections-layer" id="connections"></svg>
+                    <div class="canvas-hint" id="canvas-hint">
+                        <p>Drag blocks here to design your architecture</p>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Right Panel -->
+            <aside class="right-panel">
+                <div class="panel-tabs">
+                    <button class="panel-tab active" onclick="showPanelTab('code')">Code</button>
+                    <button class="panel-tab" onclick="showPanelTab('preview')">Preview</button>
+                    <button class="panel-tab" onclick="showPanelTab('spec')">Spec</button>
+                </div>
+                
+                <div class="panel-content">
+                    <div id="code-panel">
+                        <pre class="code-output" id="code-output"># Add blocks and generate to see code</pre>
+                    </div>
+                    <div id="preview-panel" class="hidden">
+                        <iframe class="preview-frame" id="preview-frame" src="about:blank"></iframe>
+                    </div>
+                    <div id="spec-panel" class="hidden">
+                        <pre class="code-output" id="spec-output">{}</pre>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Status Bar -->
+        <footer class="status-bar">
+            <div class="status-item">
+                <span class="status-dot" id="server-status"></span>
+                <span id="server-status-text">Connected</span>
+            </div>
+            <div class="status-item">
+                <span id="block-count">0 blocks</span>
+                <span>•</span>
+                <span id="entity-count">0 entities</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Entity Modal -->
+    <div class="modal-overlay hidden" id="entity-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Create Entity</h2>
+                <button class="modal-close" onclick="closeEntityModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="entity-form">
+                    <div class="form-group">
+                        <label class="form-label">Entity Name</label>
+                        <input type="text" class="form-input" id="entity-name" placeholder="Task, User, Post...">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-input" id="entity-description" placeholder="A brief description...">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Fields</label>
+                        <div class="fields-list" id="fields-list">
+                            <div class="field-row">
+                                <input type="text" class="form-input" placeholder="id">
+                                <select>
+                                    <option value="string">string</option>
+                                    <option value="integer">integer</option>
+                                    <option value="boolean">boolean</option>
+                                    <option value="datetime">datetime</option>
+                                </select>
+                                <button class="field-remove" onclick="this.parentElement.remove()">×</button>
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary" style="margin-top: 8px;" onclick="addField()">+ Add Field</button>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Generate For</label>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <label><input type="checkbox" id="lang-python" checked> Python</label>
+                            <label><input type="checkbox" id="lang-typescript" checked> TypeScript</label>
+                            <label><input type="checkbox" id="lang-go"> Go</label>
+                            <label><input type="checkbox" id="lang-rust"> Rust</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEntityModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="createEntity()">Create Entity</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '';  // Same origin
+        
+        // State
+        let placedBlocks = [];
+        let connections = [];
+        let entities = [];
+        let blockIdCounter = 0;
+        let serverConnected = true;
+
+        // Block definitions (simplified, full defs come from server)
+        const BLOCK_DEFS = {
+            auth_basic: { name: "Basic Auth", category: "auth", requires: [], provides: ["auth", "users"] },
+            auth_jwt: { name: "JWT Auth", category: "auth", requires: [], provides: ["auth", "tokens"] },
+            storage_json: { name: "JSON Storage", category: "storage", requires: [], provides: ["storage"] },
+            storage_sqlite: { name: "SQLite", category: "storage", requires: [], provides: ["storage", "database"] },
+            sync_crdt: { name: "CRDT Sync", category: "sync", requires: ["storage"], provides: ["sync", "offline"] },
+            crud_routes: { name: "CRUD API", category: "api", requires: ["storage"], provides: ["api", "rest"] },
+            caching: { name: "Caching", category: "feature", requires: [], provides: ["cache"] },
+            logging: { name: "Logging", category: "feature", requires: [], provides: ["logging"] },
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            setupDragDrop();
+            checkServerConnection();
+            setInterval(checkServerConnection, 5000);
+        });
+
+        function setupDragDrop() {
+            const canvas = document.getElementById('canvas');
+            
+            document.querySelectorAll('.palette-block').forEach(block => {
+                block.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('blockType', block.dataset.type);
+                    e.dataTransfer.effectAllowed = 'copy';
+                });
+            });
+
+            canvas.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                canvas.classList.add('drag-over');
+            });
+
+            canvas.addEventListener('dragleave', () => {
+                canvas.classList.remove('drag-over');
+            });
+
+            canvas.addEventListener('drop', (e) => {
+                e.preventDefault();
+                canvas.classList.remove('drag-over');
+                
+                const blockType = e.dataTransfer.getData('blockType');
+                if (blockType && BLOCK_DEFS[blockType]) {
+                    const rect = canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left - 80;
+                    const y = e.clientY - rect.top - 30;
+                    addBlock(blockType, x, y);
+                }
+            });
+        }
+
+        function addBlock(type, x, y) {
+            const def = BLOCK_DEFS[type];
+            const id = ++blockIdCounter;
+            
+            placedBlocks.push({ id, type, x: Math.max(0, x), y: Math.max(0, y) });
+            renderBlocks();
+            document.getElementById('canvas-hint').style.display = 'none';
+            updateStatus();
+            notify(`Added ${def.name}`, 'success');
+        }
+
+        function renderBlocks() {
+            const canvas = document.getElementById('canvas');
+            canvas.querySelectorAll('.placed-block').forEach(el => el.remove());
+            
+            placedBlocks.forEach(block => {
+                const def = BLOCK_DEFS[block.type];
+                const el = document.createElement('div');
+                el.className = `placed-block ${def.category}`;
+                el.style.left = block.x + 'px';
+                el.style.top = block.y + 'px';
+                el.dataset.id = block.id;
+                
+                const requiresHtml = def.requires.map(r => 
+                    `<div class="port requires"><span class="port-dot"></span>${r}</div>`
+                ).join('');
+                
+                const providesHtml = def.provides.map(p => 
+                    `<div class="port provides">${p}<span class="port-dot"></span></div>`
+                ).join('');
+                
+                el.innerHTML = `
+                    <div class="header">
+                        <span class="name">${def.name}</span>
+                        <button class="delete-btn" onclick="removeBlock(${block.id})">×</button>
+                    </div>
+                    <div class="ports">
+                        <div class="port-group requires">${requiresHtml}</div>
+                        <div class="port-group provides">${providesHtml}</div>
+                    </div>
+                `;
+                
+                makeDraggable(el, block);
+                canvas.appendChild(el);
+            });
+            
+            renderConnections();
+            updateSpec();
+        }
+
+        function makeDraggable(el, block) {
+            let isDragging = false;
+            let startX, startY;
+            
+            el.addEventListener('mousedown', (e) => {
+                if (e.target.classList.contains('delete-btn')) return;
+                isDragging = true;
+                startX = e.clientX - block.x;
+                startY = e.clientY - block.y;
+                el.style.zIndex = 100;
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                block.x = Math.max(0, e.clientX - startX);
+                block.y = Math.max(0, e.clientY - startY);
+                el.style.left = block.x + 'px';
+                el.style.top = block.y + 'px';
+                renderConnections();
+            });
+            
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+                el.style.zIndex = 1;
+            });
+        }
+
+        function removeBlock(id) {
+            placedBlocks = placedBlocks.filter(b => b.id !== id);
+            connections = connections.filter(c => c.from !== id && c.to !== id);
+            
+            if (placedBlocks.length === 0) {
+                document.getElementById('canvas-hint').style.display = 'block';
+            }
+            
+            renderBlocks();
+            updateStatus();
+        }
+
+        function autoConnect() {
+            connections = [];
+            
+            placedBlocks.forEach(provider => {
+                const providerDef = BLOCK_DEFS[provider.type];
+                
+                placedBlocks.forEach(consumer => {
+                    if (provider.id === consumer.id) return;
+                    
+                    const consumerDef = BLOCK_DEFS[consumer.type];
+                    
+                    consumerDef.requires.forEach(req => {
+                        if (providerDef.provides.includes(req)) {
+                            connections.push({ from: provider.id, to: consumer.id, port: req });
+                        }
+                    });
+                });
+            });
+            
+            renderConnections();
+            notify(`Created ${connections.length} connections`, 'info');
+        }
+
+        function renderConnections() {
+            const svg = document.getElementById('connections');
+            const paths = connections.map(conn => {
+                const fromBlock = placedBlocks.find(b => b.id === conn.from);
+                const toBlock = placedBlocks.find(b => b.id === conn.to);
+                
+                if (!fromBlock || !toBlock) return '';
+                
+                const fromX = fromBlock.x + 160;
+                const fromY = fromBlock.y + 40;
+                const toX = toBlock.x;
+                const toY = toBlock.y + 40;
+                
+                const midX = (fromX + toX) / 2;
+                return `<path d="M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}"/>`;
+            });
+            
+            svg.innerHTML = paths.join('');
+        }
+
+        function clearCanvas() {
+            placedBlocks = [];
+            connections = [];
+            blockIdCounter = 0;
+            renderBlocks();
+            document.getElementById('canvas-hint').style.display = 'block';
+            document.getElementById('code-output').textContent = '# Add blocks and generate to see code';
+            updateStatus();
+        }
+
+        async function generateProject() {
+            if (placedBlocks.length === 0 && entities.length === 0) {
+                notify('Add blocks or create entities first!', 'error');
+                return;
+            }
+            
+            const projectName = document.getElementById('project-name').value || 'my_project';
+            
+            const data = {
+                name: projectName,
+                blocks: placedBlocks.map(b => ({ type: b.type })),
+                entities: entities.map(e => ({
+                    name: e.name,
+                    fields: e.fields.map(f => ({ name: f.name, type: f.type }))
+                }))
+            };
+            
+            try {
+                const response = await fetch(`${API}/api/scaffold`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    notify(`Project generated: ${result.files?.length || 0} files created`, 'success');
+                    
+                    // Refresh file tree
+                    await loadFileTree();
+                    
+                    // Show generated code
+                    await loadGeneratedCode(projectName);
+                } else {
+                    notify(`Error: ${result.error}`, 'error');
+                }
+            } catch (err) {
+                notify(`Server error: ${err.message}`, 'error');
+            }
+        }
+
+        async function loadFileTree() {
+            try {
+                const response = await fetch(`${API}/api/project`);
+                const data = await response.json();
+                
+                const tree = document.getElementById('file-tree');
+                
+                if (data.files && data.files.length > 0) {
+                    // Build tree structure
+                    const folders = {};
+                    data.files.forEach(file => {
+                        const parts = file.path.split('/');
+                        const folder = parts.length > 1 ? parts[0] : '';
+                        if (!folders[folder]) folders[folder] = [];
+                        folders[folder].push(file);
+                    });
+                    
+                    let html = '';
+                    Object.entries(folders).forEach(([folder, files]) => {
+                        if (folder) {
+                            html += `<div class="file-item folder"><span class="icon">📁</span>${folder}</div>`;
+                        }
+                        files.forEach(file => {
+                            const name = file.path.split('/').pop();
+                            html += `<div class="file-item" onclick="loadFile('${file.path}')" style="padding-left: ${folder ? '20px' : '8px'}"><span class="icon">📄</span>${name}</div>`;
+                        });
+                    });
+                    
+                    tree.innerHTML = html;
+                } else {
+                    tree.innerHTML = '<p style="color: var(--text-secondary); font-size: 12px;">No files yet</p>';
+                }
+            } catch (err) {
+                console.error('Failed to load file tree:', err);
+            }
+        }
+
+        async function loadFile(path) {
+            try {
+                const response = await fetch(`${API}/api/file?path=${encodeURIComponent(path)}`);
+                const data = await response.json();
+                
+                if (data.content) {
+                    document.getElementById('code-output').textContent = data.content;
+                    showPanelTab('code');
+                }
+            } catch (err) {
+                notify(`Failed to load file: ${err.message}`, 'error');
+            }
+        }
+
+        async function loadGeneratedCode(projectName) {
+            try {
+                const response = await fetch(`${API}/api/file?path=${projectName}/generated_blocks.py`);
+                const data = await response.json();
+                
+                if (data.content) {
+                    document.getElementById('code-output').textContent = data.content;
+                }
+            } catch (err) {
+                // File might not exist yet
+            }
+        }
+
+        function updateSpec() {
+            const spec = {
+                blocks: placedBlocks.map(b => ({
+                    type: b.type,
+                    name: BLOCK_DEFS[b.type]?.name,
+                    provides: BLOCK_DEFS[b.type]?.provides || [],
+                    requires: BLOCK_DEFS[b.type]?.requires || [],
+                })),
+                entities: entities,
+                connections: connections.length,
+                capabilities: [...new Set(placedBlocks.flatMap(b => BLOCK_DEFS[b.type]?.provides || []))]
+            };
+            
+            document.getElementById('spec-output').textContent = JSON.stringify(spec, null, 2);
+        }
+
+        function checkConstraints() {
+            const issues = [];
+            
+            // Check: storage required for sync/crud
+            const hasSync = placedBlocks.some(b => b.type.startsWith('sync_'));
+            const hasCrud = placedBlocks.some(b => b.type === 'crud_routes');
+            const hasStorage = placedBlocks.some(b => b.type.startsWith('storage_'));
+            
+            if ((hasSync || hasCrud) && !hasStorage) {
+                issues.push('⚠️ Storage block needed for sync/API blocks');
+            }
+            
+            // Check: only one auth
+            const authCount = placedBlocks.filter(b => b.type.startsWith('auth_')).length;
+            if (authCount > 1) {
+                issues.push('⚠️ Multiple auth blocks - consider using just one');
+            }
+            
+            // Check: only one storage
+            const storageCount = placedBlocks.filter(b => b.type.startsWith('storage_')).length;
+            if (storageCount > 1) {
+                issues.push('⚠️ Multiple storage blocks - consider using just one');
+            }
+            
+            if (issues.length === 0) {
+                notify('✓ All constraints satisfied!', 'success');
+            } else {
+                notify(issues.join('\n'), 'error');
+            }
+        }
+
+        // Sidebar tabs
+        function showSidebarTab(tab) {
+            document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.sidebar-content').forEach(c => c.classList.add('hidden'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`${tab}-panel`).classList.remove('hidden');
+        }
+
+        // Panel tabs
+        function showPanelTab(tab) {
+            document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel-content > div').forEach(c => c.classList.add('hidden'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`${tab}-panel`).classList.remove('hidden');
+        }
+
+        // Entity modal
+        function showEntityModal() {
+            document.getElementById('entity-modal').classList.remove('hidden');
+            document.getElementById('entity-name').focus();
+        }
+
+        function closeEntityModal() {
+            document.getElementById('entity-modal').classList.add('hidden');
+            document.getElementById('entity-name').value = '';
+            document.getElementById('entity-description').value = '';
+            document.getElementById('fields-list').innerHTML = `
+                <div class="field-row">
+                    <input type="text" class="form-input" placeholder="id">
+                    <select>
+                        <option value="string">string</option>
+                        <option value="integer">integer</option>
+                        <option value="boolean">boolean</option>
+                        <option value="datetime">datetime</option>
+                    </select>
+                    <button class="field-remove" onclick="this.parentElement.remove()">×</button>
+                </div>
+            `;
+        }
+
+        function addField() {
+            const list = document.getElementById('fields-list');
+            const row = document.createElement('div');
+            row.className = 'field-row';
+            row.innerHTML = `
+                <input type="text" class="form-input" placeholder="field_name">
+                <select>
+                    <option value="string">string</option>
+                    <option value="integer">integer</option>
+                    <option value="boolean">boolean</option>
+                    <option value="datetime">datetime</option>
+                </select>
+                <button class="field-remove" onclick="this.parentElement.remove()">×</button>
+            `;
+            list.appendChild(row);
+        }
+
+        async function createEntity() {
+            const name = document.getElementById('entity-name').value;
+            const description = document.getElementById('entity-description').value;
+            
+            if (!name) {
+                notify('Entity name is required', 'error');
+                return;
+            }
+            
+            const fieldRows = document.querySelectorAll('#fields-list .field-row');
+            const fields = [];
+            fieldRows.forEach(row => {
+                const nameInput = row.querySelector('input');
+                const typeSelect = row.querySelector('select');
+                if (nameInput.value) {
+                    fields.push({ name: nameInput.value, type: typeSelect.value });
+                }
+            });
+            
+            const languages = [];
+            if (document.getElementById('lang-python').checked) languages.push('python');
+            if (document.getElementById('lang-typescript').checked) languages.push('typescript');
+            if (document.getElementById('lang-go').checked) languages.push('go');
+            if (document.getElementById('lang-rust').checked) languages.push('rust');
+            
+            // Save locally
+            entities.push({ name, description, fields });
+            updateEntitiesList();
+            updateStatus();
+            
+            // Generate on server
+            try {
+                const response = await fetch(`${API}/api/create-contract`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description, fields, languages })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    notify(`Entity ${name} created with ${Object.keys(result.generated).length} language files`, 'success');
+                    await loadFileTree();
+                    
+                    // Show the Python code
+                    if (result.generated.python) {
+                        document.getElementById('code-output').textContent = result.generated.python.code;
+                    }
+                }
+            } catch (err) {
+                notify(`Server error: ${err.message}`, 'error');
+            }
+            
+            closeEntityModal();
+        }
+
+        function updateEntitiesList() {
+            const list = document.getElementById('entities-list');
+            
+            if (entities.length === 0) {
+                list.innerHTML = '<p style="color: var(--text-secondary); font-size: 12px;">No entities defined yet</p>';
+                return;
+            }
+            
+            list.innerHTML = entities.map((e, i) => `
+                <div class="palette-block" style="border-left: 3px solid #9b59b6;">
+                    <div class="name">${e.name}</div>
+                    <div class="desc">${e.fields.length} fields</div>
+                </div>
+            `).join('');
+        }
+
+        // Status updates
+        function updateStatus() {
+            document.getElementById('block-count').textContent = `${placedBlocks.length} blocks`;
+            document.getElementById('entity-count').textContent = `${entities.length} entities`;
+        }
+
+        async function checkServerConnection() {
+            try {
+                const response = await fetch(`${API}/api/blocks`);
+                if (response.ok) {
+                    serverConnected = true;
+                    document.getElementById('server-status').classList.remove('disconnected');
+                    document.getElementById('server-status-text').textContent = 'Connected';
+                }
+            } catch (err) {
+                serverConnected = false;
+                document.getElementById('server-status').classList.add('disconnected');
+                document.getElementById('server-status-text').textContent = 'Disconnected';
+            }
+        }
+
+        async function saveProject() {
+            const projectName = document.getElementById('project-name').value || 'my_project';
+            
+            // Save current state as JSON
+            const state = {
+                blocks: placedBlocks,
+                entities: entities,
+                connections: connections,
+            };
+            
+            try {
+                await fetch(`${API}/api/save`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        path: `${projectName}/project.json`,
+                        content: JSON.stringify(state, null, 2)
+                    })
+                });
+                
+                notify('Project saved!', 'success');
+            } catch (err) {
+                notify(`Save failed: ${err.message}`, 'error');
+            }
+        }
+
+        function showNewProjectModal() {
+            const name = prompt('Project name:', 'new_project');
+            if (name) {
+                document.getElementById('project-name').value = name;
+                clearCanvas();
+                entities = [];
+                updateEntitiesList();
+                notify(`New project: ${name}`, 'info');
+            }
+        }
+
+        // Notifications
+        function notify(message, type = 'info') {
+            const existing = document.querySelector('.notification');
+            if (existing) existing.remove();
+            
+            const notif = document.createElement('div');
+            notif.className = `notification ${type}`;
+            notif.textContent = message;
+            document.body.appendChild(notif);
+            
+            setTimeout(() => notif.remove(), 4000);
+        }
+    </script>
+</body>
+</html>

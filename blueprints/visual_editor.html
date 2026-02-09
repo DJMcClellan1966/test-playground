@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Block Editor - Intelligent Scaffolding</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: rgba(0, 0, 0, 0.3);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            margin-bottom: 15px;
+        }
+
+        .block-palette {
+            margin-bottom: 30px;
+        }
+
+        .palette-block {
+            background: linear-gradient(135deg, #2d3436 0%, #2c3e50 100%);
+            border: 2px solid #555;
+            border-radius: 8px;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            cursor: grab;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .palette-block:hover {
+            transform: translateX(5px);
+            border-color: #00b894;
+            box-shadow: 0 4px 15px rgba(0, 184, 148, 0.3);
+        }
+
+        .palette-block:active {
+            cursor: grabbing;
+        }
+
+        .palette-block .name {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .palette-block .desc {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .palette-block.auth { border-left: 4px solid #e74c3c; }
+        .palette-block.storage { border-left: 4px solid #3498db; }
+        .palette-block.sync { border-left: 4px solid #9b59b6; }
+        .palette-block.api { border-left: 4px solid #2ecc71; }
+        .palette-block.feature { border-left: 4px solid #f1c40f; }
+
+        /* Canvas */
+        .canvas-area {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .toolbar button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+        }
+
+        .toolbar button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .canvas {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .canvas.drag-over {
+            border-color: #00b894;
+            background: rgba(0, 184, 148, 0.1);
+        }
+
+        .canvas-hint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #555;
+        }
+
+        .canvas-hint svg {
+            width: 60px;
+            height: 60px;
+            margin-bottom: 15px;
+            opacity: 0.3;
+        }
+
+        /* Placed blocks */
+        .placed-block {
+            position: absolute;
+            background: linear-gradient(135deg, #2d3436 0%, #2c3e50 100%);
+            border: 2px solid #555;
+            border-radius: 10px;
+            padding: 15px;
+            min-width: 180px;
+            cursor: move;
+            user-select: none;
+        }
+
+        .placed-block.auth { border-color: #e74c3c; }
+        .placed-block.storage { border-color: #3498db; }
+        .placed-block.sync { border-color: #9b59b6; }
+        .placed-block.api { border-color: #2ecc71; }
+        .placed-block.feature { border-color: #f1c40f; }
+
+        .placed-block .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .placed-block .name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .placed-block .delete-btn {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .placed-block .delete-btn:hover {
+            background: rgba(231, 76, 60, 0.3);
+            color: #e74c3c;
+        }
+
+        /* Ports */
+        .ports {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+        }
+
+        .port-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .port-group.requires { align-items: flex-start; }
+        .port-group.provides { align-items: flex-end; }
+
+        .port {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .port-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .port.requires .port-dot {
+            background: #e74c3c;
+            box-shadow: 0 0 5px #e74c3c;
+        }
+
+        .port.provides .port-dot {
+            background: #2ecc71;
+            box-shadow: 0 0 5px #2ecc71;
+        }
+
+        .port.connected .port-dot {
+            background: #f1c40f;
+            box-shadow: 0 0 5px #f1c40f;
+        }
+
+        /* Connections */
+        .connections-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .connections-layer path {
+            fill: none;
+            stroke: #00b894;
+            stroke-width: 2;
+            opacity: 0.7;
+        }
+
+        /* Output Panel */
+        .output-panel {
+            width: 350px;
+            background: rgba(0, 0, 0, 0.3);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .output-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .output-tabs {
+            display: flex;
+            gap: 10px;
+        }
+
+        .output-tab {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: none;
+            border-radius: 6px;
+            color: #888;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .output-tab.active {
+            background: rgba(0, 184, 148, 0.2);
+            color: #00b894;
+        }
+
+        .output-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .output-content pre {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-family: 'Fira Code', monospace;
+            line-height: 1.5;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+
+        .constraint-list {
+            list-style: none;
+        }
+
+        .constraint-item {
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .constraint-item.satisfied {
+            border-left: 3px solid #2ecc71;
+        }
+
+        .constraint-item.unsatisfied {
+            border-left: 3px solid #e74c3c;
+        }
+
+        .constraint-status {
+            float: right;
+            font-size: 11px;
+        }
+
+        .status-ok { color: #2ecc71; }
+        .status-error { color: #e74c3c; }
+
+        /* Notifications */
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            font-size: 14px;
+            animation: slideIn 0.3s ease;
+            z-index: 1000;
+        }
+
+        .notification.success {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            color: white;
+        }
+
+        .notification.error {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar with block palette -->
+        <aside class="sidebar">
+            <div class="block-palette">
+                <h2>Authentication</h2>
+                <div class="palette-block auth" draggable="true" data-type="auth_basic">
+                    <div class="name">Basic Auth</div>
+                    <div class="desc">Username/password authentication</div>
+                </div>
+                <div class="palette-block auth" draggable="true" data-type="auth_jwt">
+                    <div class="name">JWT Auth</div>
+                    <div class="desc">JSON Web Token authentication</div>
+                </div>
+            </div>
+
+            <div class="block-palette">
+                <h2>Storage</h2>
+                <div class="palette-block storage" draggable="true" data-type="storage_json">
+                    <div class="name">JSON Storage</div>
+                    <div class="desc">File-based JSON persistence</div>
+                </div>
+                <div class="palette-block storage" draggable="true" data-type="storage_sqlite">
+                    <div class="name">SQLite Storage</div>
+                    <div class="desc">SQLite database storage</div>
+                </div>
+                <div class="palette-block storage" draggable="true" data-type="storage_postgres">
+                    <div class="name">PostgreSQL</div>
+                    <div class="desc">PostgreSQL database</div>
+                </div>
+            </div>
+
+            <div class="block-palette">
+                <h2>Sync</h2>
+                <div class="palette-block sync" draggable="true" data-type="sync_crdt">
+                    <div class="name">CRDT Sync</div>
+                    <div class="desc">Conflict-free replicated data</div>
+                </div>
+                <div class="palette-block sync" draggable="true" data-type="sync_websocket">
+                    <div class="name">WebSocket Sync</div>
+                    <div class="desc">Real-time WebSocket sync</div>
+                </div>
+            </div>
+
+            <div class="block-palette">
+                <h2>API</h2>
+                <div class="palette-block api" draggable="true" data-type="crud_routes">
+                    <div class="name">CRUD Routes</div>
+                    <div class="desc">REST API endpoints</div>
+                </div>
+                <div class="palette-block api" draggable="true" data-type="graphql">
+                    <div class="name">GraphQL API</div>
+                    <div class="desc">GraphQL endpoint</div>
+                </div>
+            </div>
+
+            <div class="block-palette">
+                <h2>Features</h2>
+                <div class="palette-block feature" draggable="true" data-type="caching">
+                    <div class="name">Caching</div>
+                    <div class="desc">In-memory cache layer</div>
+                </div>
+                <div class="palette-block feature" draggable="true" data-type="logging">
+                    <div class="name">Logging</div>
+                    <div class="desc">Structured logging</div>
+                </div>
+                <div class="palette-block feature" draggable="true" data-type="rate_limiting">
+                    <div class="name">Rate Limiting</div>
+                    <div class="desc">Request rate limiter</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main canvas -->
+        <main class="canvas-area">
+            <div class="toolbar">
+                <button class="btn-primary" onclick="generateCode()">
+                    Generate Code
+                </button>
+                <button class="btn-secondary" onclick="checkConstraints()">
+                    Check Constraints
+                </button>
+                <button class="btn-secondary" onclick="autoConnect()">
+                    Auto-Connect
+                </button>
+                <button class="btn-danger" onclick="clearCanvas()">
+                    Clear All
+                </button>
+            </div>
+            
+            <div class="canvas" id="canvas">
+                <svg class="connections-layer" id="connections"></svg>
+                <div class="canvas-hint" id="canvas-hint">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <p>Drag blocks here to build your architecture</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Output panel -->
+        <aside class="output-panel">
+            <div class="output-header">
+                <div class="output-tabs">
+                    <button class="output-tab active" onclick="showTab('code')">Code</button>
+                    <button class="output-tab" onclick="showTab('constraints')">Constraints</button>
+                    <button class="output-tab" onclick="showTab('spec')">Spec</button>
+                </div>
+            </div>
+            <div class="output-content" id="output-content">
+                <pre id="code-output"># Add blocks to generate code</pre>
+                <ul class="constraint-list" id="constraints-output" style="display: none;"></ul>
+                <pre id="spec-output" style="display: none;">No specification yet</pre>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        // Block definitions
+        const BLOCK_DEFS = {
+            auth_basic: {
+                name: "Basic Auth",
+                category: "auth",
+                requires: [],
+                provides: ["auth", "users"],
+                code: `# Basic Authentication
+from functools import wraps
+from flask import request, jsonify
+
+users = {}
+
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+def check_auth(username, password):
+    return username in users and users[username] == password`
+            },
+            auth_jwt: {
+                name: "JWT Auth",
+                category: "auth",
+                requires: [],
+                provides: ["auth", "tokens"],
+                code: `# JWT Authentication
+import jwt
+from datetime import datetime, timedelta
+from functools import wraps
+from flask import request, jsonify
+
+SECRET_KEY = "your-secret-key"
+
+def create_token(user_id):
+    payload = {
+        "user_id": user_id,
+        "exp": datetime.utcnow() + timedelta(hours=24)
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+def require_token(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            request.user_id = payload["user_id"]
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token"}), 401
+        return f(*args, **kwargs)
+    return decorated`
+            },
+            storage_json: {
+                name: "JSON Storage",
+                category: "storage",
+                requires: [],
+                provides: ["storage"],
+                code: `# JSON File Storage
+import json
+from pathlib import Path
+
+class JSONStorage:
+    def __init__(self, path="data.json"):
+        self.path = Path(path)
+        self._data = self._load()
+    
+    def _load(self):
+        if self.path.exists():
+            return json.loads(self.path.read_text())
+        return {}
+    
+    def _save(self):
+        self.path.write_text(json.dumps(self._data, indent=2))
+    
+    def get(self, key, default=None):
+        return self._data.get(key, default)
+    
+    def set(self, key, value):
+        self._data[key] = value
+        self._save()
+    
+    def delete(self, key):
+        if key in self._data:
+            del self._data[key]
+            self._save()
+
+storage = JSONStorage()`
+            },
+            storage_sqlite: {
+                name: "SQLite Storage",
+                category: "storage",
+                requires: [],
+                provides: ["storage", "database"],
+                code: `# SQLite Storage
+import sqlite3
+from contextlib import contextmanager
+
+class SQLiteStorage:
+    def __init__(self, db_path="app.db"):
+        self.db_path = db_path
+        self._init_db()
+    
+    @contextmanager
+    def _get_conn(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
+    
+    def _init_db(self):
+        # Override in subclass
+        pass
+    
+    def query(self, sql, params=()):
+        with self._get_conn() as conn:
+            return conn.execute(sql, params).fetchall()
+    
+    def execute(self, sql, params=()):
+        with self._get_conn() as conn:
+            conn.execute(sql, params)
+
+db = SQLiteStorage()`
+            },
+            storage_postgres: {
+                name: "PostgreSQL",
+                category: "storage",
+                requires: [],
+                provides: ["storage", "database"],
+                code: `# PostgreSQL Storage
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from contextlib import contextmanager
+
+class PostgresStorage:
+    def __init__(self, dsn):
+        self.dsn = dsn
+    
+    @contextmanager
+    def _get_conn(self):
+        conn = psycopg2.connect(self.dsn)
+        try:
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
+    
+    def query(self, sql, params=()):
+        with self._get_conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(sql, params)
+                return cur.fetchall()
+    
+    def execute(self, sql, params=()):
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+
+db = PostgresStorage("postgresql://localhost/myapp")`
+            },
+            sync_crdt: {
+                name: "CRDT Sync",
+                category: "sync",
+                requires: ["storage"],
+                provides: ["sync", "offline"],
+                code: `# CRDT Sync (Conflict-free Replicated Data Types)
+from collections import defaultdict
+from typing import Any, Dict, Set
+
+class LWWRegister:
+    """Last-Writer-Wins Register"""
+    def __init__(self):
+        self.value = None
+        self.timestamp = 0
+    
+    def set(self, value, timestamp):
+        if timestamp > self.timestamp:
+            self.value = value
+            self.timestamp = timestamp
+    
+    def merge(self, other):
+        if other.timestamp > self.timestamp:
+            self.value = other.value
+            self.timestamp = other.timestamp
+
+class GSet:
+    """Grow-only Set"""
+    def __init__(self):
+        self.elements: Set[Any] = set()
+    
+    def add(self, element):
+        self.elements.add(element)
+    
+    def merge(self, other):
+        self.elements |= other.elements
+
+class CRDTStore:
+    def __init__(self, storage):
+        self.storage = storage
+        self.registers: Dict[str, LWWRegister] = defaultdict(LWWRegister)
+    
+    def set(self, key, value, timestamp=None):
+        import time
+        ts = timestamp or int(time.time() * 1000)
+        self.registers[key].set(value, ts)
+        self.storage.set(f"crdt:{key}", {"value": value, "ts": ts})`
+            },
+            sync_websocket: {
+                name: "WebSocket Sync",
+                category: "sync",
+                requires: ["storage"],
+                provides: ["sync", "realtime"],
+                code: `# WebSocket Sync
+from flask_socketio import SocketIO, emit, join_room
+
+socketio = SocketIO()
+
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
+
+@socketio.on('join')
+def handle_join(data):
+    room = data.get('room', 'default')
+    join_room(room)
+    emit('joined', {'room': room})
+
+@socketio.on('update')
+def handle_update(data):
+    room = data.get('room', 'default')
+    # Broadcast to all clients in room
+    emit('sync', data, room=room, include_self=False)
+
+def broadcast_change(room, data):
+    socketio.emit('sync', data, room=room)`
+            },
+            crud_routes: {
+                name: "CRUD Routes",
+                category: "api",
+                requires: ["storage"],
+                provides: ["api", "rest"],
+                code: `# CRUD API Routes
+from flask import Blueprint, request, jsonify
+
+api = Blueprint('api', __name__)
+
+@api.route('/items', methods=['GET'])
+def list_items():
+    items = storage.get('items', [])
+    return jsonify(items)
+
+@api.route('/items', methods=['POST'])
+def create_item():
+    data = request.get_json()
+    items = storage.get('items', [])
+    data['id'] = len(items) + 1
+    items.append(data)
+    storage.set('items', items)
+    return jsonify(data), 201
+
+@api.route('/items/<int:id>', methods=['GET'])
+def get_item(id):
+    items = storage.get('items', [])
+    item = next((i for i in items if i['id'] == id), None)
+    if not item:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify(item)
+
+@api.route('/items/<int:id>', methods=['PUT'])
+def update_item(id):
+    data = request.get_json()
+    items = storage.get('items', [])
+    for i, item in enumerate(items):
+        if item['id'] == id:
+            items[i] = {**item, **data}
+            storage.set('items', items)
+            return jsonify(items[i])
+    return jsonify({'error': 'Not found'}), 404
+
+@api.route('/items/<int:id>', methods=['DELETE'])
+def delete_item(id):
+    items = storage.get('items', [])
+    items = [i for i in items if i['id'] != id]
+    storage.set('items', items)
+    return '', 204`
+            },
+            graphql: {
+                name: "GraphQL API",
+                category: "api",
+                requires: ["storage"],
+                provides: ["api", "graphql"],
+                code: `# GraphQL API
+from flask_graphql import GraphQLView
+import graphene
+
+class Item(graphene.ObjectType):
+    id = graphene.Int()
+    name = graphene.String()
+    data = graphene.JSONString()
+
+class Query(graphene.ObjectType):
+    items = graphene.List(Item)
+    item = graphene.Field(Item, id=graphene.Int())
+    
+    def resolve_items(self, info):
+        return storage.get('items', [])
+    
+    def resolve_item(self, info, id):
+        items = storage.get('items', [])
+        return next((i for i in items if i['id'] == id), None)
+
+class CreateItem(graphene.Mutation):
+    class Arguments:
+        name = graphene.String()
+    
+    item = graphene.Field(Item)
+    
+    def mutate(self, info, name):
+        items = storage.get('items', [])
+        item = {'id': len(items) + 1, 'name': name}
+        items.append(item)
+        storage.set('items', items)
+        return CreateItem(item=item)
+
+class Mutation(graphene.ObjectType):
+    create_item = CreateItem.Field()
+
+schema = graphene.Schema(query=Query, mutation=Mutation)`
+            },
+            caching: {
+                name: "Caching",
+                category: "feature",
+                requires: [],
+                provides: ["cache"],
+                code: `# In-Memory Cache
+from functools import lru_cache, wraps
+from collections import OrderedDict
+import time
+
+class TTLCache:
+    def __init__(self, maxsize=100, ttl=300):
+        self.cache = OrderedDict()
+        self.maxsize = maxsize
+        self.ttl = ttl
+    
+    def get(self, key):
+        if key in self.cache:
+            value, expires = self.cache[key]
+            if time.time() < expires:
+                self.cache.move_to_end(key)
+                return value
+            del self.cache[key]
+        return None
+    
+    def set(self, key, value):
+        if len(self.cache) >= self.maxsize:
+            self.cache.popitem(last=False)
+        self.cache[key] = (value, time.time() + self.ttl)
+
+cache = TTLCache()
+
+def cached(ttl=300):
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            key = (f.__name__, args, tuple(sorted(kwargs.items())))
+            result = cache.get(key)
+            if result is None:
+                result = f(*args, **kwargs)
+                cache.set(key, result)
+            return result
+        return wrapper
+    return decorator`
+            },
+            logging: {
+                name: "Logging",
+                category: "feature",
+                requires: [],
+                provides: ["logging"],
+                code: `# Structured Logging
+import logging
+import json
+from datetime import datetime
+
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        log_data = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'level': record.levelname,
+            'message': record.getMessage(),
+            'module': record.module,
+            'function': record.funcName,
+        }
+        if record.exc_info:
+            log_data['exception'] = self.formatException(record.exc_info)
+        return json.dumps(log_data)
+
+def setup_logging(level=logging.INFO):
+    handler = logging.StreamHandler()
+    handler.setFormatter(JSONFormatter())
+    
+    logger = logging.getLogger()
+    logger.setLevel(level)
+    logger.addHandler(handler)
+    
+    return logger
+
+logger = setup_logging()`
+            },
+            rate_limiting: {
+                name: "Rate Limiting",
+                category: "feature",
+                requires: [],
+                provides: ["rate_limit"],
+                code: `# Rate Limiting
+from functools import wraps
+from flask import request, jsonify
+import time
+from collections import defaultdict
+
+class RateLimiter:
+    def __init__(self):
+        self.requests = defaultdict(list)
+    
+    def is_allowed(self, key, limit=100, window=60):
+        now = time.time()
+        # Clean old requests
+        self.requests[key] = [
+            t for t in self.requests[key]
+            if now - t < window
+        ]
+        # Check limit
+        if len(self.requests[key]) >= limit:
+            return False
+        self.requests[key].append(now)
+        return True
+
+limiter = RateLimiter()
+
+def rate_limit(limit=100, window=60):
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            key = request.remote_addr
+            if not limiter.is_allowed(key, limit, window):
+                return jsonify({'error': 'Rate limit exceeded'}), 429
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator`
+            }
+        };
+
+        // Constraints
+        const CONSTRAINTS = [
+            {
+                name: "Storage required for CRUD",
+                check: (blocks) => {
+                    const hasCrud = blocks.some(b => b.type === 'crud_routes' || b.type === 'graphql');
+                    const hasStorage = blocks.some(b => BLOCK_DEFS[b.type].provides.includes('storage'));
+                    return !hasCrud || hasStorage;
+                }
+            },
+            {
+                name: "Storage required for sync",
+                check: (blocks) => {
+                    const hasSync = blocks.some(b => b.type === 'sync_crdt' || b.type === 'sync_websocket');
+                    const hasStorage = blocks.some(b => BLOCK_DEFS[b.type].provides.includes('storage'));
+                    return !hasSync || hasStorage;
+                }
+            },
+            {
+                name: "Only one storage type recommended",
+                check: (blocks) => {
+                    const storageCount = blocks.filter(b => 
+                        BLOCK_DEFS[b.type].category === 'storage'
+                    ).length;
+                    return storageCount <= 1;
+                }
+            },
+            {
+                name: "Only one auth type recommended",
+                check: (blocks) => {
+                    const authCount = blocks.filter(b => 
+                        BLOCK_DEFS[b.type].category === 'auth'
+                    ).length;
+                    return authCount <= 1;
+                }
+            }
+        ];
+
+        // State
+        let placedBlocks = [];
+        let connections = [];
+        let blockIdCounter = 0;
+        let draggedBlock = null;
+        let activeTab = 'code';
+
+        // DOM elements
+        const canvas = document.getElementById('canvas');
+        const canvasHint = document.getElementById('canvas-hint');
+        const connectionsLayer = document.getElementById('connections');
+
+        // Event handlers
+        document.querySelectorAll('.palette-block').forEach(block => {
+            block.addEventListener('dragstart', (e) => {
+                draggedBlock = {
+                    type: block.dataset.type,
+                    isNew: true
+                };
+                e.dataTransfer.effectAllowed = 'copy';
+            });
+        });
+
+        canvas.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            canvas.classList.add('drag-over');
+        });
+
+        canvas.addEventListener('dragleave', () => {
+            canvas.classList.remove('drag-over');
+        });
+
+        canvas.addEventListener('drop', (e) => {
+            e.preventDefault();
+            canvas.classList.remove('drag-over');
+            
+            if (draggedBlock && draggedBlock.isNew) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left - 90;
+                const y = e.clientY - rect.top - 30;
+                
+                addBlock(draggedBlock.type, x, y);
+            }
+            
+            draggedBlock = null;
+        });
+
+        function addBlock(type, x, y) {
+            const def = BLOCK_DEFS[type];
+            if (!def) return;
+
+            const id = ++blockIdCounter;
+            const block = {
+                id,
+                type,
+                x: Math.max(0, x),
+                y: Math.max(0, y)
+            };
+            
+            placedBlocks.push(block);
+            renderBlocks();
+            canvasHint.style.display = 'none';
+            showNotification(`Added ${def.name}`, 'success');
+        }
+
+        function renderBlocks() {
+            // Clear existing blocks
+            canvas.querySelectorAll('.placed-block').forEach(el => el.remove());
+            
+            placedBlocks.forEach(block => {
+                const def = BLOCK_DEFS[block.type];
+                const el = document.createElement('div');
+                el.className = `placed-block ${def.category}`;
+                el.style.left = block.x + 'px';
+                el.style.top = block.y + 'px';
+                el.dataset.id = block.id;
+                
+                const requiresHtml = def.requires.map(r => 
+                    `<div class="port requires"><span class="port-dot"></span>${r}</div>`
+                ).join('');
+                
+                const providesHtml = def.provides.map(p => 
+                    `<div class="port provides">${p}<span class="port-dot"></span></div>`
+                ).join('');
+                
+                el.innerHTML = `
+                    <div class="header">
+                        <span class="name">${def.name}</span>
+                        <button class="delete-btn" onclick="removeBlock(${block.id})">×</button>
+                    </div>
+                    <div class="ports">
+                        <div class="port-group requires">${requiresHtml}</div>
+                        <div class="port-group provides">${providesHtml}</div>
+                    </div>
+                `;
+                
+                // Make draggable
+                makeDraggable(el, block);
+                
+                canvas.appendChild(el);
+            });
+            
+            renderConnections();
+        }
+
+        function makeDraggable(el, block) {
+            let isDragging = false;
+            let startX, startY;
+            
+            el.addEventListener('mousedown', (e) => {
+                if (e.target.classList.contains('delete-btn')) return;
+                isDragging = true;
+                startX = e.clientX - block.x;
+                startY = e.clientY - block.y;
+                el.style.zIndex = 100;
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                block.x = e.clientX - startX;
+                block.y = e.clientY - startY;
+                el.style.left = block.x + 'px';
+                el.style.top = block.y + 'px';
+                renderConnections();
+            });
+            
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+                el.style.zIndex = 1;
+            });
+        }
+
+        function removeBlock(id) {
+            placedBlocks = placedBlocks.filter(b => b.id !== id);
+            if (placedBlocks.length === 0) {
+                canvasHint.style.display = 'block';
+            }
+            renderBlocks();
+        }
+
+        function autoConnect() {
+            connections = [];
+            
+            // Find provides -> requires matches
+            placedBlocks.forEach(provider => {
+                const providerDef = BLOCK_DEFS[provider.type];
+                
+                placedBlocks.forEach(consumer => {
+                    if (provider.id === consumer.id) return;
+                    
+                    const consumerDef = BLOCK_DEFS[consumer.type];
+                    
+                    consumerDef.requires.forEach(req => {
+                        if (providerDef.provides.includes(req)) {
+                            connections.push({
+                                from: provider.id,
+                                to: consumer.id,
+                                port: req
+                            });
+                        }
+                    });
+                });
+            });
+            
+            renderConnections();
+            showNotification(`Created ${connections.length} connections`, 'success');
+        }
+
+        function renderConnections() {
+            const paths = connections.map(conn => {
+                const fromBlock = placedBlocks.find(b => b.id === conn.from);
+                const toBlock = placedBlocks.find(b => b.id === conn.to);
+                
+                if (!fromBlock || !toBlock) return '';
+                
+                const fromX = fromBlock.x + 180;  // Right side of block
+                const fromY = fromBlock.y + 50;
+                const toX = toBlock.x;  // Left side of block
+                const toY = toBlock.y + 50;
+                
+                // Bezier curve
+                const midX = (fromX + toX) / 2;
+                return `<path d="M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}"/>`;
+            });
+            
+            connectionsLayer.innerHTML = paths.join('');
+        }
+
+        function clearCanvas() {
+            placedBlocks = [];
+            connections = [];
+            renderBlocks();
+            canvasHint.style.display = 'block';
+            document.getElementById('code-output').textContent = '# Add blocks to generate code';
+        }
+
+        function generateCode() {
+            if (placedBlocks.length === 0) {
+                showNotification('Add some blocks first!', 'error');
+                return;
+            }
+            
+            const imports = new Set();
+            const codeBlocks = [];
+            
+            // Sort by dependencies
+            const sorted = topologicalSort(placedBlocks);
+            
+            sorted.forEach(block => {
+                const def = BLOCK_DEFS[block.type];
+                codeBlocks.push(`\n# ---- ${def.name} ----\n${def.code}`);
+            });
+            
+            // Generate main app
+            const hasFlask = placedBlocks.some(b => 
+                ['crud_routes', 'graphql'].includes(b.type)
+            );
+            
+            let mainCode = '';
+            if (hasFlask) {
+                mainCode = `
+
+# ---- Main App ----
+from flask import Flask
+
+app = Flask(__name__)
+${placedBlocks.some(b => b.type === 'crud_routes') ? 'app.register_blueprint(api, url_prefix="/api")' : ''}
+${placedBlocks.some(b => b.type === 'graphql') ? 'app.add_url_rule("/graphql", view_func=GraphQLView.as_view("graphql", schema=schema, graphiql=True))' : ''}
+${placedBlocks.some(b => b.type.startsWith('sync_')) ? 'socketio.init_app(app)' : ''}
+
+if __name__ == "__main__":
+    ${placedBlocks.some(b => b.type.startsWith('sync_')) ? 'socketio.run(app, debug=True)' : 'app.run(debug=True)'}`;
+            }
+            
+            const fullCode = `"""
+Generated by Visual Block Editor
+Blocks: ${placedBlocks.map(b => BLOCK_DEFS[b.type].name).join(', ')}
+"""
+${codeBlocks.join('\n')}${mainCode}`;
+            
+            document.getElementById('code-output').textContent = fullCode;
+            showTab('code');
+            showNotification('Code generated!', 'success');
+        }
+
+        function topologicalSort(blocks) {
+            // Simple sort - providers before consumers
+            return [...blocks].sort((a, b) => {
+                const aDef = BLOCK_DEFS[a.type];
+                const bDef = BLOCK_DEFS[b.type];
+                
+                // If a provides what b requires, a comes first
+                if (bDef.requires.some(r => aDef.provides.includes(r))) return -1;
+                if (aDef.requires.some(r => bDef.provides.includes(r))) return 1;
+                return 0;
+            });
+        }
+
+        function checkConstraints() {
+            const list = document.getElementById('constraints-output');
+            list.innerHTML = '';
+            
+            CONSTRAINTS.forEach(constraint => {
+                const satisfied = constraint.check(placedBlocks);
+                const item = document.createElement('li');
+                item.className = `constraint-item ${satisfied ? 'satisfied' : 'unsatisfied'}`;
+                item.innerHTML = `
+                    ${constraint.name}
+                    <span class="constraint-status ${satisfied ? 'status-ok' : 'status-error'}">
+                        ${satisfied ? '✓ OK' : '✗ Violated'}
+                    </span>
+                `;
+                list.appendChild(item);
+            });
+            
+            showTab('constraints');
+        }
+
+        function showTab(tab) {
+            activeTab = tab;
+            document.querySelectorAll('.output-tab').forEach(t => {
+                t.classList.toggle('active', t.textContent.toLowerCase() === tab);
+            });
+            
+            document.getElementById('code-output').style.display = tab === 'code' ? 'block' : 'none';
+            document.getElementById('constraints-output').style.display = tab === 'constraints' ? 'block' : 'none';
+            document.getElementById('spec-output').style.display = tab === 'spec' ? 'block' : 'none';
+            
+            if (tab === 'spec') {
+                updateSpec();
+            }
+        }
+
+        function updateSpec() {
+            if (placedBlocks.length === 0) {
+                document.getElementById('spec-output').textContent = 'No specification yet';
+                return;
+            }
+            
+            const spec = {
+                name: "Generated Architecture",
+                blocks: placedBlocks.map(b => ({
+                    type: b.type,
+                    name: BLOCK_DEFS[b.type].name,
+                    provides: BLOCK_DEFS[b.type].provides,
+                    requires: BLOCK_DEFS[b.type].requires
+                })),
+                connections: connections,
+                capabilities: [...new Set(placedBlocks.flatMap(b => BLOCK_DEFS[b.type].provides))]
+            };
+            
+            document.getElementById('spec-output').textContent = JSON.stringify(spec, null, 2);
+        }
+
+        function showNotification(message, type) {
+            const existing = document.querySelector('.notification');
+            if (existing) existing.remove();
+            
+            const notif = document.createElement('div');
+            notif.className = `notification ${type}`;
+            notif.textContent = message;
+            document.body.appendChild(notif);
+            
+            setTimeout(() => notif.remove(), 3000);
+        }
+    </script>
+</body>
+</html>
