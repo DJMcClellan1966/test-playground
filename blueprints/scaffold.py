@@ -544,8 +544,13 @@ module.exports = router;
 def get_llm_client():
     """Import and return the LLM call function."""
     try:
-        import config
-        from llm_client import call_llm
+        # Add socratic-learner path for imports
+        _socratic_path = Path(__file__).parent.parent / "projects" / "socratic-learner"
+        if _socratic_path.exists() and str(_socratic_path) not in sys.path:
+            sys.path.insert(0, str(_socratic_path))
+        
+        import config  # type: ignore
+        from llm_client import call_llm  # type: ignore
         return call_llm, config
     except ImportError:
         print("⚠️  LLM client not available. Install socratic-learner or run without --generate")

@@ -205,7 +205,7 @@ An algorithm is a finite, precise procedure that always terminates with a correc
 def _call_openai(prompt: str, system_prompt: str) -> str:
     """Call OpenAI API."""
     try:
-        from openai import OpenAI
+        from openai import OpenAI  # type: ignore
     except ImportError:
         return "Error: openai package not installed. Run: pip install openai"
     
@@ -230,7 +230,7 @@ def _call_openai(prompt: str, system_prompt: str) -> str:
 def _call_anthropic(prompt: str, system_prompt: str) -> str:
     """Call Anthropic API."""
     try:
-        from anthropic import Anthropic
+        from anthropic import Anthropic  # type: ignore
     except ImportError:
         return "Error: anthropic package not installed. Run: pip install anthropic"
     

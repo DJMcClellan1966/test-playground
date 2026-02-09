@@ -109,7 +109,7 @@ def recommend_model():
     print_header("Model Recommendations")
     
     try:
-        import psutil
+        import psutil  # type: ignore
         ram_gb = psutil.virtual_memory().total / (1024**3)
         print(f"\n📊 Your system has ~{ram_gb:.1f} GB RAM")
         

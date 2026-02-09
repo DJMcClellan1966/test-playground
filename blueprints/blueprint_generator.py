@@ -18,11 +18,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Add parent path for imports
-sys.path.insert(0, str(Path(__file__).parent))
+# Add socratic-learner path for LLM imports
+_socratic_path = Path(__file__).parent.parent / "projects" / "socratic-learner"
+if _socratic_path.exists():
+    sys.path.insert(0, str(_socratic_path))
 
-import config
-from llm_client import call_llm
+try:
+    import config  # type: ignore
+    from llm_client import call_llm  # type: ignore
+    LLM_AVAILABLE = True
+except ImportError:
+    config = None
+    call_llm = None
+    LLM_AVAILABLE = False
 
 
 BLUEPRINTS_DIR = Path(__file__).parent.parent.parent / "blueprints"
@@ -322,14 +330,15 @@ class BlueprintGenerator:
         )
         
         # Use larger num_predict for blueprint generation
-        import config as cfg
-        original_predict = cfg.OLLAMA_NUM_PREDICT
-        cfg.OLLAMA_NUM_PREDICT = 4000  # Need more tokens for full blueprint
+        if config is not None:
+            original_predict = config.OLLAMA_NUM_PREDICT
+            config.OLLAMA_NUM_PREDICT = 4000  # Need more tokens for full blueprint
         
         try:
             blueprint_content = call_llm(prompt, BLUEPRINT_SYNTHESIS_SYSTEM)
         finally:
-            cfg.OLLAMA_NUM_PREDICT = original_predict
+            if config is not None:
+                config.OLLAMA_NUM_PREDICT = original_predict
         
         # Save the blueprint
         safe_name = app_name.lower().replace(" ", "-")
@@ -364,6 +373,12 @@ Similar to: {', '.join(self.similar_blueprints) or 'novel concept'}
 
 def run_cli():
     """Run the blueprint generator as an interactive CLI."""
+    if not LLM_AVAILABLE:
+        print("\n❌ LLM client not available.")
+        print("   This tool requires the socratic-learner LLM client.")
+        print("   Make sure Ollama is running and try again.")
+        return
+    
     print("\n" + "=" * 60)
     print("   🎨 CUSTOM BLUEPRINT GENERATOR")
     print("   Describe your app, get a complete specification")
