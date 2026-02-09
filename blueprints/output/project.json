@@ -4,16 +4,17 @@
     "offline": true,
     "needs_auth": true,
     "needs_sync": true,
-    "storage_type": "server_only",
+    "storage_type": "local_first",
     "sync_strategy": "crdt",
     "needs_conflict_ui": true,
     "needs_backend": true
   },
   "blocks": [
     "auth_basic",
-    "sync_crdt",
     "storage_json",
-    "storage_sqlite"
+    "storage_sqlite",
+    "sync_crdt",
+    "crud_routes"
   ],
   "entities": [
     "User",

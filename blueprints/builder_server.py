@@ -30,6 +30,8 @@ from intelligent_scaffold import IntelligentScaffolder
 from contracts import Contract, Field, ContractRegistry
 from blocks import BLOCKS, BlockAssembler
 from beyond_belief import CrossLanguageSynthesizer, LANGUAGE_TARGETS
+from advisor_ai import get_advice, quick_ask, check_ollama
+from logic_advisor import analyze_state, ask_question
 
 # Configuration
 PORT = 8088
@@ -73,6 +75,17 @@ class BuilderAPIHandler(SimpleHTTPRequestHandler):
             filepath = params.get('path', [''])[0]
             self.send_json(self.read_file(filepath))
         
+        elif parsed.path == '/api/browse':
+            params = parse_qs(parsed.query)
+            dir_path = params.get('path', [''])[0]
+            self.send_json(self.browse_directory(dir_path))
+        
+        elif parsed.path == '/api/drives':
+            self.send_json(self.get_drives())
+        
+        elif parsed.path == '/api/output-path':
+            self.send_json({'path': str(self.project_dir)})
+        
         elif parsed.path.startswith('/preview/'):
             # Serve files from the generated project
             file_path = parsed.path.replace('/preview/', '')
@@ -108,6 +121,22 @@ class BuilderAPIHandler(SimpleHTTPRequestHandler):
             result = self.scaffold_from_blocks(data)
             self.send_json(result)
         
+        elif parsed.path == '/api/ask':
+            result = self.ask_ai(data)
+            self.send_json(result)
+        
+        elif parsed.path == '/api/logic/analyze':
+            result = self.logic_analyze(data)
+            self.send_json(result)
+        
+        elif parsed.path == '/api/logic/ask':
+            result = self.logic_ask(data)
+            self.send_json(result)
+        
+        elif parsed.path == '/api/set-output':
+            result = self.set_output_path(data)
+            self.send_json(result)
+        
         else:
             self.send_error(404, "API endpoint not found")
     
@@ -124,6 +153,94 @@ class BuilderAPIHandler(SimpleHTTPRequestHandler):
         self.send_cors_headers()
         self.end_headers()
         self.wfile.write(json.dumps(data, indent=2).encode('utf-8'))
+    
+    def browse_directory(self, path_str):
+        """Browse a directory and return its contents."""
+        import string
+        
+        # Default to desktop if no path given
+        if not path_str:
+            path_str = os.path.expanduser("~/Desktop")
+        
+        path = Path(path_str)
+        
+        if not path.exists():
+            return {'error': f'Path does not exist: {path_str}'}
+        
+        if not path.is_dir():
+            return {'error': f'Not a directory: {path_str}'}
+        
+        items = []
+        try:
+            for item in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+                try:
+                    items.append({
+                        'name': item.name,
+                        'path': str(item),
+                        'is_dir': item.is_dir(),
+                        'size': item.stat().st_size if item.is_file() else None,
+                    })
+                except (PermissionError, OSError):
+                    continue
+        except PermissionError:
+            return {'error': f'Permission denied: {path_str}'}
+        
+        # Get parent path
+        parent = str(path.parent) if path.parent != path else None
+        
+        return {
+            'path': str(path),
+            'parent': parent,
+            'items': items,
+        }
+    
+    def get_drives(self):
+        """Get available drives (Windows) or root directories."""
+        import platform
+        
+        if platform.system() == 'Windows':
+            import string
+            drives = []
+            for letter in string.ascii_uppercase:
+                drive = f"{letter}:\\"
+                if os.path.exists(drive):
+                    drives.append({
+                        'name': f"{letter}:",
+                        'path': drive,
+                        'is_dir': True
+                    })
+            return {'drives': drives}
+        else:
+            # Unix - return common locations
+            locations = [
+                {'name': 'Home', 'path': os.path.expanduser('~'), 'is_dir': True},
+                {'name': 'Root', 'path': '/', 'is_dir': True},
+            ]
+            return {'drives': locations}
+    
+    def set_output_path(self, data):
+        """Set the output directory for generated projects."""
+        new_path = data.get('path', '')
+        
+        if not new_path:
+            return {'error': 'No path provided'}
+        
+        path = Path(new_path)
+        
+        # Create if doesn't exist
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            self.project_dir = path
+            # Update global PROJECT_DIR
+            global PROJECT_DIR
+            PROJECT_DIR = path
+            return {
+                'success': True,
+                'path': str(path),
+                'message': f'Output path set to: {path}'
+            }
+        except Exception as e:
+            return {'error': f'Could not set path: {e}'}
     
     def get_blocks(self):
         """Get all available blocks."""
@@ -256,6 +373,80 @@ class BuilderAPIHandler(SimpleHTTPRequestHandler):
             'success': True,
             'contract': name,
             'generated': generated,
+        }
+    
+    def ask_ai(self, data):
+        """Ask the local AI advisor a question."""
+        question = data.get('question', '')
+        context = data.get('context', '')
+        
+        if not question:
+            return {'error': 'No question provided'}
+        
+        # Check if Ollama is running
+        if not check_ollama():
+            return {
+                'success': False,
+                'error': 'Local AI not available',
+                'message': 'Start Ollama with: ollama serve',
+                'fallback': self._get_fallback_advice(question)
+            }
+        
+        # If asking about a project, use get_advice
+        if any(word in question.lower() for word in ['build', 'create', 'make', 'need', 'blocks', 'project']):
+            result = get_advice(question)
+            return result
+        else:
+            # General question
+            response = quick_ask(question)
+            return {
+                'success': True,
+                'response': response
+            }
+    
+    def _get_fallback_advice(self, question):
+        """Provide basic advice without AI."""
+        q = question.lower()
+        
+        if 'blog' in q or 'website' in q:
+            return "For a blog/website, use: storage_json + crud_routes. Start with personal-website blueprint."
+        elif 'todo' in q or 'task' in q:
+            return "For todos/tasks, use: storage_sqlite + crud_routes + auth_basic. Start with task-manager blueprint."
+        elif 'offline' in q:
+            return "For offline support, add sync_crdt block. Requires storage_sqlite."
+        elif 'auth' in q or 'login' in q:
+            return "Add auth_basic block for login. Provides session management."
+        else:
+            return "Start with storage_sqlite + crud_routes for most apps. Run: python advisor_ai.py for interactive help."
+    
+    def logic_analyze(self, data):
+        """Analyze state using deterministic logic advisor."""
+        blocks = data.get('blocks', [])
+        entities = data.get('entities', [])
+        
+        # Extract block types
+        block_types = [b.get('type', b) if isinstance(b, dict) else b for b in blocks]
+        
+        # Run analysis
+        result = analyze_state(block_types, entities)
+        result['success'] = True
+        return result
+    
+    def logic_ask(self, data):
+        """Answer question using deterministic logic."""
+        question = data.get('question', '')
+        context = data.get('context', {})
+        
+        if not question:
+            return {'success': False, 'error': 'No question provided'}
+        
+        # Get answer from logic advisor
+        answer = ask_question(question, context)
+        
+        return {
+            'success': True,
+            'response': answer,
+            'source': 'logic'  # Indicates this is rule-based, not AI
         }
     
     def scaffold_from_blocks(self, data):

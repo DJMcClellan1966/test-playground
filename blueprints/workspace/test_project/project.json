@@ -1,0 +1,10 @@
+{
+  "constraints": {
+    "custom_requirement": "needs_api"
+  },
+  "blocks": [],
+  "entities": [
+    "Task"
+  ],
+  "stack": "flask"
+}

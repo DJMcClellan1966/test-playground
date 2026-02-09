@@ -59,6 +59,48 @@ Takes natural requirements → constraint solving → block selection → contra
 
 ---
 
+## 🧠 Logic Advisor - Deterministic Guidance
+
+A **rule-based advisor** that provides instant, explainable recommendations without AI (`logic_advisor.py`):
+
+```powershell
+python logic_advisor.py  # Run interactive demo
+```
+
+### Why Logic Instead of AI?
+
+| Aspect | AI Advisor | Logic Advisor |
+|--------|------------|---------------|
+| Speed | Seconds (API call) | Instant |
+| Availability | Needs Ollama | Always works |
+| Consistency | Variable | Deterministic |
+| Explainability | Opaque | Shows reasoning |
+| Offline | Requires model | Just Python |
+
+### What It Does
+
+1. **State Analysis**: Examines your blocks and entities → suggests what's missing
+2. **Question Answering**: Pattern-matched responses about blocks, patterns, CRDT, etc.
+3. **Completeness Score**: 0-100% based on storage, API, auth, entities
+4. **Next Steps**: Ordered list of what to do next
+
+### Usage in Builder
+
+Open the **Logic** tab in the builder sidebar:
+- See real-time completeness score
+- Click suggestions to auto-add blocks
+- Ask questions like "What is CRDT?" or "Why do I need storage?"
+- No timeouts, no AI dependencies
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/logic/analyze` | POST | Analyze blocks/entities, get suggestions |
+| `/api/logic/ask` | POST | Answer questions via pattern matching |
+
+---
+
 ## 🌟 Beyond Belief: Revolutionary Features
 
 Push the boundaries of what's possible without AI (`beyond_belief.py`):
@@ -378,6 +420,7 @@ blueprints/
 ├── contracts.py           # Bidirectional spec/code contracts
 ├── intelligent_scaffold.py # Unified pipeline
 ├── beyond_belief.py       # Advanced features (cross-lang, synthesis)
+├── logic_advisor.py       # Deterministic advisor (no AI, instant)
 ├── test_system.py         # Comprehensive test suite (41 tests)
 │
 ├── # Builder Dev Server
