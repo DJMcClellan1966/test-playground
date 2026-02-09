@@ -168,10 +168,10 @@ RULES = [
         priority=5
     ),
     
-    # Default fallbacks
+    # Default fallbacks (only when not offline)
     Rule(
         name="default_storage",
-        conditions={},
+        conditions={"offline": False},
         conclusions={"storage_type": "server_only"},
         priority=0
     ),
