@@ -7,16 +7,27 @@ Reads a blueprint file and generates a complete project skeleton with:
 - Starter code with TODO comments pointing to blueprint
 - README customized for the project
 
+With --generate flag:
+- Uses Ollama to generate ACTUAL working code
+- Implements models, routes, and components based on blueprint spec
+- Creates a runnable application, not just stubs
+
 Usage:
     python scaffold.py learning-app --name MyBookTracker
     python scaffold.py task-manager --name TodoMaster --stack flask
+    python scaffold.py learning-app --name MyApp --generate  # LLM-powered!
 """
 
 import argparse
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+# Add socratic-learner to path for llm_client
+SOCRATIC_PATH = Path(__file__).parent.parent / "projects" / "socratic-learner"
+sys.path.insert(0, str(SOCRATIC_PATH))
 
 
 # Path to blueprints directory
@@ -515,6 +526,229 @@ module.exports = router;
 
 
 # ============================================================================
+# LLM CODE GENERATION
+# ============================================================================
+
+def get_llm_client():
+    """Import and return the LLM call function."""
+    try:
+        import config
+        from llm_client import call_llm
+        return call_llm, config
+    except ImportError:
+        print("⚠️  LLM client not available. Install socratic-learner or run without --generate")
+        return None, None
+
+
+CODE_GEN_SYSTEM = """You are an expert {stack} developer generating production-ready code.
+
+RULES:
+- Generate complete, working code - not stubs or pseudocode
+- Follow best practices for {stack}
+- Include proper error handling
+- Add brief docstrings/comments explaining key logic
+- Use the exact field names and types from the data model
+- Make the code immediately runnable
+
+Do NOT include:
+- Markdown formatting or code blocks
+- Explanations outside the code
+- TODO comments (implement everything)
+
+Output ONLY the code, nothing else."""
+
+
+MODEL_GEN_PROMPT = """Generate a complete {stack} model for: {model_name}
+
+DATA MODEL FROM BLUEPRINT:
+{fields}
+
+REQUIREMENTS:
+- Implement all fields with proper types
+- Add CRUD operations (create, read, update, delete)
+- Include validation where appropriate
+- For Python: use dataclasses or Pydantic
+- For JS: include proper exports
+
+Generate the complete implementation:"""
+
+
+ROUTE_GEN_PROMPT = """Generate complete {stack} routes for: {entity_name}
+
+DATA MODEL:
+{model_spec}
+
+FEATURE REQUIREMENTS (from blueprint):
+{features}
+
+IMPLEMENTATION:
+- Full CRUD endpoints
+- Proper request validation
+- Error handling with appropriate status codes
+- JSON responses
+
+Generate the complete route file:"""
+
+
+APP_GEN_PROMPT = """Generate the main {stack} application entry point.
+
+PROJECT: {project_name}
+BLUEPRINT: {blueprint_title}
+
+ENTITIES TO MANAGE:
+{entities}
+
+KEY FEATURES:
+{features}
+
+REQUIREMENTS:
+- Import and register all route modules
+- Configure middleware (CORS, JSON parsing)
+- Set up error handling
+- Include health check endpoint
+- For Flask: use blueprints for routes
+- For Express: use Router
+
+Generate the complete app file:"""
+
+
+COMPONENT_GEN_PROMPT = """Generate a complete React component: {component_name}
+
+PURPOSE: {purpose}
+
+DATA IT DISPLAYS:
+{data_model}
+
+RELATED FEATURES:
+{features}
+
+REQUIREMENTS:
+- Functional component with hooks
+- Proper TypeScript/prop types if applicable
+- Handle loading and error states
+- Include basic styling classes
+
+Generate the complete component:"""
+
+
+class LLMCodeGenerator:
+    """Generate actual code using LLM based on blueprint specifications."""
+    
+    def __init__(self, blueprint: Dict, stack: str, project_name: str):
+        self.blueprint = blueprint
+        self.stack = stack
+        self.project_name = project_name
+        
+        self.call_llm, self.config = get_llm_client()
+        if not self.call_llm:
+            raise RuntimeError("LLM client not available")
+        
+        # Increase token limit for code generation
+        self._original_predict = self.config.OLLAMA_NUM_PREDICT
+        self.config.OLLAMA_NUM_PREDICT = 2000
+    
+    def __del__(self):
+        """Restore original config."""
+        if hasattr(self, 'config') and self.config:
+            self.config.OLLAMA_NUM_PREDICT = getattr(self, '_original_predict', 1000)
+    
+    def _get_section(self, name: str) -> str:
+        """Get a blueprint section by partial name match."""
+        for section_name, content in self.blueprint.get("sections", {}).items():
+            if name.lower() in section_name.lower():
+                return content
+        return ""
+    
+    def _clean_code(self, code: str) -> str:
+        """Remove markdown formatting if LLM added any, and check for errors."""
+        # Check for error messages from LLM client
+        if code.startswith("Error connecting to Ollama:") or code.startswith("Error calling"):
+            raise RuntimeError(f"LLM generation failed: {code.split(chr(10))[0]}")
+        
+        lines = code.strip().split("\n")
+        
+        # Remove opening code fence
+        if lines and lines[0].strip().startswith("```"):
+            lines = lines[1:]
+        
+        # Remove closing code fence
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        
+        return "\n".join(lines)
+    
+    def generate_model(self, model: Dict) -> str:
+        """Generate a complete model implementation."""
+        print(f"   🧠 Generating {model['name']} model...")
+        
+        fields_text = "\n".join(
+            f"  {f['name']}: {f['type']}" for f in model.get("fields", [])
+        )
+        
+        prompt = MODEL_GEN_PROMPT.format(
+            stack=self.stack,
+            model_name=model["name"],
+            fields=fields_text
+        )
+        
+        system = CODE_GEN_SYSTEM.format(stack=self.stack)
+        code = self.call_llm(prompt, system)
+        return self._clean_code(code)
+    
+    def generate_routes(self, entity_name: str, model_spec: str) -> str:
+        """Generate routes for an entity."""
+        print(f"   🧠 Generating {entity_name} routes...")
+        
+        features = self._get_section("Feature")[:500]  # Limit context
+        
+        prompt = ROUTE_GEN_PROMPT.format(
+            stack=self.stack,
+            entity_name=entity_name,
+            model_spec=model_spec,
+            features=features
+        )
+        
+        system = CODE_GEN_SYSTEM.format(stack=self.stack)
+        code = self.call_llm(prompt, system)
+        return self._clean_code(code)
+    
+    def generate_app_entry(self, entities: List[str]) -> str:
+        """Generate the main application entry point."""
+        print(f"   🧠 Generating main app...")
+        
+        features = self._get_section("Feature")[:500]
+        
+        prompt = APP_GEN_PROMPT.format(
+            stack=self.stack,
+            project_name=self.project_name,
+            blueprint_title=self.blueprint.get("title", "App"),
+            entities=", ".join(entities),
+            features=features
+        )
+        
+        system = CODE_GEN_SYSTEM.format(stack=self.stack)
+        code = self.call_llm(prompt, system)
+        return self._clean_code(code)
+    
+    def generate_component(self, name: str, purpose: str, data_model: str) -> str:
+        """Generate a React component."""
+        print(f"   🧠 Generating {name} component...")
+        
+        features = self._get_section("Feature")[:300]
+        
+        prompt = COMPONENT_GEN_PROMPT.format(
+            component_name=name,
+            purpose=purpose,
+            data_model=data_model,
+            features=features
+        )
+        
+        system = CODE_GEN_SYSTEM.format(stack="React")
+        code = self.call_llm(prompt, system)
+        return self._clean_code(code)
+
+
+# ============================================================================
 # BLUEPRINT PARSER
 # ============================================================================
 
@@ -653,24 +887,40 @@ class Scaffolder:
             raise ValueError(f"Unknown stack '{stack}'. Available: {available}")
         
         self.templates = STACK_TEMPLATES[stack]
+        self.llm_generator = None  # Lazy-load when needed
     
-    def scaffold(self, dry_run: bool = False) -> List[str]:
+    def scaffold(self, dry_run: bool = False, generate: bool = False) -> List[str]:
         """
         Generate the project structure.
         
         Args:
             dry_run: If True, just print what would be created
+            generate: If True, use LLM to generate actual implementations
             
         Returns:
             List of created file paths
         """
         created = []
         
-        print(f"\n🏗️  Scaffolding {self.project_name}")
+        mode = "🤖 LLM-Generated" if generate else "📝 Scaffolded"
+        print(f"\n🏗️  {mode}: {self.project_name}")
         print(f"   Blueprint: {self.blueprint['title']}")
         print(f"   Stack: {self.stack}")
         print(f"   Output: {self.output_path}")
+        if generate:
+            print(f"   ⚡ Using Ollama for code generation")
         print()
+        
+        # Initialize LLM generator if needed
+        if generate and not dry_run:
+            try:
+                self.llm_generator = LLMCodeGenerator(
+                    self.blueprint, self.stack, self.project_name
+                )
+            except RuntimeError as e:
+                print(f"⚠️  {e}")
+                print("   Falling back to stub generation")
+                generate = False
         
         # Create output directory
         if not dry_run:
@@ -682,25 +932,33 @@ class Scaffolder:
             created.append(readme_path)
         
         # 2. Generate main app entry
-        entry_path = self._create_app_entry(dry_run)
+        entry_path = self._create_app_entry(dry_run, generate)
         if entry_path:
             created.append(entry_path)
         
         # 3. Generate models from Data Model section
         model_section = self._find_section("Data Model")
+        models = []
         if model_section:
             models = parse_data_models(model_section)
             for model in models:
-                model_path = self._create_model(model, dry_run)
+                model_path = self._create_model(model, dry_run, generate)
                 if model_path:
                     created.append(model_path)
         
-        # 4. Generate package/requirements file
+        # 4. Generate routes (only in generate mode)
+        if generate and models and not dry_run:
+            for model in models[:3]:  # Limit to first 3 models
+                route_path = self._create_route(model, dry_run)
+                if route_path:
+                    created.append(route_path)
+        
+        # 5. Generate package/requirements file
         pkg_path = self._create_package_file(dry_run)
         if pkg_path:
             created.append(pkg_path)
         
-        # 5. Create directories from File Structure
+        # 6. Create directories from File Structure
         file_section = self._find_section("File Structure")
         if file_section:
             dirs = self._extract_directories(file_section)
@@ -712,6 +970,8 @@ class Scaffolder:
                     dir_path.mkdir(parents=True, exist_ok=True)
         
         print(f"\n✅ Created {len(created)} files")
+        if generate:
+            print("   💡 Generated code is functional but review before production use")
         return created
     
     def _find_section(self, name: str) -> Optional[str]:
@@ -794,10 +1054,10 @@ See File Structure section in the blueprint for the complete layout.
         
         return str(path)
     
-    def _create_app_entry(self, dry_run: bool) -> Optional[str]:
+    def _create_app_entry(self, dry_run: bool, generate: bool = False) -> Optional[str]:
         """Create main application entry point."""
         template = self.templates.get("app_entry", "")
-        if not template:
+        if not template and not generate:
             return None
         
         ext = self.templates.get("extension", ".py")
@@ -817,11 +1077,20 @@ See File Structure section in the blueprint for the complete layout.
         
         path = self.output_path / subdir / filename
         
-        content = template.format(
-            project_name=self.project_name,
-            blueprint_name=self.blueprint["title"],
-            blueprint_file=f"{self.blueprint['name']}.md"
-        )
+        # Use LLM generation if enabled
+        if generate and self.llm_generator:
+            model_section = self._find_section("Data Model")
+            entities = []
+            if model_section:
+                models = parse_data_models(model_section)
+                entities = [m["name"] for m in models]
+            content = self.llm_generator.generate_app_entry(entities)
+        else:
+            content = template.format(
+                project_name=self.project_name,
+                blueprint_name=self.blueprint["title"],
+                blueprint_file=f"{self.blueprint['name']}.md"
+            )
         
         if dry_run:
             print(f"  📄 Would create: {subdir}/{filename}")
@@ -832,28 +1101,32 @@ See File Structure section in the blueprint for the complete layout.
         
         return str(path)
     
-    def _create_model(self, model: Dict, dry_run: bool) -> Optional[str]:
+    def _create_model(self, model: Dict, dry_run: bool, generate: bool = False) -> Optional[str]:
         """Create a model file."""
         template = self.templates.get("model", "")
-        if not template:
+        if not template and not generate:
             return None
         
         ext = self.templates.get("extension", ".py")
         model_name = model["name"]
         name_lower = model_name.lower()
         
-        # Format fields as comments
-        fields_lines = []
-        for field in model["fields"]:
-            fields_lines.append(f"    #   {field['name']}: {field['type']}")
-        fields_commented = "\n".join(fields_lines) if fields_lines else "    #   (see blueprint)"
-        
-        content = template.format(
-            model_name=model_name,
-            name_lower=name_lower,
-            blueprint_file=f"{self.blueprint['name']}.md",
-            fields_commented=fields_commented
-        )
+        # Use LLM generation if enabled
+        if generate and self.llm_generator:
+            content = self.llm_generator.generate_model(model)
+        else:
+            # Format fields as comments
+            fields_lines = []
+            for field in model["fields"]:
+                fields_lines.append(f"    #   {field['name']}: {field['type']}")
+            fields_commented = "\n".join(fields_lines) if fields_lines else "    #   (see blueprint)"
+            
+            content = template.format(
+                model_name=model_name,
+                name_lower=name_lower,
+                blueprint_file=f"{self.blueprint['name']}.md",
+                fields_commented=fields_commented
+            )
         
         if self.stack in ("flask", "fastapi"):
             subdir = "src/models"
@@ -863,6 +1136,44 @@ See File Structure section in the blueprint for the complete layout.
             filename = f"{name_lower}.js"
         else:
             subdir = "src/models"
+            filename = f"{name_lower}{ext}"
+        
+        path = self.output_path / subdir / filename
+        
+        if dry_run:
+            print(f"  📄 Would create: {subdir}/{filename}")
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            print(f"  📄 Created: {subdir}/{filename}")
+        
+        return str(path)
+    
+    def _create_route(self, model: Dict, dry_run: bool) -> Optional[str]:
+        """Create a route file for a model (only used in generate mode)."""
+        if not self.llm_generator:
+            return None
+        
+        ext = self.templates.get("extension", ".py")
+        model_name = model["name"]
+        name_lower = model_name.lower()
+        
+        # Build model spec for the prompt
+        fields_text = "\n".join(
+            f"  {f['name']}: {f['type']}" for f in model.get("fields", [])
+        )
+        model_spec = f"{model_name}:\n{fields_text}"
+        
+        content = self.llm_generator.generate_routes(model_name, model_spec)
+        
+        if self.stack in ("flask", "fastapi"):
+            subdir = "src/routes"
+            filename = f"{name_lower}{ext}"
+        elif self.stack == "express":
+            subdir = "src/routes"
+            filename = f"{name_lower}.js"
+        else:
+            subdir = "src/routes"
             filename = f"{name_lower}{ext}"
         
         path = self.output_path / subdir / filename
@@ -983,11 +1294,18 @@ def main():
         help="Show what would be created without creating files"
     )
     
+    parser.add_argument(
+        "--generate", "-g",
+        action="store_true",
+        help="Use Ollama LLM to generate actual working code (not just stubs)"
+    )
+    
     args = parser.parse_args()
     
     if args.list or not args.blueprint:
         list_blueprints()
         print("Available stacks:", ", ".join(STACK_TEMPLATES.keys()))
+        print("\n💡 Add --generate to use LLM for actual code generation")
         print()
         return
     
@@ -1000,7 +1318,7 @@ def main():
             project_name=project_name,
             stack=args.stack
         )
-        scaffolder.scaffold(dry_run=args.dry_run)
+        scaffolder.scaffold(dry_run=args.dry_run, generate=args.generate)
         
         if not args.dry_run:
             print(f"\n🚀 Next steps:")
