@@ -46,6 +46,21 @@ Profile Tracking:
     python prompt_twin.py diff [snapshot]         # Compare with snapshot
     python prompt_twin.py suggest [description]   # Get template suggestions
 
+Advanced Analysis:
+    python prompt_twin.py confidence              # Show inferences with confidence scores
+    python prompt_twin.py privacy [path]          # Scan for secrets/sensitive data
+    python prompt_twin.py temporal                # Analyze patterns with time decay
+    python prompt_twin.py negative                # Show abandoned/error-prone patterns
+    python prompt_twin.py clusters                # Group similar projects
+    python prompt_twin.py explain                 # Explain preferences with evidence
+    python prompt_twin.py contradictions          # Detect conflicting patterns
+    python prompt_twin.py progression             # Show skill learning timeline
+    python prompt_twin.py docs                    # Documentation quality metrics
+    python prompt_twin.py agents                  # List multi-agent context views
+    python prompt_twin.py agent-context <type>    # Get context for specific agent
+
+Agent Types: code_review, scaffolding, debugging, documentation, default
+
 Feedback Loop (reality grounding):
     python prompt_twin.py feedback                # Show feedback summary
     python prompt_twin.py outcome "action" "success|failure" [error]
@@ -2325,6 +2340,744 @@ Be concise and specific. No generic advice."""
         
         print()
         return all(ok for _, ok in checks[:4])  # First 4 are critical
+    
+    # ========== CONFIDENCE SCORES ==========
+    
+    def calculate_confidence(self, category, value, count, total_samples):
+        """Calculate confidence score for an inference
+        
+        Returns:
+            float: Confidence 0.0-1.0 based on sample size and consistency
+        """
+        if total_samples == 0:
+            return 0.0
+        
+        # Base confidence from sample ratio
+        ratio = count / total_samples
+        
+        # Adjust for sample size (more samples = more confident)
+        sample_factor = min(1.0, total_samples / 10)  # Caps at 10 samples
+        
+        # Combine ratio and sample size
+        confidence = ratio * (0.5 + 0.5 * sample_factor)
+        
+        return round(confidence, 2)
+    
+    def get_inferences_with_confidence(self):
+        """Get all inferences with confidence scores and evidence"""
+        inferences = []
+        
+        # Technology inferences
+        techs = self.profile.get('technologies', {})
+        total_projects = len(self.profile.get('projects', {}))
+        
+        for tech, count in sorted(techs.items(), key=lambda x: -x[1])[:15]:
+            conf = self.calculate_confidence('technology', tech, count, total_projects)
+            inferences.append({
+                'category': 'technology',
+                'value': tech,
+                'confidence': conf,
+                'evidence': f"{count}/{total_projects} projects",
+                'sample_size': count,
+            })
+        
+        # Language inferences
+        langs = self.profile.get('languages', {})
+        total_files = sum(langs.values())
+        
+        for lang, count in sorted(langs.items(), key=lambda x: -x[1])[:5]:
+            conf = self.calculate_confidence('language', lang, count, total_files)
+            inferences.append({
+                'category': 'language',
+                'value': lang,
+                'confidence': conf,
+                'evidence': f"{count}/{total_files} files",
+                'sample_size': count,
+            })
+        
+        # Git pattern inferences
+        git_intents = self.profile.get('git_intents', {})
+        total_commits = sum(git_intents.values())
+        
+        for intent, count in sorted(git_intents.items(), key=lambda x: -x[1])[:5]:
+            conf = self.calculate_confidence('git_intent', intent, count, total_commits)
+            inferences.append({
+                'category': 'commit_style',
+                'value': intent,
+                'confidence': conf,
+                'evidence': f"{count}/{total_commits} commits",
+                'sample_size': count,
+            })
+        
+        # Preference inferences (from feedback)
+        feedback = self.get_feedback(100)
+        corrections = [f for f in feedback if f.get('type') == 'correction']
+        
+        # Infer preferences from correction patterns
+        if corrections:
+            inferences.append({
+                'category': 'feedback',
+                'value': 'Corrections logged',
+                'confidence': min(1.0, len(corrections) / 10),
+                'evidence': f"{len(corrections)} corrections",
+                'sample_size': len(corrections),
+            })
+        
+        return sorted(inferences, key=lambda x: -x['confidence'])
+    
+    def show_confidence_report(self):
+        """Display inferences with confidence scores"""
+        inferences = self.get_inferences_with_confidence()
+        
+        print("\n📊 Inference Confidence Report\n")
+        print("   Conf  | Category      | Value                 | Evidence")
+        print("   " + "-" * 70)
+        
+        for inf in inferences[:20]:
+            conf_bar = "█" * int(inf['confidence'] * 5) + "░" * (5 - int(inf['confidence'] * 5))
+            print(f"   {conf_bar} {inf['confidence']:.0%} | {inf['category']:<12} | {inf['value']:<20} | {inf['evidence']}")
+        
+        print()
+        
+        # High confidence summary
+        high_conf = [i for i in inferences if i['confidence'] >= 0.7]
+        print(f"   ✅ High confidence (≥70%): {len(high_conf)} inferences")
+        
+        # Low confidence warnings
+        low_conf = [i for i in inferences if i['confidence'] < 0.3]
+        if low_conf:
+            print(f"   ⚠️  Low confidence (<30%): {len(low_conf)} inferences - need more data")
+        
+        print()
+        return inferences
+    
+    # ========== PRIVACY FILTERS ==========
+    
+    PRIVACY_PATTERNS = [
+        (r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', '[EMAIL]'),
+        (r'(?:api[_-]?key|apikey|secret|password|token|auth)["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_\-]{8,}', '[REDACTED_SECRET]'),
+        (r'sk-[a-zA-Z0-9]{32,}', '[OPENAI_KEY]'),
+        (r'ghp_[a-zA-Z0-9]{36}', '[GITHUB_TOKEN]'),
+        (r'(?:mongodb|postgres|mysql):\/\/[^\s"\']+', '[DATABASE_URL]'),
+        (r'-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----', '[PRIVATE_KEY]'),
+        (r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b', '[PHONE]'),
+        (r'(?:private|internal|confidential)[_\s]?(?:repo|project|code)', '[PRIVATE_PROJECT]'),
+    ]
+    
+    def redact_sensitive(self, text):
+        """Redact sensitive information from text"""
+        if not text:
+            return text
+        
+        redacted = text
+        for pattern, replacement in self.PRIVACY_PATTERNS:
+            redacted = re.sub(pattern, replacement, redacted, flags=re.IGNORECASE)
+        
+        return redacted
+    
+    def get_redacted_profile(self):
+        """Get profile with sensitive data redacted"""
+        profile = self.get_structured_profile()
+        
+        # Redact project names that might be sensitive
+        if 'project_contexts' in profile:
+            redacted_contexts = {}
+            for name, ctx in profile['project_contexts'].items():
+                safe_name = self.redact_sensitive(name)
+                redacted_contexts[safe_name] = ctx
+            profile['project_contexts'] = redacted_contexts
+        
+        # Redact feedback
+        if 'feedback_summary' in profile:
+            fb = profile['feedback_summary']
+            if 'recent_outcomes' in fb:
+                fb['recent_outcomes'] = [
+                    self.redact_sensitive(str(o)) for o in fb.get('recent_outcomes', [])
+                ]
+        
+        return profile
+    
+    def scan_for_secrets(self, path=None):
+        """Scan codebase for potential secrets that should be added to .gitignore"""
+        path = Path(path) if path else DESKTOP
+        
+        print(f"\n🔐 Scanning for secrets in {path}\n")
+        
+        findings = []
+        
+        for ext in CODE_EXTENSIONS:
+            for f in path.rglob(f'*{ext}'):
+                if '.git' in str(f) or 'node_modules' in str(f):
+                    continue
+                try:
+                    content = f.read_text(errors='ignore')[:50000]
+                    for pattern, label in self.PRIVACY_PATTERNS:
+                        matches = re.findall(pattern, content, re.IGNORECASE)
+                        if matches:
+                            findings.append({
+                                'file': str(f.relative_to(path)),
+                                'type': label,
+                                'count': len(matches),
+                            })
+                except Exception:
+                    pass
+        
+        if findings:
+            print(f"   ⚠️  Found {len(findings)} files with potential secrets:\n")
+            for f in findings[:10]:
+                print(f"   {f['type']}: {f['file']} ({f['count']} matches)")
+            print("\n   💡 Consider adding these to .gitignore or using environment variables")
+        else:
+            print("   ✅ No obvious secrets detected")
+        
+        print()
+        return findings
+    
+    # ========== TEMPORAL DECAY ==========
+    
+    def apply_temporal_decay(self, items, date_field='timestamp', half_life_days=90):
+        """Apply temporal decay to weight recent items more heavily
+        
+        Args:
+            items: List of dicts with timestamps
+            date_field: Field containing ISO timestamp
+            half_life_days: Days after which weight is halved
+        """
+        import math
+        
+        now = datetime.now()
+        weighted = []
+        
+        for item in items:
+            try:
+                ts = item.get(date_field, '')
+                if isinstance(ts, str) and ts:
+                    item_date = datetime.fromisoformat(ts.replace('Z', '+00:00').split('+')[0])
+                    days_old = (now - item_date).days
+                    
+                    # Exponential decay
+                    weight = math.exp(-0.693 * days_old / half_life_days)
+                else:
+                    weight = 0.5  # Unknown date gets half weight
+                
+                weighted.append({**item, '_weight': round(weight, 3), '_days_old': days_old if 'days_old' in dir() else None})
+            except Exception:
+                weighted.append({**item, '_weight': 0.5})
+        
+        return sorted(weighted, key=lambda x: -x.get('_weight', 0))
+    
+    def get_temporal_analysis(self):
+        """Analyze patterns with temporal weighting"""
+        # Apply decay to commits
+        commits = self.profile.get('git_commits', [])
+        weighted_commits = self.apply_temporal_decay(commits, 'date')
+        
+        # Identify stale patterns
+        stale = []
+        techs = self.profile.get('technologies', {})
+        
+        # Check each technology's recency
+        for tech, count in techs.items():
+            # Look for recent commits mentioning this tech
+            recent_mentions = sum(1 for c in weighted_commits[:20] 
+                                if tech.lower() in c.get('message', '').lower())
+            if count > 3 and recent_mentions == 0:
+                stale.append(tech)
+        
+        return {
+            'total_commits': len(commits),
+            'recent_commits': len([c for c in weighted_commits if c.get('_weight', 0) > 0.5]),
+            'stale_technologies': stale,
+            'active_technologies': [t for t in list(techs.keys())[:10] if t not in stale],
+        }
+    
+    def show_temporal_report(self):
+        """Show temporal analysis of patterns"""
+        analysis = self.get_temporal_analysis()
+        
+        print("\n⏱️  Temporal Pattern Analysis\n")
+        print(f"   Total commits: {analysis['total_commits']}")
+        print(f"   Recent (high weight): {analysis['recent_commits']}")
+        
+        if analysis['stale_technologies']:
+            print(f"\n   ⚠️  Stale technologies (no recent activity):")
+            for tech in analysis['stale_technologies'][:5]:
+                print(f"      - {tech}")
+        
+        print(f"\n   ✅ Active technologies:")
+        for tech in analysis['active_technologies'][:5]:
+            print(f"      - {tech}")
+        
+        print()
+        return analysis
+    
+    # ========== NEGATIVE PATTERNS ==========
+    
+    def track_negative_patterns(self):
+        """Track abandoned technologies and error-prone approaches"""
+        negative = {
+            'abandoned': [],
+            'error_prone': [],
+            'refactored_away': [],
+        }
+        
+        # Find abandoned technologies (in old commits, not in recent)
+        commits = self.profile.get('git_commits', [])
+        old_commits = commits[20:] if len(commits) > 20 else []
+        recent_commits = commits[:20]
+        
+        # Technologies mentioned in old but not recent
+        old_techs = set()
+        recent_techs = set()
+        
+        for c in old_commits:
+            msg = c.get('message', '').lower()
+            for tech in self.profile.get('technologies', {}):
+                if tech.lower() in msg:
+                    old_techs.add(tech)
+        
+        for c in recent_commits:
+            msg = c.get('message', '').lower()
+            for tech in self.profile.get('technologies', {}):
+                if tech.lower() in msg:
+                    recent_techs.add(tech)
+        
+        negative['abandoned'] = list(old_techs - recent_techs)
+        
+        # Error-prone: technologies with high error rates
+        feedback = self.get_feedback(200)
+        error_counts = Counter()
+        
+        for entry in feedback:
+            if entry.get('type') == 'error':
+                error_type = entry.get('error_type', '')
+                if error_type:
+                    error_counts[error_type] += 1
+        
+        negative['error_prone'] = [
+            {'type': t, 'count': c} 
+            for t, c in error_counts.most_common(5)
+            if c > 2
+        ]
+        
+        # Refactored away: look for "remove", "delete", "migrate from" in commits
+        refactor_keywords = ['remove', 'delete', 'migrate from', 'replace', 'drop', 'deprecate']
+        for c in commits[:50]:
+            msg = c.get('message', '').lower()
+            if any(kw in msg for kw in refactor_keywords):
+                negative['refactored_away'].append({
+                    'message': c.get('message', '')[:80],
+                    'date': c.get('date', '')[:10],
+                })
+        
+        negative['refactored_away'] = negative['refactored_away'][:5]
+        
+        return negative
+    
+    def show_negative_patterns(self):
+        """Display negative patterns to help AI avoid mistakes"""
+        patterns = self.track_negative_patterns()
+        
+        print("\n🚫 Negative Patterns (Things to Avoid)\n")
+        
+        if patterns['abandoned']:
+            print("   📦 Abandoned Technologies:")
+            for tech in patterns['abandoned'][:5]:
+                print(f"      - {tech}")
+        
+        if patterns['error_prone']:
+            print("\n   ⚠️  Error-Prone Patterns:")
+            for p in patterns['error_prone']:
+                print(f"      - {p['type']}: {p['count']} errors")
+        
+        if patterns['refactored_away']:
+            print("\n   🔄 Recently Refactored Away:")
+            for r in patterns['refactored_away']:
+                print(f"      - {r['message']} ({r['date']})")
+        
+        if not any(patterns.values()):
+            print("   No negative patterns detected yet")
+        
+        print()
+        return patterns
+    
+    # ========== SEMANTIC CLUSTERING ==========
+    
+    def cluster_projects(self):
+        """Group similar projects to identify true patterns vs one-offs"""
+        projects = self.profile.get('projects', {})
+        
+        clusters = defaultdict(list)
+        
+        for name, proj in projects.items():
+            # Create a fingerprint based on technologies
+            techs = tuple(sorted(proj.get('technologies', [])))
+            types = tuple(sorted(proj.get('types', [])))
+            
+            # Cluster by primary type + tech combo
+            key = f"{types[0] if types else 'unknown'}_{techs[0] if techs else 'unknown'}"
+            clusters[key].append({
+                'name': name,
+                'technologies': proj.get('technologies', []),
+                'types': proj.get('types', []),
+            })
+        
+        # Analyze clusters
+        analysis = {
+            'clusters': {},
+            'one_offs': [],
+            'true_patterns': [],
+        }
+        
+        for key, items in clusters.items():
+            if len(items) == 1:
+                analysis['one_offs'].append(items[0]['name'])
+            else:
+                analysis['clusters'][key] = {
+                    'count': len(items),
+                    'projects': [i['name'] for i in items],
+                }
+                analysis['true_patterns'].append(key)
+        
+        return analysis
+    
+    def show_cluster_analysis(self):
+        """Show project clustering analysis"""
+        analysis = self.cluster_projects()
+        
+        print("\n🎯 Pattern Clustering Analysis\n")
+        
+        print(f"   True Patterns (repeated across projects):")
+        for pattern in analysis['true_patterns'][:5]:
+            cluster = analysis['clusters'][pattern]
+            print(f"      - {pattern}: {cluster['count']} projects")
+        
+        if analysis['one_offs']:
+            print(f"\n   ⚡ One-off Experiments ({len(analysis['one_offs'])}):")
+            for name in analysis['one_offs'][:3]:
+                print(f"      - {name}")
+        
+        print()
+        return analysis
+    
+    # ========== PREFERENCE EXPLANATIONS ==========
+    
+    def explain_preferences(self):
+        """Link each preference to supporting evidence"""
+        explanations = []
+        
+        techs = self.profile.get('technologies', {})
+        total = sum(techs.values())
+        
+        # Local-first preference
+        local_techs = ['SQLite', 'Ollama', 'Local']
+        local_count = sum(techs.get(t, 0) for t in local_techs)
+        if local_count > 0:
+            pct = (local_count / total * 100) if total > 0 else 0
+            explanations.append({
+                'preference': 'Local-first development',
+                'confidence': min(1.0, pct / 50),
+                'evidence': f"{pct:.0f}% of projects use local tech (SQLite, Ollama)",
+                'supporting_projects': local_count,
+            })
+        
+        # Single-file preference
+        if techs.get('Flask', 0) > techs.get('Django', 0):
+            explanations.append({
+                'preference': 'Lightweight frameworks',
+                'confidence': 0.8 if techs.get('Flask', 0) > 3 else 0.5,
+                'evidence': f"Flask ({techs.get('Flask', 0)}) preferred over Django ({techs.get('Django', 0)})",
+                'supporting_projects': techs.get('Flask', 0),
+            })
+        
+        # Python preference
+        langs = self.profile.get('languages', {})
+        py_files = langs.get('.py', 0)
+        total_files = sum(langs.values())
+        if py_files > total_files * 0.5:
+            explanations.append({
+                'preference': 'Python-first development',
+                'confidence': min(1.0, py_files / total_files),
+                'evidence': f"{py_files}/{total_files} files ({py_files/total_files*100:.0f}%) are Python",
+                'supporting_projects': py_files,
+            })
+        
+        # ML/AI focus
+        ml_techs = ['Machine Learning', 'OpenAI', 'LangChain', 'Ollama']
+        ml_count = sum(techs.get(t, 0) for t in ml_techs)
+        if ml_count > 0:
+            explanations.append({
+                'preference': 'AI/ML integration focus',
+                'confidence': min(1.0, ml_count / 5),
+                'evidence': f"{ml_count} projects use ML/AI technologies",
+                'supporting_projects': ml_count,
+            })
+        
+        return explanations
+    
+    def show_preference_explanations(self):
+        """Display preferences with their evidence"""
+        explanations = self.explain_preferences()
+        
+        print("\n📋 Preference Explanations\n")
+        
+        for exp in sorted(explanations, key=lambda x: -x['confidence']):
+            conf_pct = exp['confidence'] * 100
+            bar = "█" * int(exp['confidence'] * 5) + "░" * (5 - int(exp['confidence'] * 5))
+            print(f"   {bar} {conf_pct:.0f}% {exp['preference']}")
+            print(f"         └─ {exp['evidence']}")
+            print()
+        
+        return explanations
+    
+    # ========== CONTRADICTION DETECTION ==========
+    
+    def detect_contradictions(self):
+        """Flag when current work conflicts with historical patterns"""
+        contradictions = []
+        
+        techs = self.profile.get('technologies', {})
+        
+        # Check for contradicting technology choices
+        contradicting_pairs = [
+            ('Flask', 'Django'),
+            ('SQLite', 'PostgreSQL'),
+            ('REST', 'GraphQL'),
+            ('Ollama', 'OpenAI'),
+        ]
+        
+        for tech_a, tech_b in contradicting_pairs:
+            count_a = techs.get(tech_a, 0)
+            count_b = techs.get(tech_b, 0)
+            
+            if count_a > 0 and count_b > 0:
+                # Both are used - potential contradiction
+                if count_a > count_b * 2:
+                    contradictions.append({
+                        'type': 'technology_mix',
+                        'primary': tech_a,
+                        'secondary': tech_b,
+                        'message': f"Primary pattern is {tech_a} ({count_a}) but also using {tech_b} ({count_b})",
+                        'severity': 'low' if count_b < 2 else 'medium',
+                    })
+        
+        # Check feedback contradictions
+        feedback = self.get_feedback(100)
+        corrections = [f for f in feedback if f.get('type') == 'correction']
+        
+        # Look for repeated corrections of the same thing
+        correction_counts = Counter()
+        for c in corrections:
+            pattern = c.get('ai_suggested', '')[:30]
+            correction_counts[pattern] += 1
+        
+        for pattern, count in correction_counts.most_common(3):
+            if count > 2:
+                contradictions.append({
+                    'type': 'repeated_correction',
+                    'pattern': pattern,
+                    'count': count,
+                    'message': f"Repeatedly correcting: '{pattern}' ({count} times)",
+                    'severity': 'high',
+                })
+        
+        return contradictions
+    
+    def show_contradictions(self):
+        """Display detected contradictions"""
+        contradictions = self.detect_contradictions()
+        
+        print("\n⚡ Contradiction Detection\n")
+        
+        if not contradictions:
+            print("   ✅ No significant contradictions detected")
+        else:
+            for c in contradictions:
+                icon = "🔴" if c['severity'] == 'high' else "🟡" if c['severity'] == 'medium' else "🟢"
+                print(f"   {icon} {c['message']}")
+        
+        print()
+        return contradictions
+    
+    # ========== SKILL PROGRESSION ==========
+    
+    def track_skill_progression(self):
+        """Show technology adoption timeline and learning curves"""
+        commits = self.profile.get('git_commits', [])
+        
+        # Group commits by month
+        monthly = defaultdict(lambda: {'technologies': Counter(), 'count': 0})
+        
+        for c in commits:
+            date = c.get('date', '')[:7]  # YYYY-MM
+            if date:
+                monthly[date]['count'] += 1
+                msg = c.get('message', '').lower()
+                
+                # Detect technologies in commit messages
+                for tech in ['flask', 'sqlite', 'ollama', 'openai', 'machine learning', 'auth']:
+                    if tech in msg:
+                        monthly[date]['technologies'][tech.title()] += 1
+        
+        # Build timeline
+        timeline = []
+        sorted_months = sorted(monthly.keys())
+        
+        for month in sorted_months[-12:]:  # Last 12 months
+            data = monthly[month]
+            timeline.append({
+                'month': month,
+                'commits': data['count'],
+                'new_technologies': list(data['technologies'].keys()),
+            })
+        
+        # Identify learning trajectory
+        all_techs_by_month = {}
+        seen_techs = set()
+        
+        for month in sorted_months:
+            new_this_month = set(monthly[month]['technologies'].keys()) - seen_techs
+            if new_this_month:
+                all_techs_by_month[month] = list(new_this_month)
+            seen_techs.update(monthly[month]['technologies'].keys())
+        
+        return {
+            'timeline': timeline,
+            'tech_adoption': all_techs_by_month,
+            'total_technologies_learned': len(seen_techs),
+        }
+    
+    def show_skill_progression(self):
+        """Display skill progression timeline"""
+        progression = self.track_skill_progression()
+        
+        print("\n📈 Skill Progression Timeline\n")
+        
+        if progression['tech_adoption']:
+            print("   Technology Adoption:")
+            for month, techs in list(progression['tech_adoption'].items())[-6:]:
+                print(f"      {month}: + {', '.join(techs)}")
+        
+        print(f"\n   Total technologies tracked: {progression['total_technologies_learned']}")
+        
+        if progression['timeline']:
+            print("\n   Recent Activity:")
+            for entry in progression['timeline'][-3:]:
+                print(f"      {entry['month']}: {entry['commits']} commits")
+        
+        print()
+        return progression
+    
+    # ========== DOCUMENTATION QUALITY ==========
+    
+    def analyze_documentation_quality(self):
+        """Analyze documentation quality metrics"""
+        projects = self.profile.get('projects', {})
+        
+        metrics = {
+            'projects_with_readme': 0,
+            'total_projects': len(projects),
+            'comment_density': 'unknown',
+            'doc_files': 0,
+        }
+        
+        # Check for READMEs and docs
+        for name, proj in projects.items():
+            files = proj.get('files', [])
+            if isinstance(files, list):
+                if any('readme' in str(f).lower() for f in files):
+                    metrics['projects_with_readme'] += 1
+                metrics['doc_files'] += sum(1 for f in files if str(f).endswith(('.md', '.rst', '.txt')))
+        
+        # Calculate ratio
+        if metrics['total_projects'] > 0:
+            metrics['readme_ratio'] = metrics['projects_with_readme'] / metrics['total_projects']
+        else:
+            metrics['readme_ratio'] = 0
+        
+        # Quality score
+        metrics['quality_score'] = min(1.0, (
+            metrics['readme_ratio'] * 0.5 +
+            min(1.0, metrics['doc_files'] / 20) * 0.5
+        ))
+        
+        return metrics
+    
+    def show_doc_quality(self):
+        """Display documentation quality report"""
+        metrics = self.analyze_documentation_quality()
+        
+        print("\n📚 Documentation Quality\n")
+        print(f"   Projects with README: {metrics['projects_with_readme']}/{metrics['total_projects']}")
+        print(f"   Documentation files: {metrics['doc_files']}")
+        print(f"   Quality score: {metrics['quality_score']*100:.0f}%")
+        
+        if metrics['quality_score'] < 0.5:
+            print("\n   💡 Tip: Add READMEs to your projects")
+        
+        print()
+        return metrics
+    
+    # ========== MULTI-AGENT CONTEXT ==========
+    
+    def get_context_for_agent(self, agent_type='default'):
+        """Get context optimized for specific AI agent types
+        
+        Args:
+            agent_type: 'code_review', 'scaffolding', 'debugging', 'documentation', 'default'
+        """
+        base_profile = self._get_profile_summary()
+        
+        views = {
+            'code_review': {
+                'focus': 'quality_and_patterns',
+                'include': ['coding_style', 'error_patterns', 'corrections', 'contradictions'],
+                'style_notes': self.analyze_coding_style(),
+                'common_errors': self._analyze_common_errors(),
+                'negative_patterns': self.track_negative_patterns(),
+            },
+            'scaffolding': {
+                'focus': 'architecture_and_stack',
+                'include': ['technologies', 'project_types', 'templates'],
+                'tech_stack': dict(base_profile.get('top_technologies', [])[:10]),
+                'project_types': dict(self.profile.get('project_types', {}).most_common(5) if hasattr(self.profile.get('project_types', {}), 'most_common') else list(self.profile.get('project_types', {}).items())[:5]),
+            },
+            'debugging': {
+                'focus': 'errors_and_fixes',
+                'include': ['common_errors', 'corrections', 'error_patterns'],
+                'errors': self._analyze_common_errors(),
+                'feedback': self.get_feedback_summary(),
+                'negative_patterns': self.track_negative_patterns().get('error_prone', []),
+            },
+            'documentation': {
+                'focus': 'clarity_and_style',
+                'include': ['doc_quality', 'project_structure', 'naming'],
+                'doc_metrics': self.analyze_documentation_quality(),
+                'style': self.analyze_coding_style(),
+            },
+            'default': {
+                'focus': 'general',
+                'include': ['all'],
+                'full_profile': base_profile,
+            },
+        }
+        
+        return views.get(agent_type, views['default'])
+    
+    def show_agent_contexts(self):
+        """Show available agent context types"""
+        agent_types = ['code_review', 'scaffolding', 'debugging', 'documentation', 'default']
+        
+        print("\n🤖 Multi-Agent Context Views\n")
+        
+        for agent in agent_types:
+            ctx = self.get_context_for_agent(agent)
+            print(f"   {agent}:")
+            print(f"      Focus: {ctx['focus']}")
+            print(f"      Includes: {', '.join(ctx['include'])}")
+            print()
+        
+        print("   Usage: GET /mcp/context?agent_type=code_review")
 
 
 def main():
@@ -2488,6 +3241,44 @@ def main():
     
     elif cmd == 'health':
         twin.health_check()
+    
+    # ========== ADVANCED ANALYSIS COMMANDS ==========
+    
+    elif cmd == 'confidence':
+        twin.show_confidence_report()
+    
+    elif cmd == 'privacy' or cmd == 'secrets':
+        path = sys.argv[2] if len(sys.argv) > 2 else None
+        twin.scan_for_secrets(path)
+    
+    elif cmd == 'temporal':
+        twin.show_temporal_report()
+    
+    elif cmd == 'negative':
+        twin.show_negative_patterns()
+    
+    elif cmd == 'clusters':
+        twin.show_cluster_analysis()
+    
+    elif cmd == 'explain':
+        twin.show_preference_explanations()
+    
+    elif cmd == 'contradictions':
+        twin.show_contradictions()
+    
+    elif cmd == 'progression':
+        twin.show_skill_progression()
+    
+    elif cmd == 'docs':
+        twin.show_doc_quality()
+    
+    elif cmd == 'agents':
+        twin.show_agent_contexts()
+    
+    elif cmd == 'agent-context':
+        agent_type = sys.argv[2] if len(sys.argv) > 2 else 'default'
+        context = twin.get_context_for_agent(agent_type)
+        print(json.dumps(context, indent=2, default=str))
         
     else:
         print(f"Unknown command: {cmd}")

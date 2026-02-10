@@ -158,6 +158,30 @@ python prompt_twin.py snapshots         # List snapshots
 python prompt_twin.py diff              # Compare with last snapshot
 ```
 
+**Advanced Analysis:**
+```powershell
+# Inference quality
+python prompt_twin.py confidence        # Show confidence scores for all inferences
+python prompt_twin.py explain           # Explain preferences with evidence
+
+# Pattern analysis
+python prompt_twin.py temporal          # Time-weighted pattern analysis
+python prompt_twin.py negative          # Abandoned/error-prone patterns
+python prompt_twin.py clusters          # Group similar projects
+python prompt_twin.py contradictions    # Detect conflicting patterns
+
+# Progression & quality
+python prompt_twin.py progression       # Skill learning timeline
+python prompt_twin.py docs              # Documentation quality metrics
+
+# Security & privacy
+python prompt_twin.py privacy [path]    # Scan for secrets/sensitive data
+
+# Multi-agent support
+python prompt_twin.py agents            # List context views for different AI agents
+python prompt_twin.py agent-context debugging  # Get debugging-focused context
+```
+
 Creates: `.cursorrules`, `.github/copilot-instructions.md`, `profile.yaml`
 
 ---
