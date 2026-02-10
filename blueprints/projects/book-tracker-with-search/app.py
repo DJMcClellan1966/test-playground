@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""
+Book Tracker With Search
+Created: 2026-02-10
+Idea: book tracker with search
+"""
+
+from flask import Flask, request, jsonify, redirect, session
+import sqlite3
+from pathlib import Path
+
+app = Flask(__name__)
+app.secret_key = "dev-book-tracker-with-search"
+
+# Database
+DB_PATH = Path(__file__).parent / "data.db"
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    with get_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                content TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+
+# API Routes
+@app.route("/api/items", methods=["GET"])
+def list_items():
+    with get_db() as conn:
+        items = conn.execute("SELECT * FROM items ORDER BY created_at DESC").fetchall()
+        return jsonify({"items": [dict(row) for row in items]})
+
+@app.route("/api/items", methods=["POST"])
+def create_item():
+    data = request.get_json() or {}
+    content = data.get("content", "").strip()
+    if not content:
+        return jsonify({"error": "Content required"}), 400
+    with get_db() as conn:
+        cursor = conn.execute("INSERT INTO items (content) VALUES (?)", (content,))
+        conn.commit()
+        return jsonify({"id": cursor.lastrowid, "content": content})
+
+@app.route("/api/items/<int:item_id>", methods=["DELETE"])
+def delete_item(item_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
+        conn.commit()
+        return jsonify({"deleted": item_id})
+
+@app.route("/api/search")
+def search_items():
+    q = request.args.get("q", "")
+    with get_db() as conn:
+        items = conn.execute(
+            "SELECT * FROM items WHERE content LIKE ?",
+            (f"%{q}%",)
+        ).fetchall()
+        return jsonify({"items": [dict(row) for row in items]})
+
+# Main page
+@app.route("/")
+def index():
+    return open(Path(__file__).parent / "templates" / "index.html").read()
+
+if __name__ == "__main__":
+    init_db()
+    print()
+    print("=" * 50)
+    print("  Book Tracker With Search")
+    print("=" * 50)
+    print()
+    print("  http://localhost:5000")
+    print()
+    print("  Edit files in VS Code - changes reload automatically!")
+    print("  Press Ctrl+C to stop")
+    print()
+    app.run(debug=True, port=5000)

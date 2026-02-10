@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Manager</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1 { color: #667eea; margin-bottom: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .toolbar { display: flex; gap: 10px; margin-bottom: 20px; }
+        input[type="text"] { flex: 1; padding: 12px; background: #1a1a2e; border: 2px solid #333; 
+                             border-radius: 8px; color: white; font-size: 16px; }
+        input:focus { outline: none; border-color: #667eea; }
+        button { padding: 12px 24px; background: #667eea; color: white; border: none; 
+                 border-radius: 8px; cursor: pointer; font-weight: 600; }
+        button:hover { background: #5a6fd6; }
+        .items { display: flex; flex-direction: column; gap: 10px; }
+        .item { background: #1a1a2e; padding: 15px; border-radius: 8px; 
+                display: flex; justify-content: space-between; align-items: center; }
+        .empty { text-align: center; padding: 40px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Recipe Manager</h1>
+            
+        </div>
+        
+        <div style="margin-bottom:20px">
+            <input type="text" id="searchInput" placeholder="Search..." 
+                   oninput="searchItems()" style="width:100%;padding:12px;
+                   background:#1a1a2e;border:2px solid #333;border-radius:8px;color:white">
+        </div>
+        <div class="toolbar">
+            <input type="text" id="newItem" placeholder="Add new item..." 
+                   onkeypress="if(event.key==='Enter')addItem()">
+            <button onclick="addItem()">Add</button>
+        </div>
+        
+        <div class="items" id="itemList">
+            <div class="empty">Loading...</div>
+        </div>
+        
+    </div>
+    
+    <script>
+        async function loadItems() {
+            const resp = await fetch('/api/items');
+            const data = await resp.json();
+            renderItems(data.items);
+        }
+        
+        function renderItems(items) {
+            const container = document.getElementById('itemList');
+            if (items.length === 0) {
+                container.innerHTML = '<div class="empty">No items yet</div>';
+                return;
+            }
+            container.innerHTML = items.map(item => 
+                '<div class="item"><span>' + item.content + '</span>' +
+                '<button onclick="deleteItem(' + item.id + ')" style="background:#e74c3c;padding:6px 12px;font-size:12px">Delete</button></div>'
+            ).join('');
+        }
+        
+        async function addItem() {
+            const input = document.getElementById('newItem');
+            const content = input.value.trim();
+            if (!content) return;
+            await fetch('/api/items', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({content})
+            });
+            input.value = '';
+            loadItems();
+        }
+        
+        async function deleteItem(id) {
+            await fetch('/api/items/' + id, {method: 'DELETE'});
+            loadItems();
+        }
+        
+        async function searchItems() {
+            const q = document.getElementById('searchInput').value;
+            const resp = await fetch('/api/search?q=' + encodeURIComponent(q));
+            const data = await resp.json();
+            renderItems(data.items);
+        }
+        loadItems();
+    </script>
+</body>
+</html>
