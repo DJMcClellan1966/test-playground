@@ -834,6 +834,261 @@ if __name__ == "__main__":
     }
 
 
+# ============================================================================
+# CODE ANALYZER - Reverse engineer existing code into architecture
+# ============================================================================
+
+# Patterns to detect each block type in existing code
+CODE_PATTERNS = {
+    "backend_flask": [
+        r"from flask import",
+        r"import flask",
+        r"Flask\(__name__\)",
+        r"app\.route\(",
+    ],
+    "backend_fastapi": [
+        r"from fastapi import",
+        r"import fastapi",
+        r"FastAPI\(\)",
+        r"@app\.get\(",
+        r"@app\.post\(",
+    ],
+    "storage_sqlite": [
+        r"import sqlite3",
+        r"sqlite3\.connect",
+        r"\.db[\"']",
+        r"CREATE TABLE",
+        r"cursor\.execute",
+    ],
+    "storage_postgres": [
+        r"import psycopg",
+        r"from psycopg",
+        r"postgresql://",
+        r"postgres://",
+        r"import asyncpg",
+    ],
+    "storage_json": [
+        r"json\.dump\(",
+        r"json\.load\(",
+        r"\.json[\"']",
+        r"open\([^)]+[\"']w[\"']",
+    ],
+    "storage_s3": [
+        r"import boto3",
+        r"s3\.upload",
+        r"s3\.download",
+        r"S3Client",
+        r"s3://",
+    ],
+    "auth_basic": [
+        r"session\[",
+        r"login_required",
+        r"password",
+        r"bcrypt",
+        r"hashlib",
+        r"@login_required",
+    ],
+    "auth_oauth": [
+        r"oauth",
+        r"OAuth",
+        r"google.*auth",
+        r"github.*auth",
+        r"access_token",
+        r"refresh_token",
+    ],
+    "websocket_basic": [
+        r"websocket",
+        r"WebSocket",
+        r"socketio",
+        r"socket\.io",
+        r"ws://",
+        r"wss://",
+    ],
+    "sync_crdt": [
+        r"crdt",
+        r"CRDT",
+        r"operational.transform",
+        r"yjs",
+        r"automerge",
+    ],
+    "cache_redis": [
+        r"import redis",
+        r"from redis",
+        r"Redis\(",
+        r"redis://",
+        r"\.cache\(",
+    ],
+    "email_sendgrid": [
+        r"sendgrid",
+        r"SendGrid",
+        r"smtp",
+        r"SMTP",
+        r"send.*email",
+        r"mail\.send",
+    ],
+    "docker_basic": [
+        r"Dockerfile",
+        r"docker-compose",
+        r"FROM python",
+        r"EXPOSE",
+        r"CMD \[",
+    ],
+    "crud_routes": [
+        r"@app\.(get|post|put|delete|patch)\(",
+        r"methods=\[",
+        r"/api/",
+        r"jsonify\(",
+        r"return.*json",
+    ],
+    "html_templates": [
+        r"render_template",
+        r"Jinja",
+        r"\.html",
+        r"templates/",
+        r"{% ",
+    ],
+}
+
+
+def analyze_code(code: str, filename: str = "") -> dict:
+    """
+    Analyze existing code and detect which architectural blocks are in use.
+    This is the reverse of generation - code → architecture.
+    """
+    detected_blocks = []
+    evidence = {}
+    
+    for block_id, patterns in CODE_PATTERNS.items():
+        matches = []
+        for pattern in patterns:
+            found = re.findall(pattern, code, re.IGNORECASE)
+            if found:
+                matches.extend(found if isinstance(found[0], str) else [str(f) for f in found])
+        
+        if matches:
+            # Require at least 1 match, but weight by number of matches
+            confidence = min(len(matches) / 2, 1.0)  # 2+ matches = 100% confidence
+            detected_blocks.append({
+                "block_id": block_id,
+                "confidence": confidence,
+                "matches": len(matches),
+                "evidence": matches[:5]  # First 5 matches as evidence
+            })
+            evidence[block_id] = matches[:5]
+    
+    # Sort by confidence
+    detected_blocks.sort(key=lambda x: x["confidence"], reverse=True)
+    
+    # Build architecture from detected blocks
+    block_ids = [b["block_id"] for b in detected_blocks if b["confidence"] >= 0.5]
+    
+    # Create nodes with auto-layout
+    nodes = []
+    for i, block_id in enumerate(block_ids):
+        nodes.append({
+            "id": i + 1,
+            "blockId": block_id,
+            "x": 100 + (i % 3) * 250,
+            "y": 100 + (i // 3) * 150
+        })
+    
+    # Infer connections based on port compatibility
+    connections = []
+    for i, node_a in enumerate(nodes):
+        block_a = BLOCKS.get(node_a["blockId"])
+        if not block_a:
+            continue
+        
+        for j, node_b in enumerate(nodes):
+            if i >= j:
+                continue
+            block_b = BLOCKS.get(node_b["blockId"])
+            if not block_b:
+                continue
+            
+            # Check if a provides what b requires
+            for p in block_a.provides:
+                for r in block_b.requires:
+                    if p.name == r.name:
+                        connections.append({
+                            "fromNode": node_a["id"],
+                            "fromPort": p.name,
+                            "toNode": node_b["id"],
+                            "toPort": r.name,
+                            "inferred": True
+                        })
+            
+            # Check reverse
+            for p in block_b.provides:
+                for r in block_a.requires:
+                    if p.name == r.name:
+                        connections.append({
+                            "fromNode": node_b["id"],
+                            "fromPort": p.name,
+                            "toNode": node_a["id"],
+                            "toPort": r.name,
+                            "inferred": True
+                        })
+    
+    return {
+        "filename": filename,
+        "detected_blocks": detected_blocks,
+        "nodes": nodes,
+        "connections": connections,
+        "block_ids": block_ids,
+        "evidence": evidence,
+        "summary": f"Detected {len(block_ids)} architectural components"
+    }
+
+
+def analyze_directory(dir_path: str) -> dict:
+    """
+    Analyze all Python files in a directory and merge into one architecture.
+    """
+    all_code = ""
+    files_analyzed = []
+    
+    path = Path(dir_path)
+    if not path.exists():
+        return {"error": f"Directory not found: {dir_path}"}
+    
+    # Collect all Python files
+    for py_file in path.rglob("*.py"):
+        try:
+            content = py_file.read_text(encoding='utf-8', errors='ignore')
+            all_code += f"\n# File: {py_file.name}\n" + content
+            files_analyzed.append(str(py_file.relative_to(path)))
+        except Exception as e:
+            pass
+    
+    # Also check for Dockerfile
+    for dockerfile in path.rglob("Dockerfile*"):
+        try:
+            content = dockerfile.read_text(encoding='utf-8', errors='ignore')
+            all_code += f"\n# File: {dockerfile.name}\n" + content
+            files_analyzed.append(str(dockerfile.relative_to(path)))
+        except Exception:
+            pass
+    
+    # Check for docker-compose
+    for compose in path.rglob("docker-compose*.yml"):
+        try:
+            content = compose.read_text(encoding='utf-8', errors='ignore')
+            all_code += f"\n# File: {compose.name}\n" + content
+            files_analyzed.append(str(compose.relative_to(path)))
+        except Exception:
+            pass
+    
+    if not all_code:
+        return {"error": "No Python files found in directory"}
+    
+    result = analyze_code(all_code, dir_path)
+    result["files_analyzed"] = files_analyzed
+    result["file_count"] = len(files_analyzed)
+    
+    return result
+
+
 class NexusHandler(SimpleHTTPRequestHandler):
     """HTTP handler for Nexus."""
     
@@ -914,6 +1169,21 @@ class NexusHandler(SimpleHTTPRequestHandler):
         
         if parsed.path == "/api/generate":
             result = generate_app(data)
+            self.send_json(result)
+            return
+        
+        if parsed.path == "/api/analyze-code":
+            # Analyze code pasted directly
+            code = data.get("code", "")
+            filename = data.get("filename", "uploaded.py")
+            result = analyze_code(code, filename)
+            self.send_json(result)
+            return
+        
+        if parsed.path == "/api/analyze-directory":
+            # Analyze a directory path
+            dir_path = data.get("path", "")
+            result = analyze_directory(dir_path)
             self.send_json(result)
             return
         
@@ -1617,6 +1887,9 @@ def get_nexus_html():
             </div>
             
             <div class="header-actions">
+                <button class="header-btn" onclick="importCode()">
+                    <span>📥</span> Import Code
+                </button>
                 <button class="header-btn" onclick="showDiff()">
                     <span>⎔</span> Diff
                 </button>
@@ -1724,6 +1997,29 @@ def get_nexus_html():
         </div>
     </div>
     
+    <div class="modal" id="importModal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h2>Import Existing Code</h2>
+            <p style="color: var(--text-dim); font-size: 13px; margin-bottom: 15px;">
+                Paste your Python code below, or enter a folder path to analyze an entire project.
+            </p>
+            <div style="margin-bottom: 15px;">
+                <label style="font-size: 12px; color: var(--text-dim);">Folder Path (optional)</label>
+                <input type="text" id="importPath" placeholder="C:\\path\\to\\your\\project" 
+                       style="width: 100%; padding: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); margin-top: 5px;">
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="font-size: 12px; color: var(--text-dim);">Or paste code directly</label>
+                <textarea id="importCode" placeholder="from flask import Flask..." 
+                          style="width: 100%; height: 200px; padding: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 12px; margin-top: 5px; resize: vertical;"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="doImport()" style="flex: 1; background: var(--accent); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: 600;">Analyze & Import</button>
+                <button onclick="closeImportModal()" style="background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px 20px; border-radius: 8px; cursor: pointer;">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
     <div class="toast" id="toast"></div>
     
     <script>
@@ -1814,6 +2110,105 @@ def get_nexus_html():
         document.getElementById('nlInput').addEventListener('keypress', e => {
             if (e.key === 'Enter') parseNaturalLanguage();
         });
+        
+        // IMPORT CODE - Reverse engineer existing code into architecture
+        function importCode() {
+            document.getElementById('importModal').classList.add('show');
+        }
+        
+        function closeImportModal() {
+            document.getElementById('importModal').classList.remove('show');
+        }
+        
+        async function doImport() {
+            const pathInput = document.getElementById('importPath').value.trim();
+            const codeInput = document.getElementById('importCode').value.trim();
+            
+            if (!pathInput && !codeInput) {
+                toast('Enter a path or paste code to analyze');
+                return;
+            }
+            
+            try {
+                let result;
+                
+                if (pathInput) {
+                    // Analyze directory
+                    const res = await fetch('/api/analyze-directory', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ path: pathInput })
+                    });
+                    result = await res.json();
+                } else {
+                    // Analyze pasted code
+                    const res = await fetch('/api/analyze-code', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code: codeInput, filename: 'pasted.py' })
+                    });
+                    result = await res.json();
+                }
+                
+                if (result.error) {
+                    toast(result.error);
+                    return;
+                }
+                
+                // Apply the detected architecture
+                saveToHistory();
+                
+                nodes = result.nodes.map(n => ({
+                    ...n,
+                    block: blocks.find(b => b.id === n.blockId)
+                }));
+                connections = result.connections || [];
+                nextNodeId = Math.max(...nodes.map(n => n.id), 0) + 1;
+                
+                closeImportModal();
+                renderAll();
+                
+                // Show what was detected
+                const detectedNames = result.detected_blocks
+                    .filter(d => d.confidence >= 0.5)
+                    .map(d => d.block_id.replace('_', ' '))
+                    .join(', ');
+                
+                const fileInfo = result.file_count ? ` from ${result.file_count} files` : '';
+                toast(`Detected${fileInfo}: ${detectedNames || 'no blocks'} (${result.summary})`);
+                
+                // Show evidence in modal
+                if (result.detected_blocks.length > 0) {
+                    let evidenceHtml = '<div style="font-size: 12px;">';
+                    evidenceHtml += '<p style="margin-bottom: 10px;">Found these patterns in your code:</p>';
+                    
+                    for (const block of result.detected_blocks.slice(0, 5)) {
+                        const confidence = Math.round(block.confidence * 100);
+                        const color = confidence >= 80 ? 'var(--success)' : confidence >= 50 ? 'var(--warning)' : 'var(--text-dim)';
+                        evidenceHtml += `<div style="margin-bottom: 8px;">`;
+                        evidenceHtml += `<strong style="color: ${color}">${block.block_id}</strong> (${confidence}%)<br>`;
+                        evidenceHtml += `<code style="font-size: 10px; color: var(--text-dim);">${block.evidence.slice(0,3).join(', ')}</code>`;
+                        evidenceHtml += `</div>`;
+                    }
+                    
+                    if (result.files_analyzed) {
+                        evidenceHtml += `<div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border);">`;
+                        evidenceHtml += `<strong>Files analyzed:</strong><br>`;
+                        evidenceHtml += result.files_analyzed.slice(0, 10).map(f => `<code style="font-size: 10px;">${f}</code>`).join('<br>');
+                        if (result.files_analyzed.length > 10) {
+                            evidenceHtml += `<br><span style="color: var(--text-dim);">...and ${result.files_analyzed.length - 10} more</span>`;
+                        }
+                        evidenceHtml += `</div>`;
+                    }
+                    
+                    evidenceHtml += '</div>';
+                    showModal('Code Analysis Results', evidenceHtml);
+                }
+                
+            } catch (e) {
+                toast('Failed to analyze code: ' + e.message);
+            }
+        }
         
         // Canvas setup
         const canvasArea = document.getElementById('canvasArea');
