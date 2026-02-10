@@ -1248,6 +1248,762 @@ storage = PostgresStorage()
             "fastapi": ["psycopg2-binary", "asyncpg"],
         }
     ),
+    
+    # -------------------------------------------------------------------------
+    # OAUTH - Social Login
+    # -------------------------------------------------------------------------
+    "auth_oauth": Block(
+        id="auth_oauth",
+        name="OAuth Social Login",
+        description="Login with Google, GitHub, or other OAuth providers",
+        requires=[
+            Port("backend", "framework", "Web framework"),
+            Port("storage", "service", "User storage"),
+        ],
+        provides=[
+            Port("social_auth", "service", "OAuth authentication"),
+            Port("oauth_routes", "route", "OAuth callback endpoints"),
+        ],
+        satisfies={"auth_type": "oauth"},
+        code={
+            "flask": '''
+# oauth.py - OAuth Social Login Block
+
+from flask import Blueprint, redirect, url_for, session, request, jsonify
+from functools import wraps
+import os
+import secrets
+import urllib.parse
+import urllib.request
+import json
+
+
+class OAuthProvider:
+    """Base OAuth provider."""
+    
+    def __init__(self, client_id: str, client_secret: str, redirect_uri: str):
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.redirect_uri = redirect_uri
+    
+    def get_auth_url(self, state: str) -> str:
+        raise NotImplementedError
+    
+    def exchange_code(self, code: str) -> dict:
+        raise NotImplementedError
+    
+    def get_user_info(self, access_token: str) -> dict:
+        raise NotImplementedError
+
+
+class GoogleOAuth(OAuthProvider):
+    """Google OAuth 2.0 provider."""
+    
+    AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+    TOKEN_URL = "https://oauth2.googleapis.com/token"
+    USER_INFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
+    
+    def get_auth_url(self, state: str) -> str:
+        params = {
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "response_type": "code",
+            "scope": "email profile",
+            "state": state,
+        }
+        return f"{self.AUTH_URL}?{urllib.parse.urlencode(params)}"
+    
+    def exchange_code(self, code: str) -> dict:
+        data = urllib.parse.urlencode({
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": self.redirect_uri,
+        }).encode()
+        req = urllib.request.Request(self.TOKEN_URL, data=data)
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+    
+    def get_user_info(self, access_token: str) -> dict:
+        req = urllib.request.Request(
+            self.USER_INFO_URL,
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+
+
+class GitHubOAuth(OAuthProvider):
+    """GitHub OAuth provider."""
+    
+    AUTH_URL = "https://github.com/login/oauth/authorize"
+    TOKEN_URL = "https://github.com/login/oauth/access_token"
+    USER_INFO_URL = "https://api.github.com/user"
+    
+    def get_auth_url(self, state: str) -> str:
+        params = {
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "scope": "user:email",
+            "state": state,
+        }
+        return f"{self.AUTH_URL}?{urllib.parse.urlencode(params)}"
+    
+    def exchange_code(self, code: str) -> dict:
+        data = urllib.parse.urlencode({
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "code": code,
+        }).encode()
+        req = urllib.request.Request(
+            self.TOKEN_URL, 
+            data=data,
+            headers={"Accept": "application/json"}
+        )
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+    
+    def get_user_info(self, access_token: str) -> dict:
+        req = urllib.request.Request(
+            self.USER_INFO_URL,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json"
+            }
+        )
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+
+
+def create_oauth_routes(app, storage, providers: dict) -> Blueprint:
+    """Create OAuth routes for all configured providers."""
+    
+    oauth_bp = Blueprint("oauth", __name__, url_prefix="/auth")
+    
+    @oauth_bp.route("/login/<provider>")
+    def oauth_login(provider):
+        if provider not in providers:
+            return jsonify({"error": f"Unknown provider: {provider}"}), 400
+        
+        state = secrets.token_urlsafe(32)
+        session["oauth_state"] = state
+        
+        auth_url = providers[provider].get_auth_url(state)
+        return redirect(auth_url)
+    
+    @oauth_bp.route("/callback/<provider>")
+    def oauth_callback(provider):
+        if provider not in providers:
+            return jsonify({"error": f"Unknown provider: {provider}"}), 400
+        
+        # Verify state
+        state = request.args.get("state")
+        if state != session.get("oauth_state"):
+            return jsonify({"error": "Invalid state"}), 400
+        
+        code = request.args.get("code")
+        if not code:
+            return jsonify({"error": "No code provided"}), 400
+        
+        try:
+            # Exchange code for token
+            token_data = providers[provider].exchange_code(code)
+            access_token = token_data.get("access_token")
+            
+            # Get user info
+            user_info = providers[provider].get_user_info(access_token)
+            
+            # Find or create user
+            email = user_info.get("email")
+            existing = storage.find_by_email(email) if email else None
+            
+            if existing:
+                user = existing
+            else:
+                user = storage.create("user", {
+                    "email": email,
+                    "username": user_info.get("name") or user_info.get("login"),
+                    "oauth_provider": provider,
+                    "oauth_id": str(user_info.get("id")),
+                })
+            
+            session["user_id"] = user["id"]
+            session.pop("oauth_state", None)
+            
+            return redirect(url_for("index"))
+            
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    app.register_blueprint(oauth_bp)
+    return oauth_bp
+
+
+# Quick setup helper
+def setup_oauth(app, storage):
+    """Setup OAuth with environment variables."""
+    providers = {}
+    
+    if os.environ.get("GOOGLE_CLIENT_ID"):
+        providers["google"] = GoogleOAuth(
+            client_id=os.environ["GOOGLE_CLIENT_ID"],
+            client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
+            redirect_uri=os.environ.get("GOOGLE_REDIRECT_URI", "http://localhost:5000/auth/callback/google")
+        )
+    
+    if os.environ.get("GITHUB_CLIENT_ID"):
+        providers["github"] = GitHubOAuth(
+            client_id=os.environ["GITHUB_CLIENT_ID"],
+            client_secret=os.environ["GITHUB_CLIENT_SECRET"],
+            redirect_uri=os.environ.get("GITHUB_REDIRECT_URI", "http://localhost:5000/auth/callback/github")
+        )
+    
+    if providers:
+        create_oauth_routes(app, storage, providers)
+    
+    return providers
+''',
+        },
+        dependencies={
+            "flask": [],  # No extra deps - uses stdlib
+        }
+    ),
+    
+    # -------------------------------------------------------------------------
+    # EMAIL - SendGrid
+    # -------------------------------------------------------------------------
+    "email_sendgrid": Block(
+        id="email_sendgrid",
+        name="Email (SendGrid)",
+        description="Send transactional emails via SendGrid API",
+        requires=[],
+        provides=[
+            Port("email", "service", "Email sending capability"),
+        ],
+        satisfies={"email": True},
+        code={
+            "flask": '''
+# email_service.py - SendGrid Email Block
+
+import os
+import urllib.request
+import urllib.error
+import json
+from typing import List, Optional
+from dataclasses import dataclass
+
+
+@dataclass
+class EmailMessage:
+    """Email message structure."""
+    to: List[str]
+    subject: str
+    html_content: str
+    text_content: Optional[str] = None
+    from_email: Optional[str] = None
+    from_name: Optional[str] = None
+
+
+class SendGridEmail:
+    """SendGrid email service."""
+    
+    API_URL = "https://api.sendgrid.com/v3/mail/send"
+    
+    def __init__(self, api_key: str = None, default_from: str = None):
+        self.api_key = api_key or os.environ.get("SENDGRID_API_KEY")
+        self.default_from = default_from or os.environ.get("SENDGRID_FROM_EMAIL", "noreply@example.com")
+        
+        if not self.api_key:
+            raise ValueError("SENDGRID_API_KEY environment variable required")
+    
+    def send(self, message: EmailMessage) -> dict:
+        """Send an email via SendGrid."""
+        
+        payload = {
+            "personalizations": [{"to": [{"email": email} for email in message.to]}],
+            "from": {
+                "email": message.from_email or self.default_from,
+                "name": message.from_name or "App"
+            },
+            "subject": message.subject,
+            "content": []
+        }
+        
+        if message.text_content:
+            payload["content"].append({"type": "text/plain", "value": message.text_content})
+        
+        payload["content"].append({"type": "text/html", "value": message.html_content})
+        
+        req = urllib.request.Request(
+            self.API_URL,
+            data=json.dumps(payload).encode(),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+        )
+        
+        try:
+            with urllib.request.urlopen(req) as resp:
+                return {"success": True, "status": resp.status}
+        except urllib.error.HTTPError as e:
+            return {"success": False, "error": e.read().decode(), "status": e.code}
+    
+    def send_simple(self, to: str, subject: str, html: str) -> dict:
+        """Simple email send helper."""
+        return self.send(EmailMessage(to=[to], subject=subject, html_content=html))
+    
+    def send_template(self, to: str, subject: str, template: str, **kwargs) -> dict:
+        """Send email with template substitution."""
+        html = template
+        for key, value in kwargs.items():
+            html = html.replace(f"{{{{{key}}}}}", str(value))
+        return self.send_simple(to, subject, html)
+
+
+# Common email templates
+TEMPLATES = {
+    "welcome": """
+    <h1>Welcome, {{name}}!</h1>
+    <p>Thanks for signing up. Get started by exploring your dashboard.</p>
+    <a href="{{dashboard_url}}">Go to Dashboard</a>
+    """,
+    
+    "password_reset": """
+    <h1>Reset Your Password</h1>
+    <p>Click the link below to reset your password:</p>
+    <a href="{{reset_url}}">Reset Password</a>
+    <p>This link expires in 1 hour.</p>
+    """,
+    
+    "notification": """
+    <h1>{{title}}</h1>
+    <p>{{message}}</p>
+    """,
+}
+
+
+# Singleton instance
+email_service = None
+
+def get_email_service() -> SendGridEmail:
+    global email_service
+    if email_service is None:
+        email_service = SendGridEmail()
+    return email_service
+
+
+# Flask integration
+def send_welcome_email(user: dict, dashboard_url: str = "/dashboard"):
+    """Send welcome email to new user."""
+    svc = get_email_service()
+    return svc.send_template(
+        to=user["email"],
+        subject="Welcome!",
+        template=TEMPLATES["welcome"],
+        name=user.get("username", "there"),
+        dashboard_url=dashboard_url
+    )
+
+
+def send_password_reset(email: str, reset_url: str):
+    """Send password reset email."""
+    svc = get_email_service()
+    return svc.send_template(
+        to=email,
+        subject="Reset Your Password",
+        template=TEMPLATES["password_reset"],
+        reset_url=reset_url
+    )
+''',
+        },
+        dependencies={
+            "flask": [],  # Uses stdlib
+        }
+    ),
+    
+    # -------------------------------------------------------------------------
+    # CACHE - Redis
+    # -------------------------------------------------------------------------
+    "cache_redis": Block(
+        id="cache_redis",
+        name="Redis Cache",
+        description="Redis-based caching for performance",
+        requires=[],
+        provides=[
+            Port("cache", "service", "Caching capability"),
+        ],
+        satisfies={"cache": True},
+        code={
+            "flask": '''
+# cache.py - Redis Cache Block
+
+import os
+import json
+import hashlib
+from functools import wraps
+from typing import Any, Optional, Callable
+import redis
+
+
+class RedisCache:
+    """Redis caching service."""
+    
+    def __init__(self, url: str = None, prefix: str = "app"):
+        self.url = url or os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        self.prefix = prefix
+        self.client = redis.from_url(self.url, decode_responses=True)
+    
+    def _key(self, key: str) -> str:
+        """Prefix key for namespacing."""
+        return f"{self.prefix}:{key}"
+    
+    def get(self, key: str) -> Optional[Any]:
+        """Get value from cache."""
+        data = self.client.get(self._key(key))
+        if data:
+            return json.loads(data)
+        return None
+    
+    def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
+        """Set value in cache with TTL (default 1 hour)."""
+        return self.client.setex(
+            self._key(key),
+            ttl,
+            json.dumps(value, default=str)
+        )
+    
+    def delete(self, key: str) -> bool:
+        """Delete key from cache."""
+        return bool(self.client.delete(self._key(key)))
+    
+    def exists(self, key: str) -> bool:
+        """Check if key exists."""
+        return bool(self.client.exists(self._key(key)))
+    
+    def clear_pattern(self, pattern: str) -> int:
+        """Delete all keys matching pattern."""
+        full_pattern = self._key(pattern)
+        keys = self.client.keys(full_pattern)
+        if keys:
+            return self.client.delete(*keys)
+        return 0
+    
+    def incr(self, key: str, amount: int = 1) -> int:
+        """Increment counter."""
+        return self.client.incrby(self._key(key), amount)
+    
+    def get_or_set(self, key: str, factory: Callable, ttl: int = 3600) -> Any:
+        """Get from cache or compute and store."""
+        value = self.get(key)
+        if value is None:
+            value = factory()
+            self.set(key, value, ttl)
+        return value
+
+
+# Decorator for caching function results
+def cached(ttl: int = 3600, key_prefix: str = None):
+    """Cache function results."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            cache = get_cache()
+            
+            # Build cache key from function name and args
+            prefix = key_prefix or func.__name__
+            key_parts = [prefix] + [str(a) for a in args] + [f"{k}={v}" for k, v in sorted(kwargs.items())]
+            key = hashlib.md5(":".join(key_parts).encode()).hexdigest()
+            
+            # Try cache first
+            result = cache.get(key)
+            if result is not None:
+                return result
+            
+            # Compute and cache
+            result = func(*args, **kwargs)
+            cache.set(key, result, ttl)
+            return result
+        
+        return wrapper
+    return decorator
+
+
+# Rate limiting helper
+def rate_limit(key: str, limit: int, window: int = 60) -> tuple:
+    """
+    Check rate limit.
+    
+    Returns: (allowed: bool, remaining: int, reset_in: int)
+    """
+    cache = get_cache()
+    full_key = f"ratelimit:{key}"
+    
+    current = cache.client.get(cache._key(full_key))
+    if current is None:
+        cache.client.setex(cache._key(full_key), window, 1)
+        return (True, limit - 1, window)
+    
+    current = int(current)
+    if current >= limit:
+        ttl = cache.client.ttl(cache._key(full_key))
+        return (False, 0, ttl)
+    
+    cache.incr(full_key)
+    ttl = cache.client.ttl(cache._key(full_key))
+    return (True, limit - current - 1, ttl)
+
+
+# Singleton
+_cache = None
+
+def get_cache() -> RedisCache:
+    global _cache
+    if _cache is None:
+        _cache = RedisCache()
+    return _cache
+
+
+# Flask middleware for rate limiting
+def flask_rate_limit(limit: int = 60, window: int = 60):
+    """Flask decorator for rate limiting."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            from flask import request, jsonify
+            
+            # Use IP as rate limit key
+            key = request.remote_addr
+            allowed, remaining, reset = rate_limit(key, limit, window)
+            
+            if not allowed:
+                return jsonify({
+                    "error": "Rate limit exceeded",
+                    "retry_after": reset
+                }), 429
+            
+            response = func(*args, **kwargs)
+            return response
+        
+        return wrapper
+    return decorator
+''',
+        },
+        dependencies={
+            "flask": ["redis"],
+        }
+    ),
+    
+    # -------------------------------------------------------------------------
+    # FILE UPLOAD - S3
+    # -------------------------------------------------------------------------
+    "storage_s3": Block(
+        id="storage_s3",
+        name="S3 File Storage",
+        description="Upload and serve files via AWS S3 or compatible",
+        requires=[],
+        provides=[
+            Port("file_storage", "service", "File upload/download"),
+        ],
+        satisfies={"file_storage": True},
+        code={
+            "flask": '''
+# file_storage.py - S3 File Storage Block
+
+import os
+import uuid
+from datetime import datetime
+from typing import BinaryIO, Optional
+import boto3
+from botocore.exceptions import ClientError
+
+
+class S3FileStorage:
+    """S3-compatible file storage service."""
+    
+    def __init__(
+        self,
+        bucket: str = None,
+        region: str = None,
+        endpoint_url: str = None,  # For MinIO/LocalStack
+        access_key: str = None,
+        secret_key: str = None,
+    ):
+        self.bucket = bucket or os.environ.get("S3_BUCKET", "app-uploads")
+        self.region = region or os.environ.get("AWS_REGION", "us-east-1")
+        
+        # Support custom endpoints (MinIO, LocalStack, etc.)
+        self.endpoint_url = endpoint_url or os.environ.get("S3_ENDPOINT_URL")
+        
+        self.client = boto3.client(
+            "s3",
+            region_name=self.region,
+            endpoint_url=self.endpoint_url,
+            aws_access_key_id=access_key or os.environ.get("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=secret_key or os.environ.get("AWS_SECRET_ACCESS_KEY"),
+        )
+    
+    def upload(
+        self,
+        file: BinaryIO,
+        filename: str,
+        folder: str = "uploads",
+        content_type: str = None,
+        public: bool = False,
+    ) -> dict:
+        """
+        Upload a file to S3.
+        
+        Returns: {"key": str, "url": str, "size": int}
+        """
+        # Generate unique key
+        ext = os.path.splitext(filename)[1]
+        unique_name = f"{uuid.uuid4().hex}{ext}"
+        key = f"{folder}/{datetime.now().strftime('%Y/%m/%d')}/{unique_name}"
+        
+        # Get file size
+        file.seek(0, 2)
+        size = file.tell()
+        file.seek(0)
+        
+        # Upload
+        extra_args = {}
+        if content_type:
+            extra_args["ContentType"] = content_type
+        if public:
+            extra_args["ACL"] = "public-read"
+        
+        self.client.upload_fileobj(file, self.bucket, key, ExtraArgs=extra_args)
+        
+        # Build URL
+        if self.endpoint_url:
+            url = f"{self.endpoint_url}/{self.bucket}/{key}"
+        else:
+            url = f"https://{self.bucket}.s3.{self.region}.amazonaws.com/{key}"
+        
+        return {
+            "key": key,
+            "url": url,
+            "size": size,
+            "filename": filename,
+        }
+    
+    def download(self, key: str) -> bytes:
+        """Download file from S3."""
+        response = self.client.get_object(Bucket=self.bucket, Key=key)
+        return response["Body"].read()
+    
+    def get_presigned_url(self, key: str, expires_in: int = 3600) -> str:
+        """Get a presigned URL for private file access."""
+        return self.client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self.bucket, "Key": key},
+            ExpiresIn=expires_in,
+        )
+    
+    def get_upload_url(self, key: str, content_type: str, expires_in: int = 3600) -> str:
+        """Get presigned URL for direct upload from browser."""
+        return self.client.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": self.bucket,
+                "Key": key,
+                "ContentType": content_type,
+            },
+            ExpiresIn=expires_in,
+        )
+    
+    def delete(self, key: str) -> bool:
+        """Delete a file from S3."""
+        try:
+            self.client.delete_object(Bucket=self.bucket, Key=key)
+            return True
+        except ClientError:
+            return False
+    
+    def list_files(self, prefix: str = "", max_keys: int = 100) -> list:
+        """List files with prefix."""
+        response = self.client.list_objects_v2(
+            Bucket=self.bucket,
+            Prefix=prefix,
+            MaxKeys=max_keys,
+        )
+        return [
+            {"key": obj["Key"], "size": obj["Size"], "modified": obj["LastModified"]}
+            for obj in response.get("Contents", [])
+        ]
+
+
+# Singleton
+_storage = None
+
+def get_file_storage() -> S3FileStorage:
+    global _storage
+    if _storage is None:
+        _storage = S3FileStorage()
+    return _storage
+
+
+# Flask routes for file upload
+def create_upload_routes(app, allowed_types: list = None):
+    """Create file upload routes."""
+    from flask import Blueprint, request, jsonify
+    
+    upload_bp = Blueprint("upload", __name__, url_prefix="/api/files")
+    allowed = allowed_types or ["image/jpeg", "image/png", "image/gif", "application/pdf"]
+    
+    @upload_bp.route("/upload", methods=["POST"])
+    def upload_file():
+        if "file" not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        
+        file = request.files["file"]
+        if not file.filename:
+            return jsonify({"error": "No filename"}), 400
+        
+        # Check content type
+        if allowed and file.content_type not in allowed:
+            return jsonify({"error": f"File type not allowed: {file.content_type}"}), 400
+        
+        storage = get_file_storage()
+        result = storage.upload(
+            file=file.stream,
+            filename=file.filename,
+            content_type=file.content_type,
+            folder=request.form.get("folder", "uploads"),
+        )
+        
+        return jsonify(result), 201
+    
+    @upload_bp.route("/presign", methods=["POST"])
+    def get_presigned():
+        """Get presigned URL for direct browser upload."""
+        data = request.get_json()
+        filename = data.get("filename")
+        content_type = data.get("content_type")
+        
+        if not filename or not content_type:
+            return jsonify({"error": "filename and content_type required"}), 400
+        
+        storage = get_file_storage()
+        key = f"uploads/{datetime.now().strftime('%Y/%m/%d')}/{uuid.uuid4().hex}_{filename}"
+        
+        upload_url = storage.get_upload_url(key, content_type)
+        
+        return jsonify({
+            "upload_url": upload_url,
+            "key": key,
+        })
+    
+    app.register_blueprint(upload_bp)
+    return upload_bp
+''',
+        },
+        dependencies={
+            "flask": ["boto3"],
+        }
+    ),
 }
 
 
