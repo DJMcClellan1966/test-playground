@@ -1,20 +1,65 @@
-# App Blueprint Library
+# Blueprint: Constraint-First Development
 
-**Purpose:** Pre-built specifications for common app types so you can build complete applications without needing AI assistance.
-
-Each blueprint includes:
-- ✅ All "obvious" features (the stuff you shouldn't have to ask for)
-- 📋 User flows and screens
-- ⚙️ Technical decisions and recommendations
-- 🎯 MVP scope vs full vision
-- ⚠️ Common pitfalls to avoid
-- 📁 Suggested file structure
+> **"What AI guesses, we prove."**
 
 ---
 
-## 🚀 NEW: Intelligent Scaffolding System
+## The Paradigm
 
-A breakthrough system that achieves **LLM-like intelligence without AI** by combining three approaches:
+**Constraint-First Development** is a fundamentally different approach to software scaffolding:
+
+| AI Paradigm | Constraint-First Paradigm |
+|-------------|---------------------------|
+| Probabilistic output | **Deterministic output** |
+| Opaque reasoning | **Explainable derivation** |
+| Requires external services | **100% offline** |
+| Can generate invalid configs | **Invalid states are impossible** |
+| Variable results | **Same input → same result, always** |
+
+This is not an incremental improvement. It's a different answer to "How should software be scaffolded?"
+
+---
+
+## 🔬 THE DEMO: 30 Seconds to Proof
+
+Run this now:
+
+```powershell
+python blueprint.py prove
+```
+
+You will see 4 guarantees that **no AI scaffolder can provide**:
+
+1. **Deterministic Output** - Same requirements, same result, 3 times in a row
+2. **Provable Correctness** - Invalid configurations are blocked, not generated
+3. **Explainable Reasoning** - Full derivation trace for every decision
+4. **Zero AI Dependency** - No API, no model, no internet required
+
+**This single demo is the paradigm.** Everything else follows from these guarantees.
+
+---
+
+## Quick Start
+
+```powershell
+# Interactive mode
+python blueprint.py
+
+# Natural language → verified project
+python blueprint.py create "todo app with offline sync"
+
+# Run the proof demo
+python blueprint.py prove
+
+# Start learning journey
+python blueprint.py learn
+```
+
+---
+
+## 🧠 The Core System
+
+Three components achieve LLM-like results through formal methods:
 
 ### 1. Constraint Solver (`constraint_solver.py`)
 Logical deduction engine with 15+ architectural rules. Your requirements → derived architecture.
