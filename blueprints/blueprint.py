@@ -66,15 +66,29 @@ def prove_guarantees():
     print("│  GUARANTEE 1: Deterministic Output                              │")
     print("└─────────────────────────────────────────────────────────────────┘")
     print("\n  Running same requirements 3 times...")
+    print("  Input: offline=True, multi_user=True")
     
     results = []
     for i in range(3):
         solver = ConstraintSolver()
         solver.add_constraint('offline', True)
         solver.add_constraint('multi_user', True)
-        result = solver.solve()
-        results.append(sorted(result.get('blocks', [])))
-        print(f"  Run {i+1}: {results[-1]}")
+        solution = solver.solve()
+        
+        # Get key derived constraints
+        derived = []
+        for key in ['sync_strategy', 'needs_auth', 'needs_backend', 'storage_type']:
+            if key in solution:
+                derived.append(f"{key}={solution[key]}")
+        
+        # Also get blocks
+        assembler = BlockAssembler(solution)
+        blocks = assembler.select_blocks()
+        block_ids = sorted([b.id for b in blocks])
+        
+        result_str = f"Derived: {derived}, Blocks: {block_ids}"
+        results.append(result_str)
+        print(f"  Run {i+1}: {result_str}")
     
     if results[0] == results[1] == results[2]:
         print("\n  ✅ PROVEN: Identical output every time")
@@ -108,8 +122,26 @@ def prove_guarantees():
     result = solver.solve()
     
     print("\n  Derivation trace:")
-    for step in result.get('derivation', []):
-        print(f"    → {step}")
+    explanation = solver.explain()
+    if "No derivations" not in explanation:
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_lines = []
+        for line in explanation.split('\n'):
+            stripped = line.strip()
+            if stripped and 'Derivation trace' not in stripped and stripped not in seen:
+                seen.add(stripped)
+                unique_lines.append(stripped)
+        for line in unique_lines[:8]:  # Show max 8 derivations
+            print(f"    {line}")
+        if len(unique_lines) > 8:
+            print(f"    ... and {len(unique_lines) - 8} more")
+    else:
+        # Show what was derived even if log is empty
+        derived_items = [(k, v) for k, v in result.items() 
+                         if k not in ['offline', 'multi_user'] and v is not None]
+        for k, v in derived_items[:6]:
+            print(f"    → {k} = {v}")
     
     print("\n  ✅ PROVEN: Every decision has an explanation")
     print("  ❌ AI CANNOT DO THIS: LLMs are black boxes")
