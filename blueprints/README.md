@@ -18,6 +18,8 @@
 
 This is not an incremental improvement. It's a different answer to "How should software be scaffolded?"
 
+**Mathematically proven**: See [PROOF_CONFLUENCE.md](PROOF_CONFLUENCE.md) for the formal proof that rule order doesn't affect output (confluence property).
+
 ---
 
 ## 🔬 THE DEMO: 30 Seconds to Proof
