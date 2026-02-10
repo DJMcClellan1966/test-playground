@@ -1,0 +1,9 @@
+{
+  "name": "grocery-planner",
+  "title": "Grocery Planner",
+  "features": [
+    "search"
+  ],
+  "created": "2026-02-10",
+  "last_run": null
+}

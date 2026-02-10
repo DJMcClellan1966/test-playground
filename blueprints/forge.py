@@ -29,6 +29,87 @@ from datetime import datetime
 FORGE_DIR = Path(__file__).parent / "forge_projects"
 FORGE_DIR.mkdir(exist_ok=True)
 
+MEMORY_FILE = Path(__file__).parent / "forge_memory.md"
+
+# =============================================================================
+# MEMORY SYSTEM - Context for AI assistant
+# =============================================================================
+
+def init_memory():
+    """Create memory file if it doesn't exist."""
+    if not MEMORY_FILE.exists():
+        MEMORY_FILE.write_text("""# Forge Memory
+
+This file helps the AI assistant understand your preferences and history.
+It's written in plain markdown so you (and the AI) can read it.
+
+## Preferences
+
+- Style: (not set yet)
+- Code patterns: (not set yet)
+- Things I like: (not set yet)
+- Things I dislike: (not set yet)
+
+## Project History
+
+
+## Notes & Feedback
+
+
+## Decisions Made
+
+""")
+
+def log_memory(section: str, entry: str):
+    """Add an entry to a section of the memory file."""
+    init_memory()
+    content = MEMORY_FILE.read_text()
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    # Find the section and add entry after the section header
+    section_marker = f"## {section}"
+    if section_marker in content:
+        parts = content.split(section_marker)
+        if len(parts) >= 2:
+            # Find the end of the section (next ## or end of file)
+            rest = parts[1]
+            next_section = rest.find("\n## ")
+            if next_section == -1:
+                # No next section, append at end
+                new_content = parts[0] + section_marker + rest.rstrip() + f"\n\n[{timestamp}] {entry}\n"
+            else:
+                # Insert before next section
+                before_next = rest[:next_section]
+                after_next = rest[next_section:]
+                new_content = parts[0] + section_marker + before_next.rstrip() + f"\n\n[{timestamp}] {entry}\n" + after_next
+            
+            MEMORY_FILE.write_text(new_content)
+
+def get_memory() -> str:
+    """Get the full memory content for AI context."""
+    init_memory()
+    return MEMORY_FILE.read_text()
+
+def set_preference(key: str, value: str):
+    """Set a preference in the memory file."""
+    init_memory()
+    content = MEMORY_FILE.read_text()
+    
+    # Look for existing preference line
+    pattern = rf"- {key}: .*"
+    replacement = f"- {key}: {value}"
+    
+    if re.search(pattern, content, re.IGNORECASE):
+        content = re.sub(pattern, replacement, content, flags=re.IGNORECASE)
+    else:
+        # Add new preference after "## Preferences"
+        content = content.replace(
+            "## Preferences\n",
+            f"## Preferences\n\n- {key}: {value}\n"
+        )
+    
+    MEMORY_FILE.write_text(content)
+
 # =============================================================================
 # TEMPLATES - Proven, working code patterns
 # =============================================================================
@@ -621,6 +702,10 @@ is exactly what's running. No magic, no hidden generation.
 '''
     (project_dir / "README.md").write_text(readme)
     
+    # Log to memory
+    feature_str = ", ".join(features) if features else "basic CRUD"
+    log_memory("Project History", f"Created **{name}** with features: {feature_str}")
+    
     return project_dir
 
 
@@ -776,6 +861,93 @@ def cmd_templates(args: list):
     print()
 
 
+# =============================================================================
+# MEMORY COMMANDS - Build context for AI assistant
+# =============================================================================
+
+def cmd_note(args: list):
+    """Add a note to memory."""
+    if not args:
+        print("\n  Usage: python forge.py note \"Your note here\"")
+        print("\n  Examples:")
+        print('    python forge.py note "I prefer dark mode"')
+        print('    python forge.py note "The search in recipe-tracker is slow with 500+ items"')
+        print('    python forge.py note "I like how the login form looks"')
+        return
+    
+    note = " ".join(args)
+    log_memory("Notes & Feedback", note)
+    print(f"\n  Noted: {note}")
+    print(f"  Saved to: {MEMORY_FILE}")
+    print()
+
+
+def cmd_pref(args: list):
+    """Set a preference."""
+    if len(args) < 2:
+        print("\n  Usage: python forge.py pref <key> <value>")
+        print("\n  Examples:")
+        print('    python forge.py pref style "dark mode, minimal, no clutter"')
+        print('    python forge.py pref patterns "I like explicit code over magic"')
+        print('    python forge.py pref dislikes "bootstrap, heavy frameworks"')
+        return
+    
+    key = args[0]
+    value = " ".join(args[1:])
+    set_preference(key, value)
+    print(f"\n  Preference set: {key} = {value}")
+    print(f"  Saved to: {MEMORY_FILE}")
+    print()
+
+
+def cmd_feedback(args: list):
+    """Add feedback about what worked or didn't."""
+    if not args:
+        print("\n  Usage: python forge.py feedback \"What worked or didn't\"")
+        print("\n  Examples:")
+        print('    python forge.py feedback "The auth template worked great"')
+        print('    python forge.py feedback "Search is case-sensitive, which is annoying"')
+        print('    python forge.py feedback "Wish there was a tags/categories feature"')
+        return
+    
+    feedback = " ".join(args)
+    log_memory("Notes & Feedback", f"FEEDBACK: {feedback}")
+    print(f"\n  Feedback logged: {feedback}")
+    print(f"  Saved to: {MEMORY_FILE}")
+    print()
+
+
+def cmd_memory(args: list):
+    """Show or manage memory."""
+    if not args or args[0] == "show":
+        init_memory()
+        print("\n" + "=" * 60)
+        print("  YOUR FORGE MEMORY (AI Context)")
+        print("=" * 60)
+        print()
+        print(get_memory())
+        print()
+        print(f"  File: {MEMORY_FILE}")
+        print("  Edit this file directly or use commands:")
+        print("    python forge.py note \"...\"")
+        print("    python forge.py pref key \"value\"")
+        print("    python forge.py feedback \"...\"")
+        print()
+    elif args[0] == "clear":
+        if MEMORY_FILE.exists():
+            MEMORY_FILE.unlink()
+            init_memory()
+            print("\n  Memory cleared and reset.")
+        else:
+            print("\n  No memory file to clear.")
+    elif args[0] == "path":
+        init_memory()
+        print(f"\n  Memory file: {MEMORY_FILE}")
+    else:
+        print(f"\n  Unknown memory command: {args[0]}")
+        print("  Use: show, clear, or path")
+
+
 def main():
     args = sys.argv[1:]
     
@@ -791,6 +963,12 @@ Commands:
   python forge.py run <name>              Run a project
   python forge.py list                    Show your projects
   python forge.py templates               Show available features
+  
+Memory (AI context):
+  python forge.py note "..."              Add a note
+  python forge.py pref key "value"        Set a preference  
+  python forge.py feedback "..."          Log what worked/didn't
+  python forge.py memory                  Show your memory file
 
 Examples:
   python forge.py new "recipe tracker"
@@ -819,6 +997,14 @@ but the code itself is just templates. No magic.
         cmd_list(rest)
     elif cmd == "templates":
         cmd_templates(rest)
+    elif cmd == "note":
+        cmd_note(rest)
+    elif cmd == "pref":
+        cmd_pref(rest)
+    elif cmd == "feedback":
+        cmd_feedback(rest)
+    elif cmd == "memory":
+        cmd_memory(rest)
     else:
         # Treat as project name
         cmd_new(args)

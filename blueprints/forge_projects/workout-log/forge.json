@@ -1,0 +1,9 @@
+{
+  "name": "workout-log",
+  "title": "Workout Log",
+  "features": [
+    "auth"
+  ],
+  "created": "2026-02-10",
+  "last_run": null
+}

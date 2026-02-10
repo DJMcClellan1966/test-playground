@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workout Log</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container { max-width: 48rem; margin: 0 auto; }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #334155;
+        }
+        h1 { color: #60a5fa; font-size: 1.5rem; }
+        
+        .add-form {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 0.5rem;
+            color: #e2e8f0;
+            font-size: 1rem;
+        }
+        input:focus {
+            outline: none;
+            border-color: #60a5fa;
+        }
+        
+        button {
+            padding: 0.75rem 1.5rem;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:hover { background: #2563eb; }
+        .btn-danger { background: #ef4444; padding: 0.5rem 1rem; font-size: 0.875rem; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-secondary { background: #475569; }
+        .btn-secondary:hover { background: #64748b; }
+        
+        
+        
+        .items { display: flex; flex-direction: column; gap: 0.5rem; }
+        .item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: #1e293b;
+            border-radius: 0.5rem;
+        }
+        .item-content { flex: 1; }
+        
+        .empty {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+        
+        
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Workout Log</h1>
+            <a href="/logout"><button class="btn-secondary">Logout</button></a>
+        </header>
+        
+        
+        
+        <div class="add-form">
+            <input type="text" id="newItem" placeholder="Add new item..." 
+                   onkeypress="if(event.key==='Enter')addItem()">
+            <button onclick="addItem()">Add</button>
+        </div>
+        
+        <div class="items" id="items">
+            <div class="empty">Loading...</div>
+        </div>
+        
+        
+    </div>
+    
+    <script>
+        // Load items on page load
+        async function loadItems() {
+            const resp = await fetch('/api/items');
+            const data = await resp.json();
+            renderItems(data.items);
+        }
+        
+        // Render items to the page
+        function renderItems(items) {
+            const container = document.getElementById('items');
+            if (items.length === 0) {
+                container.innerHTML = '<div class="empty">No items yet. Add one above!</div>';
+                return;
+            }
+            container.innerHTML = items.map(item => `
+                <div class="item">
+                    <span class="item-content">${item.content}</span>
+                    <button class="btn-danger" onclick="deleteItem(${item.id})">Delete</button>
+                </div>
+            `).join('');
+        }
+        
+        // Add a new item
+        async function addItem() {
+            const input = document.getElementById('newItem');
+            const content = input.value.trim();
+            if (!content) return;
+            
+            await fetch('/api/items', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content })
+            });
+            input.value = '';
+            loadItems();
+        }
+        
+        // Delete an item
+        async function deleteItem(id) {
+            await fetch('/api/items/' + id, { method: 'DELETE' });
+            loadItems();
+        }
+        
+        
+        
+        // Initial load
+        loadItems();
+    </script>
+</body>
+</html>
