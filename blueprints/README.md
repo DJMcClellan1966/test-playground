@@ -120,16 +120,18 @@ python blocks.py --list              # See all blocks
 python blocks.py --auth --offline    # Assemble matching blocks
 ```
 
-**10 Blocks Available**:
+**14 Blocks Available**:
 | Category | Blocks |
 |----------|--------|
-| Storage | JSON, SQLite, **PostgreSQL** |
-| Backend | **Flask**, **FastAPI** |
-| Auth | Basic Auth |
+| Storage | JSON, SQLite, PostgreSQL, **S3 Files** |
+| Backend | Flask, FastAPI |
+| Auth | Basic Auth, **OAuth (Google/GitHub)** |
 | Sync | CRDT Sync |
-| Real-time | **WebSocket** |
-| Deployment | **Docker** |
+| Real-time | WebSocket |
+| Deployment | Docker |
 | API | CRUD Routes |
+| Email | **SendGrid** |
+| Cache | **Redis** |
 
 ### 3. Bidirectional Contracts (`contracts.py`)
 **The life-changing part**: Spec and code are THE SAME THING. Define once, generate:
@@ -177,8 +179,8 @@ python learning_integration.py  # Run demo
 1. **Level-Gated Blocks**
    - **Beginner**: JSON Storage, CRUD Routes
    - **Intermediate**: SQLite, Flask Backend, Auth, FastAPI
-   - **Advanced**: PostgreSQL ✅, CRDT Sync, WebSocket ✅, Docker ✅
-   - **Expert**: Kubernetes (planned), GraphQL (planned), OAuth (planned)
+   - **Advanced**: PostgreSQL ✅, CRDT Sync, WebSocket ✅, Docker ✅, OAuth ✅, Redis ✅, S3 ✅, SendGrid ✅
+   - **Expert**: Kubernetes (planned), GraphQL (planned)
 
 2. **Working Code Projects** (18 total - not scaffolds, real apps!)
    
