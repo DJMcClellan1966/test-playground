@@ -96,7 +96,7 @@ python gui.py
 
 **Location:** `blueprints/prompt_twin.py`
 
-Builds a local profile of your coding patterns for AI agents.
+Builds a local profile of your coding patterns for AI agents. Now with watch mode and Ollama integration.
 
 ```powershell
 cd blueprints
@@ -110,15 +110,55 @@ python prompt_twin.py github <your-username>
 # Inject context into AI tools (Cursor, VS Code, Ollama)
 python prompt_twin.py inject
 
-# View feedback/outcomes
+# Watch for changes and auto-update (Ctrl+C to stop)
+python prompt_twin.py watch
+
+# Install git post-commit hook for auto-updates
+python prompt_twin.py hook
+
+# Export structured profile (JSON + YAML)
+python prompt_twin.py structured
+
+# Test Ollama completions with/without context
+python prompt_twin.py ollama "write a flask api"
+```
+
+**Feedback Commands:**
+```powershell
+# View feedback summary
 python prompt_twin.py feedback
 
 # Log results for AI learning
 python prompt_twin.py outcome "ran app.py" success
 python prompt_twin.py error "ImportError" "No module flask"
+python prompt_twin.py correction "AI suggested" "I preferred"
+
+# Nuanced feedback (naming/style/deprecated/complexity)
+python prompt_twin.py nuanced naming "Used camelCase instead of snake_case"
+python prompt_twin.py nuanced-summary
 ```
 
-Creates: `.cursorrules`, `.github/copilot-instructions.md`
+**High-Value Commands:**
+```powershell
+# Start MCP server (for AI agent queries)
+python prompt_twin.py mcp [port]        # Default: 8765
+
+# Configuration
+python prompt_twin.py config            # Show config
+python prompt_twin.py config set KEY VAL
+python prompt_twin.py health            # Check all integrations
+
+# LLM Analysis
+python prompt_twin.py analyze           # AI pattern analysis
+python prompt_twin.py suggest "api with auth"  # Template suggestions
+
+# Profile Tracking
+python prompt_twin.py snapshot          # Save profile snapshot
+python prompt_twin.py snapshots         # List snapshots
+python prompt_twin.py diff              # Compare with last snapshot
+```
+
+Creates: `.cursorrules`, `.github/copilot-instructions.md`, `profile.yaml`
 
 ---
 

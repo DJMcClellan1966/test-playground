@@ -8,6 +8,9 @@ This tool:
 3. Provides context that AI agents can query for better understanding
 4. Fetches GitHub profile data (repos, commits, READMEs)
 5. Injects context into AI tools (Cursor, VS Code, Ollama)
+6. Watches for changes and auto-updates profile
+7. Tests completions with Ollama to measure context impact
+8. Exposes MCP server for AI agent queries
 
 Usage:
     python prompt_twin.py scan                    # Scan desktop for patterns
@@ -17,12 +20,48 @@ Usage:
     python prompt_twin.py export                  # Export profile to markdown
     python prompt_twin.py github <username>       # Fetch GitHub data
     python prompt_twin.py inject                  # Inject context into AI tools
-    
+
+Watch Mode & Automation:
+    python prompt_twin.py watch [path] [interval] # Watch for changes (30s default)
+    python prompt_twin.py hook [repo]             # Install git post-commit hook
+
+Structured Profile:
+    python prompt_twin.py structured              # Export structured JSON/YAML profile
+
+Ollama Integration:
+    python prompt_twin.py ollama "prompt" [model] # Test completion with context
+    python prompt_twin.py analyze                 # LLM analysis of your patterns
+
+MCP Server (for AI agents):
+    python prompt_twin.py mcp [port]              # Start MCP server (default: 8765)
+
+Configuration:
+    python prompt_twin.py config                  # Show current config
+    python prompt_twin.py config set KEY VALUE    # Set config value
+    python prompt_twin.py health                  # Check all integrations
+
+Profile Tracking:
+    python prompt_twin.py snapshot [name]         # Save profile snapshot
+    python prompt_twin.py snapshots               # List snapshots
+    python prompt_twin.py diff [snapshot]         # Compare with snapshot
+    python prompt_twin.py suggest [description]   # Get template suggestions
+
 Feedback Loop (reality grounding):
     python prompt_twin.py feedback                # Show feedback summary
     python prompt_twin.py outcome "action" "success|failure" [error]
     python prompt_twin.py error "ErrorType" "message" [file]
     python prompt_twin.py correction "ai said" "user wanted"
+    python prompt_twin.py nuanced <category> "description"
+    python prompt_twin.py nuanced-summary
+
+Nuanced Feedback Categories:
+    naming         - AI misunderstood naming conventions
+    deprecated     - Suggested deprecated pattern
+    style          - Didn't match coding style
+    complexity     - Over/under-engineered
+    missing_context - Missed project-specific context
+    wrong_tech     - Suggested wrong technology
+    good           - AI got it right (positive feedback)
 """
 
 import os
@@ -1325,6 +1364,442 @@ if __name__ == "__main__":
         
         return '\n'.join(lines)
     
+    # ========== WATCH MODE ==========
+    
+    def watch(self, paths=None, interval=30):
+        """Watch for file changes and auto-update profile
+        
+        Args:
+            paths: List of paths to watch (default: Desktop)
+            interval: Seconds between checks (default: 30)
+        """
+        import time
+        
+        watch_paths = paths or [DESKTOP]
+        print(f"👁️  Watch mode started (checking every {interval}s)")
+        print(f"   Watching: {', '.join(str(p) for p in watch_paths)}")
+        print("   Press Ctrl+C to stop\n")
+        
+        # Track file modification times
+        last_scan = {}
+        
+        def get_file_mtimes(root):
+            """Get modification times for relevant files"""
+            mtimes = {}
+            root = Path(root)
+            if not root.exists():
+                return mtimes
+            for ext in CODE_EXTENSIONS | DOC_EXTENSIONS:
+                for f in root.rglob(f'*{ext}'):
+                    if '.git' not in str(f) and 'node_modules' not in str(f):
+                        try:
+                            mtimes[str(f)] = f.stat().st_mtime
+                        except (PermissionError, OSError):
+                            pass
+            return mtimes
+        
+        # Initial scan
+        for p in watch_paths:
+            last_scan.update(get_file_mtimes(p))
+        print(f"   Tracking {len(last_scan)} files")
+        
+        try:
+            while True:
+                time.sleep(interval)
+                
+                # Check for changes
+                changed = False
+                for p in watch_paths:
+                    current = get_file_mtimes(p)
+                    for f, mtime in current.items():
+                        if f not in last_scan or last_scan[f] != mtime:
+                            changed = True
+                            print(f"   📝 Changed: {Path(f).name}")
+                    last_scan.update(current)
+                
+                if changed:
+                    print(f"\n   🔄 Re-scanning at {datetime.now().strftime('%H:%M:%S')}...")
+                    self.scan_projects()
+                    self.inject_context()
+                    print("   ✓ Profile updated and injected\n")
+                    
+        except KeyboardInterrupt:
+            print("\n   ⏹️  Watch mode stopped")
+    
+    def setup_git_hook(self, repo_path=None):
+        """Install a git post-commit hook for auto-scanning
+        
+        Args:
+            repo_path: Repository to add hook to (default: current directory)
+        """
+        repo = Path(repo_path) if repo_path else Path.cwd()
+        git_dir = repo / '.git'
+        
+        if not git_dir.exists():
+            print(f"❌ Not a git repository: {repo}")
+            return False
+        
+        hooks_dir = git_dir / 'hooks'
+        hooks_dir.mkdir(exist_ok=True)
+        
+        hook_file = hooks_dir / 'post-commit'
+        
+        # Create hook script
+        script_path = Path(__file__).absolute()
+        hook_content = f'''#!/bin/sh
+# Auto-update prompt twin after commits
+python "{script_path}" scan
+python "{script_path}" inject
+echo "✓ Prompt twin updated"
+'''
+        
+        hook_file.write_text(hook_content)
+        
+        # Make executable (Windows doesn't really need this, but good practice)
+        try:
+            import stat
+            hook_file.chmod(hook_file.stat().st_mode | stat.S_IEXEC)
+        except Exception:
+            pass
+        
+        print(f"✓ Git hook installed: {hook_file}")
+        print("  Profile will auto-update after each commit")
+        return True
+    
+    # ========== STRUCTURED PROFILE ==========
+    
+    def analyze_coding_style(self):
+        """Analyze coding patterns and style preferences"""
+        style = {
+            'naming_conventions': {},
+            'file_organization': {},
+            'common_patterns': [],
+            'framework_preferences': [],
+            'database_preferences': [],
+        }
+        
+        # Analyze from scanned projects
+        techs = self.profile.get('technologies', {})
+        
+        # Framework preferences
+        web_frameworks = ['Flask', 'FastAPI', 'Django', 'Express']
+        for fw in web_frameworks:
+            if techs.get(fw, 0) > 0:
+                style['framework_preferences'].append(fw)
+        
+        # Database preferences
+        dbs = ['SQLite', 'PostgreSQL', 'MongoDB', 'Redis']
+        for db in dbs:
+            if techs.get(db, 0) > 0:
+                style['database_preferences'].append(db)
+        
+        # Infer naming from commit messages
+        commits = self.profile.get('git_commits', [])
+        if commits:
+            # Check if commits use lowercase, present tense, etc.
+            lowercase_starts = sum(1 for c in commits if c.get('message', '').split()[0].islower())
+            style['naming_conventions']['commit_style'] = 'lowercase_present' if lowercase_starts > len(commits) / 2 else 'capitalized'
+        
+        # Common patterns from code
+        patterns = []
+        if techs.get('Flask', 0) > 0 and techs.get('SQLite', 0) > 0:
+            patterns.append('Flask + SQLite for local apps')
+        if techs.get('Ollama', 0) > 0:
+            patterns.append('Local LLM via Ollama')
+        if any(techs.get(t, 0) > 0 for t in ['Machine Learning', 'OpenAI', 'LangChain']):
+            patterns.append('AI/ML integration')
+        
+        style['common_patterns'] = patterns
+        
+        return style
+    
+    def get_structured_profile(self):
+        """Get a fully structured profile with all sections"""
+        return {
+            'meta': {
+                'version': '2.0',
+                'created': self.profile.get('created'),
+                'last_scan': self.profile.get('last_scan'),
+                'last_updated': datetime.now().isoformat(),
+            },
+            'coding_style': self.analyze_coding_style(),
+            'common_errors': self._analyze_common_errors(),
+            'preferred_patterns': self._get_preferred_patterns(),
+            'project_contexts': self._get_project_contexts(),
+            'technologies': dict(self.profile.get('technologies', {})),
+            'feedback_summary': self.get_feedback_summary(),
+        }
+    
+    def _analyze_common_errors(self):
+        """Analyze common errors from feedback"""
+        feedback = self.get_feedback(500)
+        errors = {}
+        
+        for entry in feedback:
+            if entry.get('type') == 'error':
+                err_type = entry.get('error_type', 'Unknown')
+                if err_type not in errors:
+                    errors[err_type] = {'count': 0, 'examples': []}
+                errors[err_type]['count'] += 1
+                if len(errors[err_type]['examples']) < 3:
+                    errors[err_type]['examples'].append(entry.get('error_message', '')[:100])
+        
+        return errors
+    
+    def _get_preferred_patterns(self):
+        """Extract preferred patterns from feedback and code"""
+        patterns = {
+            'preferred': [],
+            'avoided': [],
+        }
+        
+        feedback = self.get_feedback(500)
+        for entry in feedback:
+            if entry.get('type') == 'correction':
+                # User corrected AI = pattern to avoid
+                patterns['avoided'].append({
+                    'ai_suggested': entry.get('ai_suggested', '')[:100],
+                    'user_preferred': entry.get('user_wrote', '')[:100],
+                    'reason': entry.get('reason'),
+                })
+        
+        # Preferred patterns from code analysis
+        style = self.analyze_coding_style()
+        patterns['preferred'] = style.get('common_patterns', [])
+        
+        return patterns
+    
+    def _get_project_contexts(self):
+        """Get context for each project"""
+        contexts = {}
+        for name, project in list(self.profile.get('projects', {}).items())[:20]:
+            files = project.get('files', 0)
+            # Handle both int count and list
+            file_count = files if isinstance(files, int) else len(files) if isinstance(files, list) else 0
+            contexts[name] = {
+                'technologies': project.get('technologies', []),
+                'types': project.get('types', []),
+                'file_count': file_count,
+            }
+        return contexts
+    
+    def export_structured(self):
+        """Export structured profile as YAML-like format"""
+        profile = self.get_structured_profile()
+        
+        structured_file = DATA_DIR / 'profile_structured.json'
+        structured_file.write_text(json.dumps(profile, indent=2), encoding='utf-8')
+        print(f"✓ Exported structured profile: {structured_file}")
+        
+        # Also create a YAML-like readable version
+        yaml_file = DATA_DIR / 'profile.yaml'
+        yaml_content = self._to_yaml_like(profile)
+        yaml_file.write_text(yaml_content, encoding='utf-8')
+        print(f"✓ Exported readable profile: {yaml_file}")
+        
+        return profile
+    
+    def _to_yaml_like(self, data, indent=0):
+        """Convert dict to readable YAML-like format (no PyYAML dependency)"""
+        lines = []
+        prefix = '  ' * indent
+        
+        if isinstance(data, dict):
+            for key, value in data.items():
+                if isinstance(value, (dict, list)) and value:
+                    lines.append(f"{prefix}{key}:")
+                    lines.append(self._to_yaml_like(value, indent + 1))
+                else:
+                    lines.append(f"{prefix}{key}: {value}")
+        elif isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict):
+                    lines.append(f"{prefix}-")
+                    lines.append(self._to_yaml_like(item, indent + 1))
+                else:
+                    lines.append(f"{prefix}- {item}")
+        
+        return '\n'.join(lines)
+    
+    # ========== OLLAMA INTEGRATION ==========
+    
+    def test_with_ollama(self, prompt, model='qwen2.5:7b'):
+        """Test prompt completion with context injected into Ollama
+        
+        Args:
+            prompt: The user prompt to test
+            model: Ollama model to use
+        """
+        import time
+        
+        # Generate system prompt from profile
+        system_prompt = self._generate_ollama_system_prompt()
+        
+        print(f"🧪 Testing with Ollama ({model})")
+        print(f"   System prompt: {len(system_prompt)} chars")
+        print(f"   User prompt: {prompt[:50]}...")
+        print()
+        
+        # Test WITHOUT context
+        print("⏳ Testing without context...")
+        start = time.time()
+        result_no_ctx = self._query_ollama(prompt, model=model)
+        time_no_ctx = time.time() - start
+        
+        # Test WITH context
+        print("⏳ Testing with context...")
+        start = time.time()
+        result_with_ctx = self._query_ollama(prompt, system_prompt=system_prompt, model=model)
+        time_with_ctx = time.time() - start
+        
+        print("\n" + "="*60)
+        print("WITHOUT CONTEXT:")
+        print("-"*60)
+        print(result_no_ctx[:500])
+        print(f"\n[{time_no_ctx:.1f}s]")
+        
+        print("\n" + "="*60)
+        print("WITH YOUR PROFILE CONTEXT:")
+        print("-"*60)
+        print(result_with_ctx[:500])
+        print(f"\n[{time_with_ctx:.1f}s]")
+        print("="*60)
+        
+        return result_no_ctx, result_with_ctx
+    
+    def _generate_ollama_system_prompt(self):
+        """Generate a system prompt for Ollama based on profile"""
+        summary = self._get_profile_summary()
+        feedback = self.get_feedback_summary()
+        
+        lines = [
+            "You are a coding assistant for a developer with these preferences:",
+            "",
+            "## Tech Stack",
+        ]
+        
+        if summary['top_technologies']:
+            techs = ', '.join(t[0] for t in summary['top_technologies'][:8])
+            lines.append(f"Primary: {techs}")
+        
+        if summary['primary_languages']:
+            langs = ', '.join(l[0] for l in summary['primary_languages'][:5])
+            lines.append(f"Languages: {langs}")
+        
+        lines.extend([
+            "",
+            "## Style Preferences",
+            "- Prefer local-first solutions (Ollama over cloud APIs, SQLite over hosted DBs)",
+            "- Keep code practical and runnable",
+            "- Single-file apps when possible",
+            "- Standard library over heavy dependencies",
+        ])
+        
+        # Add error patterns to avoid
+        if feedback.get('common_errors'):
+            lines.extend(["", "## Common Errors (avoid these)"])
+            for err_type, count in list(feedback['common_errors'].items())[:5]:
+                lines.append(f"- {err_type}: {count} occurrences")
+        
+        # Add correction patterns
+        corrections = self._get_preferred_patterns().get('avoided', [])
+        if corrections:
+            lines.extend(["", "## User Corrections (learn from these)"])
+            for c in corrections[:3]:
+                lines.append(f"- Changed: {c.get('ai_suggested', '?')[:50]}")
+                lines.append(f"  To: {c.get('user_preferred', '?')[:50]}")
+        
+        lines.extend([
+            "",
+            "Be concise. Provide working code. Match the developer's style.",
+        ])
+        
+        return '\n'.join(lines)
+    
+    def _query_ollama(self, prompt, system_prompt=None, model='qwen2.5:7b'):
+        """Query Ollama API"""
+        try:
+            data = {
+                'model': model,
+                'prompt': prompt,
+                'stream': False,
+            }
+            if system_prompt:
+                data['system'] = system_prompt
+            
+            req = urllib.request.Request(
+                'http://localhost:11434/api/generate',
+                json.dumps(data).encode(),
+                {'Content-Type': 'application/json'}
+            )
+            r = urllib.request.urlopen(req, timeout=60)
+            result = json.loads(r.read())
+            return result.get('response', '')
+        except Exception as e:
+            return f"[Ollama error: {e}]"
+    
+    # ========== NUANCED FEEDBACK ==========
+    
+    def log_nuanced_feedback(self, category, description, context=None):
+        """Log nuanced feedback about AI interactions
+        
+        Categories:
+        - naming: AI misunderstood naming conventions
+        - deprecated: Suggested deprecated pattern
+        - style: Didn't match coding style
+        - complexity: Over/under-engineered
+        - missing_context: Missed project-specific context
+        - wrong_tech: Suggested wrong technology
+        - good: AI got it right (positive feedback)
+        """
+        valid_categories = [
+            'naming', 'deprecated', 'style', 'complexity',
+            'missing_context', 'wrong_tech', 'good', 'other'
+        ]
+        
+        if category not in valid_categories:
+            print(f"⚠️  Unknown category. Valid: {', '.join(valid_categories)}")
+            category = 'other'
+        
+        entry = {
+            'timestamp': datetime.now().isoformat(),
+            'type': 'nuanced_feedback',
+            'category': category,
+            'description': description[:500],
+            'context': context or {},
+        }
+        
+        with open(FEEDBACK_FILE, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(entry) + '\n')
+        
+        icons = {
+            'naming': '📛', 'deprecated': '⚠️', 'style': '🎨',
+            'complexity': '📐', 'missing_context': '❓',
+            'wrong_tech': '🔧', 'good': '✅', 'other': '📝'
+        }
+        print(f"{icons.get(category, '📝')} Logged {category}: {description[:50]}...")
+        return entry
+    
+    def get_nuanced_feedback_summary(self):
+        """Get summary of nuanced feedback categories"""
+        feedback = self.get_feedback(500)
+        
+        categories = Counter()
+        examples = defaultdict(list)
+        
+        for entry in feedback:
+            if entry.get('type') == 'nuanced_feedback':
+                cat = entry.get('category', 'other')
+                categories[cat] += 1
+                if len(examples[cat]) < 3:
+                    examples[cat].append(entry.get('description', '')[:80])
+        
+        return {
+            'counts': dict(categories),
+            'examples': dict(examples),
+            'total': sum(categories.values()),
+        }
+    
     def set_preference(self, key, value):
         """Set a user preference"""
         if 'preferences' not in self.profile:
@@ -1332,6 +1807,524 @@ if __name__ == "__main__":
         self.profile['preferences'][key] = value
         self._save_profile()
         print(f"Set preference: {key} = {value}")
+    
+    # ========== MCP SERVER MODE ==========
+    
+    def start_mcp_server(self, port=8765):
+        """Start an MCP-compatible tool server
+        
+        Exposes prompt twin as tools that AI agents can query:
+        - get_context: Get context for a query
+        - get_profile: Get developer profile summary
+        - log_feedback: Log outcome/error/correction
+        - get_technologies: Get tech stack
+        """
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        import threading
+        
+        twin = self
+        
+        class MCPHandler(BaseHTTPRequestHandler):
+            def log_message(self, format, *args):
+                pass  # Suppress logging
+            
+            def _send_json(self, data, status=200):
+                self.send_response(status)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps(data).encode())
+            
+            def do_OPTIONS(self):
+                self.send_response(200)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                self.end_headers()
+            
+            def do_GET(self):
+                if self.path == '/mcp/tools':
+                    # Return available tools (MCP discovery)
+                    tools = {
+                        'tools': [
+                            {
+                                'name': 'prompt_twin_context',
+                                'description': 'Get developer context for a query',
+                                'parameters': {'query': 'string'}
+                            },
+                            {
+                                'name': 'prompt_twin_profile',
+                                'description': 'Get developer profile summary',
+                                'parameters': {}
+                            },
+                            {
+                                'name': 'prompt_twin_technologies',
+                                'description': 'Get developer tech stack',
+                                'parameters': {}
+                            },
+                            {
+                                'name': 'prompt_twin_feedback',
+                                'description': 'Log feedback about AI interaction',
+                                'parameters': {'type': 'string', 'message': 'string'}
+                            }
+                        ]
+                    }
+                    self._send_json(tools)
+                    
+                elif self.path == '/mcp/profile':
+                    summary = twin._get_profile_summary()
+                    self._send_json(summary)
+                    
+                elif self.path == '/mcp/technologies':
+                    techs = dict(twin.profile.get('technologies', {}))
+                    self._send_json({'technologies': techs})
+                    
+                elif self.path == '/health':
+                    self._send_json({'status': 'ok', 'version': '2.0'})
+                    
+                else:
+                    self._send_json({'error': 'Unknown endpoint'}, 404)
+            
+            def do_POST(self):
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length)) if length else {}
+                
+                if self.path == '/mcp/context':
+                    query = body.get('query', '')
+                    context = twin.get_context(query)
+                    self._send_json(context)
+                    
+                elif self.path == '/mcp/feedback':
+                    fb_type = body.get('type', 'outcome')
+                    if fb_type == 'error':
+                        twin.log_error(
+                            body.get('error_type', 'Unknown'),
+                            body.get('message', ''),
+                            body.get('file')
+                        )
+                    elif fb_type == 'correction':
+                        twin.log_correction(
+                            body.get('ai_suggested', ''),
+                            body.get('user_wrote', ''),
+                            body.get('reason')
+                        )
+                    else:
+                        twin.log_outcome(
+                            body.get('action', ''),
+                            body.get('result', 'success'),
+                            body.get('error')
+                        )
+                    self._send_json({'status': 'logged'})
+                    
+                elif self.path == '/mcp/invoke':
+                    # MCP tool invocation
+                    tool = body.get('tool', '')
+                    params = body.get('parameters', {})
+                    
+                    if tool == 'prompt_twin_context':
+                        result = twin.get_context(params.get('query', ''))
+                    elif tool == 'prompt_twin_profile':
+                        result = twin._get_profile_summary()
+                    elif tool == 'prompt_twin_technologies':
+                        result = {'technologies': dict(twin.profile.get('technologies', {}))}
+                    else:
+                        result = {'error': f'Unknown tool: {tool}'}
+                    
+                    self._send_json(result)
+                    
+                else:
+                    self._send_json({'error': 'Unknown endpoint'}, 404)
+        
+        print(f"🔌 MCP Server starting on http://localhost:{port}")
+        print(f"   Tools: /mcp/tools")
+        print(f"   Profile: /mcp/profile")
+        print(f"   Context: POST /mcp/context")
+        print(f"   Invoke: POST /mcp/invoke")
+        print(f"   Press Ctrl+C to stop\n")
+        
+        server = HTTPServer(('127.0.0.1', port), MCPHandler)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("\n   ⏹️  MCP Server stopped")
+    
+    # ========== CONFIG FILE SUPPORT ==========
+    
+    def load_config(self):
+        """Load configuration from .prompt_twin/config.json"""
+        config_file = DATA_DIR / 'config.json'
+        
+        default_config = {
+            'scan_paths': [str(DESKTOP)],
+            'watch_interval': 30,
+            'ollama_model': 'qwen2.5:7b',
+            'ollama_url': 'http://localhost:11434',
+            'mcp_port': 8765,
+            'auto_inject': True,
+            'inject_targets': ['cursor', 'copilot', 'ollama'],
+            'exclude_patterns': ['.git', 'node_modules', '__pycache__', '.venv'],
+            'max_file_size_kb': 500,
+        }
+        
+        if config_file.exists():
+            try:
+                user_config = json.loads(config_file.read_text(encoding='utf-8'))
+                default_config.update(user_config)
+            except Exception as e:
+                print(f"⚠️  Config error: {e}")
+        
+        return default_config
+    
+    def save_config(self, config):
+        """Save configuration to .prompt_twin/config.json"""
+        config_file = DATA_DIR / 'config.json'
+        config_file.write_text(json.dumps(config, indent=2), encoding='utf-8')
+        print(f"✓ Config saved: {config_file}")
+    
+    def show_config(self):
+        """Show current configuration"""
+        config = self.load_config()
+        print("\n⚙️  Configuration (.prompt_twin/config.json)\n")
+        for key, value in config.items():
+            print(f"   {key}: {value}")
+        print()
+    
+    def set_config(self, key, value):
+        """Set a configuration value"""
+        config = self.load_config()
+        
+        # Type conversion
+        if key in ('watch_interval', 'mcp_port', 'max_file_size_kb'):
+            value = int(value)
+        elif key in ('auto_inject',):
+            value = value.lower() in ('true', '1', 'yes')
+        elif key in ('scan_paths', 'inject_targets', 'exclude_patterns'):
+            value = [v.strip() for v in value.split(',')]
+        
+        config[key] = value
+        self.save_config(config)
+        print(f"Set {key} = {value}")
+    
+    # ========== LLM AUTO-ANALYSIS ==========
+    
+    def analyze_with_llm(self, aspect='all'):
+        """Use LLM to analyze your coding patterns and suggest improvements
+        
+        Args:
+            aspect: 'all', 'patterns', 'errors', 'style', 'suggestions'
+        """
+        config = self.load_config()
+        model = config.get('ollama_model', 'qwen2.5:7b')
+        
+        # Build analysis prompt
+        summary = self._get_profile_summary()
+        feedback = self.get_feedback_summary()
+        structured = self.get_structured_profile()
+        
+        analysis_prompt = f"""Analyze this developer's coding profile and provide insights:
+
+## Technologies
+{json.dumps(dict(list(summary.get('top_technologies', [])[:10])), indent=2)}
+
+## Languages  
+{json.dumps(dict(list(summary.get('primary_languages', [])[:5])), indent=2)}
+
+## Common Errors
+{json.dumps(feedback.get('common_errors', {}), indent=2)}
+
+## Corrections Made
+{json.dumps(structured.get('preferred_patterns', {}).get('avoided', [])[:5], indent=2)}
+
+## Recent Git Activity
+{json.dumps(dict(list(summary.get('git_intent_summary', {}).items())[:5]), indent=2)}
+
+Based on this profile, provide:
+1. THREE patterns you notice in their work
+2. TWO potential blind spots or errors to watch for
+3. TWO suggestions to improve their workflow
+4. ONE technology they might benefit from learning
+
+Be concise and specific. No generic advice."""
+
+        print(f"🔍 Analyzing profile with {model}...")
+        print()
+        
+        result = self._query_ollama(analysis_prompt, model=model)
+        
+        print("="*60)
+        print("📊 LLM ANALYSIS OF YOUR CODING PROFILE")
+        print("="*60)
+        print(result)
+        print("="*60)
+        
+        # Save analysis
+        analysis_file = DATA_DIR / 'analysis.md'
+        analysis_file.write_text(f"# Profile Analysis\n\nGenerated: {datetime.now().isoformat()}\n\n{result}", encoding='utf-8')
+        print(f"\n✓ Saved to {analysis_file}")
+        
+        return result
+    
+    # ========== TEMPLATE SUGGESTIONS ==========
+    
+    def suggest_templates(self, description=None):
+        """Suggest project templates based on your profile and description
+        
+        Args:
+            description: Optional project description
+        """
+        summary = self._get_profile_summary()
+        techs = dict(summary.get('top_technologies', [])[:10])
+        
+        # Define templates based on common stacks
+        templates = {
+            'flask_sqlite': {
+                'name': 'Flask + SQLite App',
+                'stack': ['Flask', 'SQLite'],
+                'files': ['app.py', 'database.py', 'templates/'],
+                'description': 'Simple Flask app with SQLite storage'
+            },
+            'flask_auth': {
+                'name': 'Flask with Auth',
+                'stack': ['Flask', 'Auth', 'SQLite'],
+                'files': ['app.py', 'auth.py', 'models.py'],
+                'description': 'Flask app with user authentication'
+            },
+            'ml_pipeline': {
+                'name': 'ML Pipeline',
+                'stack': ['Machine Learning', 'pandas'],
+                'files': ['train.py', 'predict.py', 'data/'],
+                'description': 'Machine learning training pipeline'
+            },
+            'api_service': {
+                'name': 'REST API Service',
+                'stack': ['Flask', 'FastAPI'],
+                'files': ['main.py', 'routes.py', 'models.py'],
+                'description': 'RESTful API service'
+            },
+            'ollama_tool': {
+                'name': 'Ollama Integration',
+                'stack': ['Ollama', 'Machine Learning'],
+                'files': ['chat.py', 'embeddings.py'],
+                'description': 'Local LLM tool with Ollama'
+            },
+            'cli_tool': {
+                'name': 'CLI Tool',
+                'stack': [],
+                'files': ['main.py', 'commands.py'],
+                'description': 'Command-line tool (stdlib only)'
+            }
+        }
+        
+        # Score templates based on profile match
+        scored = []
+        for tid, template in templates.items():
+            score = 0
+            for tech in template['stack']:
+                if techs.get(tech, 0) > 0:
+                    score += techs[tech]
+            
+            # Boost if description matches
+            if description:
+                desc_lower = description.lower()
+                if any(word in desc_lower for word in ['auth', 'login', 'user']):
+                    if 'Auth' in template['stack']:
+                        score += 10
+                if any(word in desc_lower for word in ['ml', 'train', 'model', 'predict']):
+                    if 'Machine Learning' in template['stack']:
+                        score += 10
+                if any(word in desc_lower for word in ['api', 'rest', 'endpoint']):
+                    if 'Flask' in template['stack'] or 'FastAPI' in template['stack']:
+                        score += 5
+                if any(word in desc_lower for word in ['ollama', 'llm', 'chat', 'ai']):
+                    if 'Ollama' in template['stack']:
+                        score += 10
+            
+            scored.append((score, tid, template))
+        
+        # Sort by score
+        scored.sort(reverse=True, key=lambda x: x[0])
+        
+        print("\n🎯 Template Suggestions Based on Your Profile\n")
+        if description:
+            print(f"   Query: \"{description}\"\n")
+        
+        for i, (score, tid, template) in enumerate(scored[:4], 1):
+            match = "⭐⭐⭐" if score > 10 else "⭐⭐" if score > 5 else "⭐" if score > 0 else ""
+            print(f"{i}. {template['name']} {match}")
+            print(f"   {template['description']}")
+            print(f"   Stack: {', '.join(template['stack']) or 'stdlib'}")
+            print(f"   Files: {', '.join(template['files'])}")
+            print()
+        
+        return scored[:4]
+    
+    # ========== PROFILE DIFF TRACKING ==========
+    
+    def save_snapshot(self, name=None):
+        """Save a snapshot of current profile for tracking changes"""
+        snapshots_dir = DATA_DIR / 'snapshots'
+        snapshots_dir.mkdir(exist_ok=True)
+        
+        name = name or datetime.now().strftime('%Y%m%d_%H%M%S')
+        snapshot_file = snapshots_dir / f'{name}.json'
+        
+        snapshot = {
+            'timestamp': datetime.now().isoformat(),
+            'name': name,
+            'profile': self.get_structured_profile(),
+        }
+        
+        snapshot_file.write_text(json.dumps(snapshot, indent=2), encoding='utf-8')
+        print(f"✓ Snapshot saved: {snapshot_file.name}")
+        return snapshot_file
+    
+    def list_snapshots(self):
+        """List available profile snapshots"""
+        snapshots_dir = DATA_DIR / 'snapshots'
+        if not snapshots_dir.exists():
+            print("No snapshots yet. Use 'python prompt_twin.py snapshot' to create one.")
+            return []
+        
+        snapshots = sorted(snapshots_dir.glob('*.json'), reverse=True)
+        
+        print(f"\n📸 Profile Snapshots ({len(snapshots)} total)\n")
+        for s in snapshots[:10]:
+            try:
+                data = json.loads(s.read_text(encoding='utf-8'))
+                ts = data.get('timestamp', 'Unknown')[:10]
+                techs = len(data.get('profile', {}).get('technologies', {}))
+                print(f"   {s.stem} ({ts}) - {techs} technologies")
+            except:
+                print(f"   {s.stem}")
+        
+        return [s.stem for s in snapshots]
+    
+    def diff_profile(self, snapshot_name=None):
+        """Compare current profile with a previous snapshot"""
+        snapshots_dir = DATA_DIR / 'snapshots'
+        
+        if not snapshot_name:
+            # Find most recent snapshot
+            snapshots = sorted(snapshots_dir.glob('*.json'), reverse=True)
+            if not snapshots:
+                print("No snapshots to compare. Create one first with 'snapshot'")
+                return
+            snapshot_name = snapshots[0].stem
+        
+        snapshot_file = snapshots_dir / f'{snapshot_name}.json'
+        if not snapshot_file.exists():
+            print(f"Snapshot not found: {snapshot_name}")
+            return
+        
+        old_data = json.loads(snapshot_file.read_text(encoding='utf-8'))
+        old_profile = old_data.get('profile', {})
+        
+        current = self.get_structured_profile()
+        
+        print(f"\n📊 Profile Diff: {snapshot_name} → Now\n")
+        print(f"   Snapshot: {old_data.get('timestamp', 'Unknown')[:10]}")
+        print(f"   Current:  {datetime.now().strftime('%Y-%m-%d')}\n")
+        
+        # Compare technologies
+        old_techs = set(old_profile.get('technologies', {}).keys())
+        new_techs = set(current.get('technologies', {}).keys())
+        
+        added = new_techs - old_techs
+        removed = old_techs - new_techs
+        
+        if added:
+            print(f"   ➕ New technologies: {', '.join(added)}")
+        if removed:
+            print(f"   ➖ Removed: {', '.join(removed)}")
+        
+        # Compare project count
+        old_ctx = old_profile.get('project_contexts', {})
+        new_ctx = current.get('project_contexts', {})
+        
+        new_projects = set(new_ctx.keys()) - set(old_ctx.keys())
+        if new_projects:
+            print(f"   📁 New projects: {', '.join(list(new_projects)[:5])}")
+        
+        # Compare feedback
+        old_fb = old_profile.get('feedback_summary', {})
+        new_fb = current.get('feedback_summary', {})
+        
+        old_total = old_fb.get('total_outcomes', 0)
+        new_total = new_fb.get('total_outcomes', 0)
+        if new_total > old_total:
+            print(f"   📝 New feedback entries: {new_total - old_total}")
+        
+        print()
+        return {'added': list(added), 'removed': list(removed), 'new_projects': list(new_projects)}
+    
+    # ========== HEALTH CHECK ==========
+    
+    def health_check(self):
+        """Verify all AI tool integrations are working"""
+        print("\n🏥 Prompt Twin Health Check\n")
+        
+        checks = []
+        
+        # 1. Profile exists and has data
+        has_profile = bool(self.profile.get('technologies'))
+        print(f"   {'✅' if has_profile else '❌'} Profile: {'Has data' if has_profile else 'Empty - run scan'}")
+        checks.append(('profile', has_profile))
+        
+        # 2. .cursorrules exists
+        cursor_file = Path('.cursorrules')
+        has_cursor = cursor_file.exists()
+        print(f"   {'✅' if has_cursor else '⚠️'} Cursor: {'.cursorrules exists' if has_cursor else 'Not found - run inject'}")
+        checks.append(('cursor', has_cursor))
+        
+        # 3. copilot-instructions.md exists
+        copilot_file = Path('.github/copilot-instructions.md')
+        has_copilot = copilot_file.exists()
+        print(f"   {'✅' if has_copilot else '⚠️'} Copilot: {'copilot-instructions.md exists' if has_copilot else 'Not found - run inject'}")
+        checks.append(('copilot', has_copilot))
+        
+        # 4. Ollama reachable
+        try:
+            r = urllib.request.urlopen('http://localhost:11434/api/version', timeout=3)
+            version = json.loads(r.read()).get('version', 'unknown')
+            has_ollama = True
+            print(f"   ✅ Ollama: Running (v{version})")
+        except:
+            has_ollama = False
+            print(f"   ⚠️  Ollama: Not reachable at localhost:11434")
+        checks.append(('ollama', has_ollama))
+        
+        # 5. Git hook installed
+        hook_file = Path('.git/hooks/post-commit')
+        has_hook = hook_file.exists() and 'prompt_twin' in hook_file.read_text(errors='ignore')
+        print(f"   {'✅' if has_hook else '⚠️'} Git Hook: {'Installed' if has_hook else 'Not installed - run hook'}")
+        checks.append(('git_hook', has_hook))
+        
+        # 6. Config file
+        config_file = DATA_DIR / 'config.json'
+        has_config = config_file.exists()
+        print(f"   {'✅' if has_config else 'ℹ️'} Config: {'Custom config' if has_config else 'Using defaults'}")
+        checks.append(('config', True))  # Not a failure
+        
+        # 7. Feedback data
+        has_feedback = FEEDBACK_FILE.exists() and FEEDBACK_FILE.stat().st_size > 0
+        print(f"   {'✅' if has_feedback else 'ℹ️'} Feedback: {'Has entries' if has_feedback else 'No feedback yet'}")
+        checks.append(('feedback', True))  # Not a failure
+        
+        # Summary
+        passed = sum(1 for _, ok in checks if ok)
+        total = len(checks)
+        
+        print(f"\n   Status: {passed}/{total} checks passed")
+        
+        if not has_profile:
+            print("\n   💡 Run: python prompt_twin.py scan")
+        if not has_cursor or not has_copilot:
+            print("   💡 Run: python prompt_twin.py inject")
+        if not has_ollama:
+            print("   💡 Start Ollama: ollama serve")
+        
+        print()
+        return all(ok for _, ok in checks[:4])  # First 4 are critical
 
 
 def main():
@@ -1417,6 +2410,84 @@ def main():
         user_wrote = sys.argv[3]
         reason = sys.argv[4] if len(sys.argv) > 4 else None
         twin.log_correction(ai_suggested, user_wrote, reason)
+    
+    # ========== NEW COMMANDS ==========
+    
+    elif cmd == 'watch':
+        path = sys.argv[2] if len(sys.argv) > 2 else None
+        interval = int(sys.argv[3]) if len(sys.argv) > 3 else 30
+        twin.watch([path] if path else None, interval)
+    
+    elif cmd == 'hook':
+        repo = sys.argv[2] if len(sys.argv) > 2 else None
+        twin.setup_git_hook(repo)
+    
+    elif cmd == 'structured':
+        twin.export_structured()
+    
+    elif cmd == 'ollama':
+        if len(sys.argv) < 3:
+            print("Usage: python prompt_twin.py ollama 'your prompt' [model]")
+            print("Example: python prompt_twin.py ollama 'write a flask api' qwen2.5:7b")
+            return
+        prompt = sys.argv[2]
+        model = sys.argv[3] if len(sys.argv) > 3 else 'qwen2.5:7b'
+        twin.test_with_ollama(prompt, model)
+    
+    elif cmd == 'nuanced':
+        if len(sys.argv) < 4:
+            print("Usage: python prompt_twin.py nuanced <category> 'description'")
+            print("Categories: naming, deprecated, style, complexity, missing_context, wrong_tech, good")
+            print("Example: python prompt_twin.py nuanced naming 'AI used camelCase instead of snake_case'")
+            return
+        category = sys.argv[2]
+        description = ' '.join(sys.argv[3:])
+        twin.log_nuanced_feedback(category, description)
+    
+    elif cmd == 'nuanced-summary':
+        summary = twin.get_nuanced_feedback_summary()
+        print(f"\n📊 Nuanced Feedback Summary ({summary['total']} total)\n")
+        for cat, count in summary['counts'].items():
+            print(f"  {cat}: {count}")
+            for ex in summary['examples'].get(cat, []):
+                print(f"    - {ex}")
+    
+    # ========== NEW HIGH-VALUE COMMANDS ==========
+    
+    elif cmd == 'mcp':
+        port = int(sys.argv[2]) if len(sys.argv) > 2 else 8765
+        twin.start_mcp_server(port)
+    
+    elif cmd == 'config':
+        if len(sys.argv) < 3:
+            twin.show_config()
+        elif sys.argv[2] == 'set' and len(sys.argv) >= 5:
+            twin.set_config(sys.argv[3], ' '.join(sys.argv[4:]))
+        else:
+            print("Usage:")
+            print("  python prompt_twin.py config              # Show config")
+            print("  python prompt_twin.py config set KEY VAL  # Set value")
+    
+    elif cmd == 'analyze':
+        twin.analyze_with_llm()
+    
+    elif cmd == 'suggest':
+        desc = ' '.join(sys.argv[2:]) if len(sys.argv) > 2 else None
+        twin.suggest_templates(desc)
+    
+    elif cmd == 'snapshot':
+        name = sys.argv[2] if len(sys.argv) > 2 else None
+        twin.save_snapshot(name)
+    
+    elif cmd == 'snapshots':
+        twin.list_snapshots()
+    
+    elif cmd == 'diff':
+        name = sys.argv[2] if len(sys.argv) > 2 else None
+        twin.diff_profile(name)
+    
+    elif cmd == 'health':
+        twin.health_check()
         
     else:
         print(f"Unknown command: {cmd}")

@@ -1,0 +1,348 @@
+{
+  "meta": {
+    "version": "2.0",
+    "created": "2026-02-10T12:03:23.089814",
+    "last_scan": "2026-02-10T12:08:09.764835",
+    "last_updated": "2026-02-10T17:46:26.818616"
+  },
+  "coding_style": {
+    "naming_conventions": {
+      "commit_style": "capitalized"
+    },
+    "file_organization": {},
+    "common_patterns": [
+      "Flask + SQLite for local apps",
+      "Local LLM via Ollama",
+      "AI/ML integration"
+    ],
+    "framework_preferences": [
+      "Flask",
+      "FastAPI"
+    ],
+    "database_preferences": [
+      "SQLite",
+      "PostgreSQL",
+      "MongoDB"
+    ]
+  },
+  "common_errors": {
+    "ImportError": {
+      "count": 1,
+      "examples": [
+        "No module named flask"
+      ]
+    }
+  },
+  "preferred_patterns": {
+    "preferred": [
+      "Flask + SQLite for local apps",
+      "Local LLM via Ollama",
+      "AI/ML integration"
+    ],
+    "avoided": []
+  },
+  "project_contexts": {
+    "AI-Agent": {
+      "technologies": [
+        "FastAPI",
+        "SQLite",
+        "PostgreSQL",
+        "Ollama",
+        "OpenAI",
+        "LangChain",
+        "Auth"
+      ],
+      "types": [
+        "Web App",
+        "Mobile App",
+        "API Service",
+        "ML/AI Project",
+        "Data Pipeline"
+      ],
+      "file_count": 524
+    },
+    "AI-Kernels-LLM": {
+      "technologies": [
+        "Flask",
+        "Machine Learning"
+      ],
+      "types": [
+        "Web App",
+        "CLI Tool",
+        "API Service",
+        "ML/AI Project",
+        "Data Pipeline"
+      ],
+      "file_count": 37
+    },
+    "algorithm-oracle": {
+      "technologies": [
+        "Flask"
+      ],
+      "types": [
+        "Web App",
+        "Mobile App",
+        "CLI Tool",
+        "API Service",
+        "ML/AI Project",
+        "Data Pipeline"
+      ],
+      "file_count": 38
+    },
+    "Bible-Apps": {
+      "technologies": [
+        "Ollama",
+        "OpenAI",
+        "Semantic Kernel",
+        "RAG"
+      ],
+      "types": [
+        "Web App",
+        "Mobile App",
+        "API Service",
+        "ML/AI Project"
+      ],
+      "file_count": 606
+    },
+    "Book-Club": {
+      "technologies": [
+        "OpenAI",
+        "Auth"
+      ],
+      "types": [
+        "Web App",
+        "Mobile App",
+        "API Service",
+        "ML/AI Project",
+        "Data Pipeline",
+        "Game"
+      ],
+      "file_count": 488
+    },
+    "C#-Learning": {
+      "technologies": [],
+      "types": [],
+      "file_count": 475
+    },
+    "cuddly-octo-computing-machine": {
+      "technologies": [
+        "Flask",
+        "SQLite",
+        "Ollama",
+        "OpenAI"
+      ],
+      "types": [
+        "Web App",
+        "Mobile App",
+        "CLI Tool",
+        "API Service",
+        "ML/AI Project",
+        "Data Pipeline"
+      ],
+      "file_count": 351
+    },
+    "LLM-Twin": {
+      "technologies": [
+        "SQLite",
+        "MongoDB",
+        "OpenAI",
+        "LangChain",
+        "Machine Learning",
+        "RAG",
+        "Auth"
+      ],
+      "types": [
+        "Web App",
+        "CLI Tool",
+        "API Service",
+        "ML/AI Project",
+        "Data Pipeline",
+        "Game"
+      ],
+      "file_count": 208
+    },
+    "Machine-Learning": {
+      "technologies": [
+        "Machine Learning"
+      ],
+      "types": [
+        "ML/AI Project",
+        "Data Pipeline"
+      ],
+      "file_count": 17
+    },
+    "ML_Compass": {
+      "technologies": [
+        "Flask",
+        "RAG"
+      ],
+      "types": [
+        "Web App",
+        "CLI Tool",
+        "API Service",
+        "ML/AI Project",
+        "Data Pipeline"
+      ],
+      "file_count": 191
+    },
+    "mycelium": {
+      "technologies": [
+        "Flask",
+        "SQLite",
+        "Machine Learning",
+        "RAG"
+      ],
+      "types": [
+        "Web App",
+        "Mobile App",
+        "CLI Tool",
+        "API Service",
+        "ML/AI Project",
+        "Data Pipeline"
+      ],
+      "file_count": 49
+    },
+    "pf-playground": {
+      "technologies": [
+        "Auth"
+      ],
+      "types": [
+        "API Service",
+        "ML/AI Project",
+        "Game"
+      ],
+      "file_count": 770
+    },
+    "PocketFence-All": {
+      "technologies": [
+        "MAUI"
+      ],
+      "types": [
+        "Web App",
+        "Mobile App",
+        "API Service",
+        "ML/AI Project"
+      ],
+      "file_count": 692
+    },
+    "PocketFence-Family": {
+      "technologies": [
+        "Auth"
+      ],
+      "types": [
+        "Mobile App",
+        "API Service",
+        "ML/AI Project",
+        "Game"
+      ],
+      "file_count": 377
+    },
+    "puzzle": {
+      "technologies": [],
+      "types": [
+        "Web App",
+        "Data Pipeline",
+        "Game"
+      ],
+      "file_count": 277
+    },
+    "pygame": {
+      "technologies": [],
+      "types": [
+        "Game"
+      ],
+      "file_count": 35
+    },
+    "special_project": {
+      "technologies": [
+        "OpenAI",
+        "Machine Learning"
+      ],
+      "types": [
+        "Web App",
+        "CLI Tool",
+        "API Service",
+        "ML/AI Project",
+        "Data Pipeline"
+      ],
+      "file_count": 5
+    },
+    "Test_playground": {
+      "technologies": [
+        "SQLite"
+      ],
+      "types": [
+        "Web App",
+        "Mobile App",
+        "CLI Tool",
+        "API Service",
+        "ML/AI Project",
+        "Data Pipeline"
+      ],
+      "file_count": 725
+    },
+    "theory-as-channel": {
+      "technologies": [
+        "Machine Learning"
+      ],
+      "types": [
+        "Mobile App",
+        "CLI Tool",
+        "API Service",
+        "ML/AI Project",
+        "Data Pipeline",
+        "Game"
+      ],
+      "file_count": 850
+    },
+    "toolbox": {
+      "technologies": [
+        "Flask",
+        "FastAPI",
+        "Machine Learning",
+        "Auth"
+      ],
+      "types": [
+        "Web App",
+        "Mobile App",
+        "API Service",
+        "ML/AI Project",
+        "Data Pipeline",
+        "Game"
+      ],
+      "file_count": 806
+    }
+  },
+  "technologies": {
+    "FastAPI": 2,
+    "SQLite": 5,
+    "PostgreSQL": 1,
+    "Ollama": 3,
+    "OpenAI": 6,
+    "LangChain": 2,
+    "Auth": 6,
+    "Flask": 6,
+    "Machine Learning": 7,
+    "Semantic Kernel": 1,
+    "RAG": 4,
+    "MongoDB": 1,
+    "MAUI": 1
+  },
+  "feedback_summary": {
+    "total_entries": 3,
+    "outcomes": {
+      "success": 2,
+      "failure": 0,
+      "partial": 0
+    },
+    "common_errors": {
+      "ImportError": 1
+    },
+    "corrections_count": 0,
+    "tests": {
+      "passed": 0,
+      "failed": 0
+    },
+    "recent_failures": []
+  }
+}
