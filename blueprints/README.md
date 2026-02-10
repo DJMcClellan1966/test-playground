@@ -120,7 +120,16 @@ python blocks.py --list              # See all blocks
 python blocks.py --auth --offline    # Assemble matching blocks
 ```
 
-**Blocks**: Auth, CRDT Sync, JSON Storage, SQLite Storage, CRUD Routes
+**10 Blocks Available**:
+| Category | Blocks |
+|----------|--------|
+| Storage | JSON, SQLite, **PostgreSQL** |
+| Backend | **Flask**, **FastAPI** |
+| Auth | Basic Auth |
+| Sync | CRDT Sync |
+| Real-time | **WebSocket** |
+| Deployment | **Docker** |
+| API | CRUD Routes |
 
 ### 3. Bidirectional Contracts (`contracts.py`)
 **The life-changing part**: Spec and code are THE SAME THING. Define once, generate:
@@ -166,10 +175,10 @@ python learning_integration.py  # Run demo
 ### Features
 
 1. **Level-Gated Blocks**
-   - **Beginner**: JSON Storage, Basic CRUD, Console UI
-   - **Intermediate**: SQLite, Flask Routes, Auth, HTML UI
-   - **Advanced**: PostgreSQL, OAuth, CRDT Sync, WebSocket
-   - **Expert**: Kubernetes, GraphQL
+   - **Beginner**: JSON Storage, CRUD Routes
+   - **Intermediate**: SQLite, Flask Backend, Auth, FastAPI
+   - **Advanced**: PostgreSQL ✅, CRDT Sync, WebSocket ✅, Docker ✅
+   - **Expert**: Kubernetes (planned), GraphQL (planned), OAuth (planned)
 
 2. **Working Code Projects** (18 total - not scaffolds, real apps!)
    
@@ -613,7 +622,7 @@ blueprints/
 ├── beyond_belief.py       # Advanced features (cross-lang, synthesis)
 ├── logic_advisor.py       # Deterministic advisor (no AI, instant)
 ├── learning_integration.py # Level-gated learning system
-├── test_system.py         # Comprehensive test suite (41 tests)
+├── test_system.py         # Comprehensive test suite (44 tests)
 │
 ├── # Builder Dev Server
 ├── builder_server.py      # HTTP API server for visual editor

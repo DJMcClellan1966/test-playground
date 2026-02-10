@@ -693,6 +693,561 @@ def register_crud_for_entities(app, storage, entities: list):
         },
         dependencies={}
     ),
+    
+    # -------------------------------------------------------------------------
+    # BACKEND FRAMEWORKS
+    # -------------------------------------------------------------------------
+    "backend_flask": Block(
+        id="backend_flask",
+        name="Flask Backend",
+        description="Flask application with factory pattern and blueprints",
+        requires=[],
+        provides=[
+            Port("backend", "framework", "Flask application framework"),
+            Port("routing", "service", "HTTP routing"),
+            Port("middleware", "service", "Request/response middleware"),
+        ],
+        satisfies={"backend_type": "flask"},
+        code={
+            "flask": '''
+# app.py - Flask Backend Block
+
+from flask import Flask, jsonify
+from flask_cors import CORS
+import os
+
+
+def create_app(config=None):
+    """Application factory pattern."""
+    app = Flask(__name__)
+    
+    # Configuration
+    app.config.update(
+        SECRET_KEY=os.environ.get("SECRET_KEY", "dev-secret-change-in-prod"),
+        DEBUG=os.environ.get("DEBUG", "true").lower() == "true",
+    )
+    
+    if config:
+        app.config.update(config)
+    
+    # Enable CORS
+    CORS(app)
+    
+    # Health check
+    @app.route("/health")
+    def health():
+        return jsonify({"status": "healthy", "version": "1.0.0"})
+    
+    @app.route("/")
+    def index():
+        return jsonify({
+            "message": "API is running",
+            "docs": "/api/docs"
+        })
+    
+    # Error handlers
+    @app.errorhandler(404)
+    def not_found(e):
+        return jsonify({"error": "Not found"}), 404
+    
+    @app.errorhandler(500)
+    def server_error(e):
+        return jsonify({"error": "Internal server error"}), 500
+    
+    return app
+
+
+if __name__ == "__main__":
+    app = create_app()
+    app.run(host="0.0.0.0", port=5000, debug=True)
+''',
+        },
+        dependencies={
+            "flask": ["flask", "flask-cors"],
+        }
+    ),
+    
+    "backend_fastapi": Block(
+        id="backend_fastapi",
+        name="FastAPI Backend",
+        description="FastAPI application with async support and OpenAPI docs",
+        requires=[],
+        provides=[
+            Port("backend", "framework", "FastAPI application framework"),
+            Port("routing", "service", "HTTP routing with async"),
+            Port("openapi", "service", "Automatic OpenAPI documentation"),
+        ],
+        satisfies={"backend_type": "fastapi"},
+        code={
+            "fastapi": '''
+# app.py - FastAPI Backend Block
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+import os
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events."""
+    # Startup
+    print("Starting up...")
+    yield
+    # Shutdown
+    print("Shutting down...")
+
+
+def create_app() -> FastAPI:
+    """Application factory pattern."""
+    app = FastAPI(
+        title="API",
+        version="1.0.0",
+        docs_url="/api/docs",
+        redoc_url="/api/redoc",
+        lifespan=lifespan,
+    )
+    
+    # CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    @app.get("/health")
+    async def health():
+        return {"status": "healthy", "version": "1.0.0"}
+    
+    @app.get("/")
+    async def root():
+        return {"message": "API is running", "docs": "/api/docs"}
+    
+    return app
+
+
+app = create_app()
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+''',
+        },
+        dependencies={
+            "fastapi": ["fastapi", "uvicorn[standard]"],
+        }
+    ),
+    
+    # -------------------------------------------------------------------------
+    # REAL-TIME
+    # -------------------------------------------------------------------------
+    "websocket_basic": Block(
+        id="websocket_basic",
+        name="WebSocket Support",
+        description="Real-time bidirectional communication",
+        requires=[
+            Port("backend", "framework", "Web framework"),
+        ],
+        provides=[
+            Port("realtime", "service", "Real-time messaging"),
+            Port("broadcast", "service", "Message broadcasting"),
+        ],
+        satisfies={"realtime": True},
+        code={
+            "flask": '''
+# websocket.py - WebSocket Block (Flask-SocketIO)
+
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from functools import wraps
+
+socketio = SocketIO(cors_allowed_origins="*")
+
+
+def init_websocket(app):
+    """Initialize WebSocket support."""
+    socketio.init_app(app)
+    
+    @socketio.on("connect")
+    def handle_connect():
+        print(f"Client connected: {socketio.server.environ.get('REMOTE_ADDR')}")
+        emit("connected", {"message": "Connected to server"})
+    
+    @socketio.on("disconnect")
+    def handle_disconnect():
+        print("Client disconnected")
+    
+    @socketio.on("join")
+    def handle_join(data):
+        room = data.get("room", "default")
+        join_room(room)
+        emit("joined", {"room": room}, room=room)
+    
+    @socketio.on("leave")
+    def handle_leave(data):
+        room = data.get("room", "default")
+        leave_room(room)
+        emit("left", {"room": room}, room=room)
+    
+    @socketio.on("message")
+    def handle_message(data):
+        room = data.get("room", "default")
+        emit("message", data, room=room, include_self=False)
+    
+    return socketio
+
+
+def broadcast(event: str, data: dict, room: str = None):
+    """Broadcast event to all clients or specific room."""
+    if room:
+        socketio.emit(event, data, room=room)
+    else:
+        socketio.emit(event, data)
+
+
+def run_with_socketio(app, **kwargs):
+    """Run app with WebSocket support."""
+    socketio.run(app, **kwargs)
+''',
+            "fastapi": '''
+# websocket.py - WebSocket Block (FastAPI)
+
+from fastapi import WebSocket, WebSocketDisconnect
+from typing import Dict, Set
+import json
+
+
+class ConnectionManager:
+    """Manage WebSocket connections."""
+    
+    def __init__(self):
+        self.active_connections: Dict[str, Set[WebSocket]] = {}
+    
+    async def connect(self, websocket: WebSocket, room: str = "default"):
+        await websocket.accept()
+        if room not in self.active_connections:
+            self.active_connections[room] = set()
+        self.active_connections[room].add(websocket)
+    
+    def disconnect(self, websocket: WebSocket, room: str = "default"):
+        if room in self.active_connections:
+            self.active_connections[room].discard(websocket)
+    
+    async def send_personal(self, message: dict, websocket: WebSocket):
+        await websocket.send_json(message)
+    
+    async def broadcast(self, message: dict, room: str = "default"):
+        if room in self.active_connections:
+            for connection in self.active_connections[room]:
+                await connection.send_json(message)
+    
+    async def broadcast_except(self, message: dict, exclude: WebSocket, room: str = "default"):
+        if room in self.active_connections:
+            for connection in self.active_connections[room]:
+                if connection != exclude:
+                    await connection.send_json(message)
+
+
+manager = ConnectionManager()
+
+
+def setup_websocket_routes(app):
+    """Add WebSocket routes to FastAPI app."""
+    
+    @app.websocket("/ws/{room}")
+    async def websocket_endpoint(websocket: WebSocket, room: str = "default"):
+        await manager.connect(websocket, room)
+        try:
+            while True:
+                data = await websocket.receive_json()
+                # Echo to room except sender
+                await manager.broadcast_except(data, websocket, room)
+        except WebSocketDisconnect:
+            manager.disconnect(websocket, room)
+            await manager.broadcast({"event": "user_left"}, room)
+''',
+        },
+        dependencies={
+            "flask": ["flask-socketio", "eventlet"],
+            "fastapi": ["websockets"],
+        }
+    ),
+    
+    # -------------------------------------------------------------------------
+    # DEPLOYMENT
+    # -------------------------------------------------------------------------
+    "docker_basic": Block(
+        id="docker_basic",
+        name="Docker Configuration",
+        description="Dockerfile and docker-compose for containerized deployment",
+        requires=[],
+        provides=[
+            Port("containerization", "deployment", "Docker container setup"),
+        ],
+        satisfies={"deployment": "docker"},
+        code={
+            "flask": '''
+# --- Dockerfile ---
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY . .
+
+# Expose port
+EXPOSE 5000
+
+# Run with gunicorn for production
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "app:create_app()"]
+
+
+# --- docker-compose.yml ---
+version: "3.8"
+
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-dev-secret}
+      - DEBUG=false
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  # Uncomment for PostgreSQL
+  # db:
+  #   image: postgres:15
+  #   environment:
+  #     POSTGRES_USER: ${DB_USER:-app}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+  #     POSTGRES_DB: ${DB_NAME:-appdb}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+
+volumes:
+  postgres_data:
+''',
+            "fastapi": '''
+# --- Dockerfile ---
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+
+
+# --- docker-compose.yml ---
+version: "3.8"
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-dev-secret}
+      - DEBUG=false
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+''',
+        },
+        dependencies={
+            "flask": ["gunicorn"],
+            "fastapi": [],
+        }
+    ),
+    
+    # -------------------------------------------------------------------------
+    # DATABASE - PRODUCTION
+    # -------------------------------------------------------------------------
+    "storage_postgres": Block(
+        id="storage_postgres",
+        name="PostgreSQL Storage",
+        description="Production-grade PostgreSQL storage with connection pooling",
+        requires=[],
+        provides=[
+            Port("storage", "service", "CRUD storage operations"),
+            Port("database", "storage", "PostgreSQL database"),
+            Port("transactions", "service", "ACID transactions"),
+        ],
+        satisfies={"database_type": "postgres", "storage_type": "production"},
+        code={
+            "flask": '''
+# storage.py - PostgreSQL Storage Block
+
+import os
+import json
+from datetime import datetime
+from typing import Dict, List, Optional, Any
+from contextlib import contextmanager
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from psycopg2 import pool
+
+
+class PostgresStorage:
+    """PostgreSQL storage with connection pooling."""
+    
+    def __init__(self, database_url: str = None):
+        self.database_url = database_url or os.environ.get(
+            "DATABASE_URL",
+            "postgresql://postgres:postgres@localhost:5432/appdb"
+        )
+        self.pool = pool.ThreadedConnectionPool(
+            minconn=2,
+            maxconn=10,
+            dsn=self.database_url
+        )
+        self._init_db()
+    
+    @contextmanager
+    def _conn(self):
+        conn = self.pool.getconn()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            self.pool.putconn(conn)
+    
+    def _init_db(self):
+        """Initialize database schema."""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS entities (
+                        id TEXT PRIMARY KEY,
+                        entity_type TEXT NOT NULL,
+                        data JSONB NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_entity_type 
+                    ON entities(entity_type)
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_entity_data 
+                    ON entities USING GIN (data)
+                """)
+    
+    def create(self, entity: str, data: Dict) -> Dict:
+        now = datetime.now().isoformat()
+        item_id = f"{entity[:3]}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        
+        item = {"id": item_id, "created_at": now, "updated_at": now, **data}
+        
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO entities (id, entity_type, data, created_at, updated_at) 
+                       VALUES (%s, %s, %s, %s, %s)""",
+                    (item_id, entity, json.dumps(item), now, now)
+                )
+        return item
+    
+    def get(self, entity: str, id: str) -> Optional[Dict]:
+        with self._conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT data FROM entities WHERE id = %s AND entity_type = %s",
+                    (id, entity)
+                )
+                row = cur.fetchone()
+                return row["data"] if row else None
+    
+    def list(self, entity: str, **filters) -> List[Dict]:
+        with self._conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if filters:
+                    # Use JSONB containment for filtering
+                    cur.execute(
+                        """SELECT data FROM entities 
+                           WHERE entity_type = %s AND data @> %s
+                           ORDER BY created_at DESC""",
+                        (entity, json.dumps(filters))
+                    )
+                else:
+                    cur.execute(
+                        """SELECT data FROM entities 
+                           WHERE entity_type = %s 
+                           ORDER BY created_at DESC""",
+                        (entity,)
+                    )
+                return [row["data"] for row in cur.fetchall()]
+    
+    def update(self, entity: str, id: str, data: Dict) -> Optional[Dict]:
+        existing = self.get(entity, id)
+        if not existing:
+            return None
+        
+        now = datetime.now().isoformat()
+        existing.update(data)
+        existing["updated_at"] = now
+        
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """UPDATE entities SET data = %s, updated_at = %s 
+                       WHERE id = %s AND entity_type = %s""",
+                    (json.dumps(existing), now, id, entity)
+                )
+        return existing
+    
+    def delete(self, entity: str, id: str) -> bool:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM entities WHERE id = %s AND entity_type = %s",
+                    (id, entity)
+                )
+                return cur.rowcount > 0
+    
+    def find_by_email(self, email: str) -> Optional[Dict]:
+        with self._conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """SELECT data FROM entities 
+                       WHERE entity_type = 'user' AND data->>'email' = %s""",
+                    (email,)
+                )
+                row = cur.fetchone()
+                return row["data"] if row else None
+    
+    def close(self):
+        """Close connection pool."""
+        self.pool.closeall()
+
+
+storage = PostgresStorage()
+''',
+        },
+        dependencies={
+            "flask": ["psycopg2-binary"],
+            "fastapi": ["psycopg2-binary", "asyncpg"],
+        }
+    ),
 }
 
 
