@@ -5,10 +5,13 @@ It's written in plain markdown so you (and the AI) can read it.
 
 ## Preferences
 
-- Style: (not set yet)
-- Code patterns: (not set yet)
-- Things I like: (not set yet)
-- Things I dislike: (not set yet)
+- Style: Python-first, Web App, Mobile App, API Service
+- Code patterns: FastAPI, SQLite, PostgreSQL, Ollama, OpenAI
+- Primary languages: .py, .js, .ts
+- Things I like: (learning from feedback)
+- Things I dislike: (learning from feedback)
+
+<!-- Auto-synced from prompt_twin.py at 2026-02-10 18:11 -->
 
 ## Project History
 

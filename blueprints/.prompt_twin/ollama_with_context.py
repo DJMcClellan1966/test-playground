@@ -10,7 +10,7 @@ import urllib.request
 CONTEXT = """
 ## Developer Profile
 Technologies: Machine Learning, OpenAI, Auth, Flask, SQLite
-Languages: .py(926), .cs(162), .js(116)
+Languages: .py(896), .cs(162), .js(116)
 Project Types: ML/AI Project, API Service, Web App
 GitHub: @DJMcClellan1966 (64 repos)
 GitHub Languages: Python(14), HTML(7), C#(7)

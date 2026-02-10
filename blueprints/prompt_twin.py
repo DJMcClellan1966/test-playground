@@ -22,6 +22,7 @@ Usage:
     python prompt_twin.py inject                  # Inject context into AI tools
 
 Watch Mode & Automation:
+    python prompt_twin.py auto                    # Run scan+inject+health (one command!)
     python prompt_twin.py watch [path] [interval] # Watch for changes (30s default)
     python prompt_twin.py hook [repo]             # Install git post-commit hook
 
@@ -419,8 +420,13 @@ class PromptTwin:
     
     def scan_projects(self, root_dir=None):
         """Scan directories for project patterns"""
-        root = Path(root_dir) if root_dir else DESKTOP
-        print(f"Scanning {root}...")
+        # Get scan paths from config if no root specified
+        if root_dir:
+            roots = [Path(root_dir)]
+        else:
+            config = self.load_config()
+            scan_paths = config.get('scan_paths', [str(DESKTOP)])
+            roots = [Path(p) for p in scan_paths if Path(p).exists()]
         
         projects_found = {}
         all_techs = Counter()
@@ -428,44 +434,47 @@ class PromptTwin:
         all_langs = Counter()
         all_topics = Counter()
         
-        # Find project directories (those with code files)
-        for item in root.iterdir():
-            if not item.is_dir():
-                continue
-            if item.name.startswith('.'):
-                continue
-            if item.name in {'node_modules', '__pycache__', '.git', 'venv', '.venv', 'bin', 'obj'}:
-                continue
+        for root in roots:
+            print(f"Scanning {root}...")
+            
+            # Find project directories (those with code files)
+            for item in root.iterdir():
+                if not item.is_dir():
+                    continue
+                if item.name.startswith('.'):
+                    continue
+                if item.name in {'node_modules', '__pycache__', '.git', 'venv', '.venv', 'bin', 'obj'}:
+                    continue
+                    
+                # Check if this is a project directory
+                try:
+                    code_files = []
+                    for f in item.rglob('*'):
+                        code_files.append(f)
+                        if len(code_files) >= 1000:  # Limit for performance
+                            break
+                except (OSError, PermissionError) as e:
+                    print(f"    Skipping {item.name}: {e}")
+                    continue
                 
-            # Check if this is a project directory
-            try:
-                code_files = []
-                for f in item.rglob('*'):
-                    code_files.append(f)
-                    if len(code_files) >= 1000:  # Limit for performance
-                        break
-            except (OSError, PermissionError) as e:
-                print(f"    Skipping {item.name}: {e}")
-                continue
-            
-            # Count by extension
-            ext_counts = Counter(f.suffix.lower() for f in code_files if f.is_file())
-            
-            # Only process if has code files
-            code_count = sum(ext_counts.get(ext, 0) for ext in CODE_EXTENSIONS)
-            if code_count < 2:
-                continue
+                # Count by extension
+                ext_counts = Counter(f.suffix.lower() for f in code_files if f.is_file())
                 
-            print(f"  Analyzing: {item.name}")
-            
-            project_info = {
-                'path': str(item),
-                'name': item.name,
-                'files': len([f for f in code_files if f.is_file()]),
-                'technologies': [],
-                'types': [],
-                'languages': [],
-            }
+                # Only process if has code files
+                code_count = sum(ext_counts.get(ext, 0) for ext in CODE_EXTENSIONS)
+                if code_count < 2:
+                    continue
+                    
+                print(f"  Analyzing: {item.name}")
+                
+                project_info = {
+                    'path': str(item),
+                    'name': item.name,
+                    'files': len([f for f in code_files if f.is_file()]),
+                    'technologies': [],
+                    'types': [],
+                    'languages': [],
+                }
             
             # Sample code files for content analysis
             sample_content = ""
@@ -3078,6 +3087,160 @@ Be concise and specific. No generic advice."""
             print()
         
         print("   Usage: GET /mcp/context?agent_type=code_review")
+    
+    # ========== FORGE INTEGRATION ==========
+    
+    def sync_forge(self):
+        """Sync profile to forge.py's memory system"""
+        forge_memory = Path(__file__).parent / "forge_memory.md"
+        
+        if not self.profile:
+            print("\n⚠️  No profile data. Run 'python prompt_twin.py scan' first.")
+            return
+        
+        # Build preferences section from profile
+        tech = self.profile.get('technologies', {})
+        langs = self.profile.get('languages', {})
+        proj_types = self.profile.get('project_types', {})
+        
+        top_tech = ', '.join(list(tech.keys())[:5]) if tech else 'not detected'
+        top_langs = ', '.join(list(langs.keys())[:3]) if langs else 'not detected'
+        top_types = ', '.join(list(proj_types.keys())[:3]) if proj_types else 'not detected'
+        
+        # Get feedback preferences
+        feedback = self.get_feedback_summary()
+        likes = []
+        dislikes = []
+        for f in feedback.get('detailed', []):
+            if f.get('vote') == 'up':
+                likes.append(f.get('prompt', '')[:50])
+            elif f.get('vote') == 'down':
+                dislikes.append(f.get('prompt', '')[:50])
+        
+        # Build new preferences section
+        prefs = f"""## Preferences
+
+- Style: Python-first, {top_types}
+- Code patterns: {top_tech}
+- Primary languages: {top_langs}
+- Things I like: {', '.join(likes[:3]) if likes else '(learning from feedback)'}
+- Things I dislike: {', '.join(dislikes[:3]) if dislikes else '(learning from feedback)'}
+
+<!-- Auto-synced from prompt_twin.py at {datetime.now().strftime('%Y-%m-%d %H:%M')} -->
+"""
+        
+        if forge_memory.exists():
+            content = forge_memory.read_text()
+            # Replace preferences section
+            if '## Preferences' in content:
+                parts = content.split('## Preferences')
+                rest_start = parts[1].find('\n## ')
+                if rest_start == -1:
+                    new_content = parts[0] + prefs
+                else:
+                    new_content = parts[0] + prefs + parts[1][rest_start:]
+                forge_memory.write_text(new_content)
+            else:
+                # Add preferences at the top
+                forge_memory.write_text(prefs + '\n' + content)
+        else:
+            # Create new memory file
+            forge_memory.write_text(f"""# Forge Memory
+
+This file helps the AI assistant understand your preferences and history.
+Synced from prompt_twin.py.
+
+{prefs}
+## Project History
+
+
+## Notes & Feedback
+
+
+## Decisions Made
+
+""")
+        
+        print(f"\n✅ Synced profile to {forge_memory}")
+        print(f"   - Technologies: {top_tech}")
+        print(f"   - Languages: {top_langs}")
+        print(f"   - Project types: {top_types}")
+        print("\n   Forge will now use your preferences when building apps.")
+    
+    # ========== AUTO-START SETUP ==========
+    
+    def setup_autostart(self, target_dir=None):
+        """Set up VS Code/Cursor to run prompt_twin auto on folder open
+        
+        Creates .vscode/tasks.json with a runOnFolderOpen task
+        """
+        target = Path(target_dir) if target_dir else Path.cwd()
+        vscode_dir = target / ".vscode"
+        tasks_file = vscode_dir / "tasks.json"
+        
+        # Get path to this script
+        script_path = Path(__file__).absolute()
+        
+        tasks_config = {
+            "version": "2.0.0",
+            "tasks": [
+                {
+                    "label": "Prompt Twin Auto-Update",
+                    "type": "shell",
+                    "command": f"python \"{script_path}\" auto",
+                    "presentation": {
+                        "reveal": "silent",
+                        "panel": "dedicated",
+                        "close": True
+                    },
+                    "runOptions": {
+                        "runOn": "folderOpen"
+                    },
+                    "problemMatcher": []
+                }
+            ]
+        }
+        
+        # Check if tasks.json exists and merge
+        if tasks_file.exists():
+            try:
+                existing = json.loads(tasks_file.read_text())
+                # Check if our task already exists
+                existing_labels = [t.get('label') for t in existing.get('tasks', [])]
+                if "Prompt Twin Auto-Update" in existing_labels:
+                    print(f"\n✅ Auto-start already configured in {tasks_file}")
+                    return
+                # Add our task
+                existing.setdefault('tasks', []).append(tasks_config['tasks'][0])
+                tasks_config = existing
+            except json.JSONDecodeError:
+                pass  # Overwrite invalid JSON
+        
+        vscode_dir.mkdir(exist_ok=True)
+        tasks_file.write_text(json.dumps(tasks_config, indent=2))
+        
+        # Also add this folder to scan_paths if it's outside Desktop
+        target_str = str(target.absolute())
+        desktop_str = str(DESKTOP)
+        
+        if not target_str.startswith(desktop_str):
+            # This folder is outside Desktop - add to scan_paths
+            config = self.load_config()
+            scan_paths = config.get('scan_paths', [str(DESKTOP)])
+            
+            if target_str not in scan_paths:
+                scan_paths.append(target_str)
+                config['scan_paths'] = scan_paths
+                self.save_config(config)
+                print(f"\n📁 Added to scan paths: {target_str}")
+        
+        print(f"\n✅ Auto-start configured!")
+        print(f"   Created: {tasks_file}")
+        print(f"\n   When you open this folder in VS Code/Cursor:")
+        print(f"   - prompt_twin auto will run automatically")
+        print(f"   - Your AI context will stay fresh")
+        print(f"\n   ⚠️  First time: VS Code may ask 'Allow automatic tasks?'")
+        print(f"      Click 'Allow' to enable auto-start.")
 
 
 def main():
@@ -3279,6 +3442,37 @@ def main():
         agent_type = sys.argv[2] if len(sys.argv) > 2 else 'default'
         context = twin.get_context_for_agent(agent_type)
         print(json.dumps(context, indent=2, default=str))
+    
+    # ========== ONE-COMMAND AUTOMATION ==========
+    
+    elif cmd == 'auto':
+        # Do everything: scan, inject, sync-forge, health check
+        print("\n🚀 Auto-update: Running scan → inject → sync-forge → health\n")
+        print("="*50)
+        print("Step 1: Scanning projects...")
+        twin.scan_projects()
+        print()
+        print("="*50)
+        print("Step 2: Injecting context into AI tools...")
+        twin.inject_context()
+        print()
+        print("="*50)
+        print("Step 3: Syncing to Forge...")
+        twin.sync_forge()
+        print()
+        print("="*50)
+        print("Step 4: Health check...")
+        twin.health_check()
+        print()
+        print("="*50)
+        print("✅ All done! Your AI tools now have fresh context.")
+    
+    elif cmd == 'sync-forge':
+        twin.sync_forge()
+    
+    elif cmd == 'setup':
+        target = sys.argv[2] if len(sys.argv) > 2 else None
+        twin.setup_autostart(target)
         
     else:
         print(f"Unknown command: {cmd}")

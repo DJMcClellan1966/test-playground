@@ -1,0 +1,22 @@
+{
+  "scan_paths": [
+    "C:\\Users\\DJMcC\\OneDrive\\Desktop"
+  ],
+  "watch_interval": 30,
+  "ollama_model": "qwen2.5:7b",
+  "ollama_url": "http://localhost:11434",
+  "mcp_port": 8765,
+  "auto_inject": true,
+  "inject_targets": [
+    "cursor",
+    "copilot",
+    "ollama"
+  ],
+  "exclude_patterns": [
+    ".git",
+    "node_modules",
+    "__pycache__",
+    ".venv"
+  ],
+  "max_file_size_kb": 500
+}
