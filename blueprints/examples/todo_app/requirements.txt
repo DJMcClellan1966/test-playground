@@ -1,0 +1,5 @@
+# Todo App - Blueprint Demo
+# Install with: pip install -r requirements.txt
+
+flask>=2.3.0
+flask-cors>=4.0.0

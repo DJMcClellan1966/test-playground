@@ -4,6 +4,35 @@
 
 ---
 
+## Quick Start
+
+### Visual Builder (Recommended)
+```powershell
+cd blueprints
+python visual_builder.py
+```
+Opens a web UI at http://localhost:5000 where you can:
+- Click blocks to add them to your app
+- See live code preview as you build
+- Generate working apps with one click
+
+### CLI Commands
+```powershell
+# Create an app from natural language
+python blueprint.py create "todo app"
+
+# List all available blocks
+python blueprint.py blocks
+
+# Run the proof demo
+python blueprint.py prove
+
+# System diagnostics
+python blueprint.py doctor
+```
+
+---
+
 ## The Paradigm
 
 **Constraint-First Development** is a fundamentally different approach to software scaffolding:
@@ -17,45 +46,6 @@
 | Variable results | **Same input → same result, always** |
 
 This is not an incremental improvement. It's a different answer to "How should software be scaffolded?"
-
-**Mathematically proven**: See [PROOF_CONFLUENCE.md](PROOF_CONFLUENCE.md) for the formal proof that rule order doesn't affect output (confluence property).
-
----
-
-## 🔬 THE DEMO: 30 Seconds to Proof
-
-Run this now:
-
-```powershell
-python blueprint.py prove
-```
-
-You will see 4 guarantees that **no AI scaffolder can provide**:
-
-1. **Deterministic Output** - Same requirements, same result, 3 times in a row
-2. **Provable Correctness** - Invalid configurations are blocked, not generated
-3. **Explainable Reasoning** - Full derivation trace for every decision
-4. **Zero AI Dependency** - No API, no model, no internet required
-
-**This single demo is the paradigm.** Everything else follows from these guarantees.
-
----
-
-## Quick Start
-
-```powershell
-# Interactive mode
-python blueprint.py
-
-# Natural language → verified project
-python blueprint.py create "todo app with offline sync"
-
-# Run the proof demo
-python blueprint.py prove
-
-# Start learning journey
-python blueprint.py learn
-```
 
 ---
 
