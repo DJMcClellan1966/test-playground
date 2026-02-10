@@ -1,0 +1,117 @@
+=== chat.ChatSessionStore.index ===
+Size: 595 bytes
+
+Type: dict
+Keys: ['version', 'entries']
+
+Full data:
+{
+  "version": 1,
+  "entries": {
+    "3ce3e319-1887-4cf0-af65-dcadaae8cee9": {
+      "sessionId": "3ce3e319-1887-4cf0-af65-dcadaae8cee9",
+      "title": "New Chat",
+      "lastMessageDate": 1766272601661,
+      "timing": {
+        "startTime": 1766272601661
+      },
+      "initialLocation": "panel",
+      "hasPendingEdits": false,
+      "isEmpty": true,
+      "isExternal": false,
+      "lastResponseState": 1
+    },
+    "e8a4f2e9-96df-4645-b5d2-f3615a3fc058": {
+      "sessionId": "e8a4f2e9-96df-4645-b5d2-f3615a3fc058",
+      "title": "New Chat",
+      "lastMessageDate": 1770521255976,
+      "timing": {
+        "created": 1770521255976
+      },
+      "initialLocation": "panel",
+      "hasPendingEdits": false,
+      "isEmpty": true,
+      "isExternal": false,
+      "lastResponseState": 1
+    }
+  }
+}
+
+=== GitHub.copilot-chat ===
+{
+  "VSCode.ABExp.FeatureData": {
+    "$$$isWrappedExpValue": true,
+    "savedDateTime": "2026-02-10T16:42:31.636Z",
+    "extensionVersion": "0.37.1",
+    "value": {
+      "features": [
+        "chat.defaultLanguageModel",
+        "chat.defaultMode",
+        "chat.defaultModeFree",
+        "config.chat.agentCustomizationSkill.enabled",
+        "config.chat.allowAnonymousAccess",
+        "config.chat.editMode.hidden",
+        "config.chat.restoreLastPanelSessioncf",
+        "config.chat.todoListTool.descriptionFieldcf",
+        "config.chat.todoListTool.writeOnly",
+        "config.github.copilot.chat.advanced.enableAskAgent",
+        "config.github.copilot.chat.advanced.enableRetryNetworkErrors",
+        "config.github.copilot.chat.advanced.gemini.functionCallingMode",
+        "config.github.copilot.chat.advanced.imageUpload",
+        "config.github.copilot.chat.advanced.inlineEdits.autoExpandEditWindowLines",
+        "config.github.copilot.chat.advanced.inlineEdits.useSlashModels",
+        "config.github.copilot.chat.advanced.inlineEdits.xtabProvider.defaultModelConfigurationString",
+        "config.github.copilot.chat.advanced.inlineEdits.xtabProvider.emitFastCursorLineChange",
+        "config.github.copilot.chat.advanced.instantApply.useProxyModelsService",
+        "config.github.copilot.chat.advanced.retryServerErrorStatusCodes",
+        "config.github.copilot.chat.agent.autoFixcf",
+        "config.github.copilot.chat.agent.largeToolResultsToDisk.enabled",
+        "config.github.copilot.chat.inlineEdits.renameSymbolSuggestions",
+        "config.github.copilot.chat.responsesApiReasoningSummary",
+        "config.github.copilot.chat.useResponsesApi",
+        "config.github.copilot.nextEditSuggestions.enabled",
+        "config.github.copilot.nextEditSuggestions.extendedRange",
+        "config.githubPullRequests.codingAgent.uiIntegration",
+        "config.http.systemCertificatesNodecf",
+        "config.python.analysis.aiHoverSummaries",
+        "config.python.locator",
+        "copilotchat.aa",
+        "copilotchat.autoModelHint",
+        "copilotchat.autoModelHint.editor",
+        "copilotchat.disableReplaceStringHealing",
+        "copilotchat.enableNesInSettings",
+        "copilotchat.feedback.notificationProbability",
+        "copilotchat.feedback.notificationProbability.inactive",
+        "copilotchat.feedback.sessionProbability",
+        "copilotchat.feedback.sessionProbability.inactive",
+        "copilotchat.hiddenModelBEditTool",
+        "copilotchat.ruffDiagnosticsCookbook",
+        "copilot_ci",
+        "ctiaaccf",
+        "cveremediatoragentenabledcf",
+        "ideenablecopilotsemanticsearch",
+        "livesharecontinuousaacf",
+        "mindaroBinariesVersion",
+        "test-ai-12cf",
+        "workspace.embeddingIndex.automaticReindexingDelay"
+      ],
+      "assignmentContext": "vsliv368cf:30146710;binariesv615:30325510;ah738568:30811544;nativeloc1:31344060;7d05f481:31442065;cg8ef616:31442064;copilot_t_ci:31333650;pythonrdcb7:31342333;6518g693:31436602;aj953862:31281341;6abeh943:31336334;cloudbuttont:31379625;aihoversummaries_t:31453032;upload-service:31384080;3efgi100_wstrepl:31403338;use-responses-api:31390855;anonusage:31403420;je187915:31401257;ec5jj548:31422691;cp_cls_t_966_ss:31454198;c0683394:31458171;30h21147:31435638;ge8j1254_inline_auto_hint_haiku:31431912;nes-autoexp-10:31446583;a5gib710:31434435;5j92g670_sonnet:31457540;rename_enabled:31436409;7a04d226_do_not_restore_last_panel_session:31438103;anthropic_thinking_c:31457102;722j7530_gpt_5_2_codex:31458091;406hc587_ask_agent:31428393;preserve_tokens:31444547;cp_cls_c_1081:31454833;copilot-nes-oct-trt:31432596;ia-use-proxy-models-svc:31452481;nes-slash-models-on:31441832;nes-set-to-on:31441941;a43f0576c:31442824;c0ci8992_validated:31449878;nes-fast-additive:31459484;46204921:31447328;ge038258:31458187;edit_mode_hidden:31459179;864ei723_large_tool_results_to_disk:31458758;pp-44cc9697:31455969;7ef87755:31458076;nes-extended-on:31455476;",
+      "configs": [
+        {
+          "Id": "vscode",
+          "Parameters": {
+            "chat.defaultLanguageModel": "copilot/claude-sonnet-4.5",
+            "chat.defaultMode": "agent",
+            "chat.defaultModeFree": "agent",
+            "config.chat.agentCustomizationSkill.enabled": true,
+            "config.chat.allowAnonymousAccess": true,
+            "config.chat.editMode.hidden": true,
+            "config.chat.restoreLastPanelSession": false,
+            "config.chat.todoListTool.descriptionField": false,
+            "config.chat.todoListTool.writeOnly": true,
+            "config.github.copilot.chat.advanced.enableAskAgent": true,
+            "config.github.copilot.chat.advanced.enableRetryNetworkErrors": true,
+            "config.github.copilot.chat.advanced.gemini.functionCallingMode": "validated",
+            "config.github.copilot.chat.advanced.imageUpload": true,
+            "config.github.copilot.chat.advanced.inlineEdits.autoExpandEditWindowLines": 10,
+            "config.github.copi

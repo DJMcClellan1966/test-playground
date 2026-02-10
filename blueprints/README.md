@@ -106,6 +106,24 @@ The AI assistant is **optional** - ask it for help if stuck, but the code genera
 
 ---
 
+## Other Tools
+
+### prompt_twin.py - Local Context Profiling
+
+Build a local profile from your coding patterns for AI agents to consult:
+
+```powershell
+python prompt_twin.py scan                    # Scan projects for patterns
+python prompt_twin.py github <username>       # Fetch GitHub data
+python prompt_twin.py inject                  # Inject context into AI tools
+python prompt_twin.py feedback                # Show reality feedback
+python prompt_twin.py outcome "action" "success|failure"  # Log outcomes
+```
+
+Creates `.cursorrules`, `.github/copilot-instructions.md`, and Ollama wrapper. Includes reality feedback loop to track what actually works.
+
+---
+
 ## Legacy Tools
 
 Other files in this directory are experimental:
