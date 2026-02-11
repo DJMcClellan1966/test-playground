@@ -51,15 +51,18 @@
       <!-- Step 2: Questions -->
       <div id="step-questions" class="step">
         <div class="step-card">
-          <h1>Tell Us About Your App</h1>
+          <div id="detection-panel" class="detection-panel" style="display:none;">
+            <h3>&#10003; We figured out from your description:</h3>
+            <div id="detection-items"></div>
+          </div>
+
+          <h1 id="questions-title">Tell Us About Your App</h1>
           <p class="step-subtitle" id="question-count"></p>
           
           <div id="questions-container"></div>
           
           <div class="form-group">
-            <button id="btn-back" class="btn">← Back</button>
-            <button id="btn-answer-next" class="btn primary" style="display: none;">Next Question</button>
-            <button id="btn-generate" class="btn primary" style="display: none;">Generate My App →</button>
+            <button id="btn-back" class="btn">&larr; Back</button>
           </div>
         </div>
       </div>

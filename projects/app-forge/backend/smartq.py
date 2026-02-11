@@ -1,5 +1,6 @@
 """SmartQ - Intelligent question engine for app requirements."""
 
+import re
 from dataclasses import dataclass
 from typing import List, Dict, Any
 
@@ -64,6 +65,87 @@ QUESTIONS = [
         category="performance",
     ),
 ]
+
+
+# ==========================================================================
+# Description inference — auto-answer obvious questions from keywords
+# ==========================================================================
+INFERENCE_RULES = [
+    # --- Data storage (strong yes) + typical personal app defaults ---
+    (r"recipe|cook|meal|todo|task|inventory|product|blog|contact|event|calendar|"
+     r"note|movie|habit|collection|tracker|bookmark|catalog|library|portfolio|"
+     r"budget|expense|journal|diary|crm|warehouse|grocery|workout|log\b",
+     {"has_data": True, "realtime": False, "performance_critical": False}),
+
+    # --- No data / standalone apps (answer ALL questions to skip wizard) ---
+    (r"calculator|calc\b|converter|unit\s+convert|bmi|tip\s+calc|mortgage",
+     {"has_data": False, "complex_queries": False, "search": False, "export": False,
+      "needs_auth": False, "multi_user": False, "realtime": False, "mobile": False,
+      "performance_critical": False}),
+    (r"game|puzzle|quiz|trivia|tic.?tac|guess|memory|hangman|wordle|snake|pong",
+     {"has_data": False, "complex_queries": False, "needs_auth": False, "multi_user": False,
+      "realtime": False, "search": False, "export": False, "mobile": False,
+      "performance_critical": False}),
+    (r"timer|countdown|stopwatch|pomodoro|clock",
+     {"has_data": False, "complex_queries": False, "needs_auth": False, "multi_user": False,
+      "realtime": False, "search": False, "export": False, "mobile": False,
+      "performance_critical": False}),
+
+    # --- Multi-user / auth ---
+    (r"team|collaborat|share\s+(with|between)|multi.?user|group|organization|members|workspace",
+     {"multi_user": True}),
+    (r"login|password|account|register|sign.?up|auth\b|secure\s+access",
+     {"multi_user": True, "needs_auth": True}),
+
+    # --- Single-user (personal indicators) ---
+    (r"personal|my\s+own|just\s+(for\s+)?me|solo|private|individual|"
+     r"where\s+i\s+can|i\s+want\s+(to|a)\b|for\s+myself|i\s+can\s+\w+",
+     {"multi_user": False}),
+
+    # --- Collections imply search, single purpose apps don't need export ---
+    (r"collection|browse|catalog|library|bookmark",
+     {"search": True}),
+
+    # --- Realtime ---
+    (r"real.?time|live\s+update|chat\b|notification|instant|socket|streaming",
+     {"realtime": True}),
+
+    # --- Search ---
+    (r"search|filter|find\b|lookup|browse",
+     {"search": True}),
+
+    # --- Export ---
+    (r"export|download|csv|pdf\b|report|backup",
+     {"export": True}),
+
+    # --- Mobile ---
+    (r"mobile|phone|android|ios\b",
+     {"mobile": True}),
+
+    # --- Performance ---
+    (r"performance.?critical|competitive|real.?time\s+gaming",
+     {"performance_critical": True}),
+]
+
+
+def infer_from_description(description: str) -> Dict[str, bool]:
+    """Auto-answer obvious questions based on description keywords."""
+    desc_lower = description.lower()
+    inferred: Dict[str, bool] = {}
+
+    for pattern, answers in INFERENCE_RULES:
+        if re.search(pattern, desc_lower):
+            for qid, val in answers.items():
+                if qid not in inferred:          # first-match wins for conflicts
+                    inferred[qid] = val
+
+    # Apply dependency logic
+    if inferred.get("multi_user") is False:
+        inferred.setdefault("needs_auth", False)
+    if inferred.get("has_data") is False:
+        inferred.setdefault("complex_queries", False)
+
+    return inferred
 
 
 def get_relevant_questions(answered: Dict[str, bool]) -> List[Question]:

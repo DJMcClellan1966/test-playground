@@ -1,5 +1,18 @@
 /**App Forge Frontend Logic*/
 
+// Human-readable labels for inferred answers
+const ANSWER_LABELS = {
+  has_data: ["Stores data in a database", "No database needed"],
+  needs_auth: ["User login required", "No login needed"],
+  multi_user: ["Multiple users", "Single user"],
+  realtime: ["Real-time updates", "Standard loading"],
+  search: ["Search capability", "No search needed"],
+  export: ["Data export", "No export needed"],
+  mobile: ["Mobile support", "Desktop only"],
+  complex_queries: ["Complex queries", "Simple queries"],
+  performance_critical: ["Performance critical", "Standard performance"],
+};
+
 const API = {
   async start(description) {
     const res = await fetch('/api/start', {
@@ -78,18 +91,49 @@ const UI = {
         </div>
       </div>
     `;
-    
     document.getElementById('btn-yes').addEventListener('click', () => {
       State.answer(question.id, true);
     });
-    
     document.getElementById('btn-no').addEventListener('click', () => {
       State.answer(question.id, false);
     });
   },
 
   updateQuestionCount(current, total) {
-    document.getElementById('question-count').textContent = `Question ${current} of ${total}`;
+    const el = document.getElementById('question-count');
+    if (total <= 1) {
+      el.textContent = 'One more thing:';
+    } else {
+      el.textContent = `Question ${current} of ${total}`;
+    }
+  },
+
+  showDetection(inferred) {
+    const panel = document.getElementById('detection-panel');
+    const items = document.getElementById('detection-items');
+    const badges = [];
+    for (const [key, val] of Object.entries(inferred)) {
+      const labels = ANSWER_LABELS[key];
+      if (labels) {
+        const label = val ? labels[0] : labels[1];
+        badges.push(`<span class="detection-item">${label}</span>`);
+      }
+    }
+    if (badges.length > 0) {
+      items.innerHTML = badges.join('');
+      panel.style.display = 'block';
+    }
+  },
+
+  showGenerating() {
+    const container = document.getElementById('questions-container');
+    container.innerHTML = `
+      <div class="generating-message">
+        <h2>Building your app</h2>
+        <div class="dots">&#9679; &#9679; &#9679;</div>
+      </div>
+    `;
+    document.getElementById('question-count').textContent = '';
   },
 
   showResults(tech_stack, files, preview_url, preview_error) {
@@ -97,16 +141,15 @@ const UI = {
     document.getElementById('stack-db').textContent = tech_stack.database;
     document.getElementById('stack-frontend').textContent = tech_stack.frontend;
     document.getElementById('stack-auth').textContent = tech_stack.auth;
-    
+
     if (tech_stack.notes && tech_stack.notes.length > 0) {
       const notesHtml = tech_stack.notes.map(n => `<div class="stack-note">&#128161; ${n}</div>`).join('');
       document.getElementById('stack-notes').innerHTML = notesHtml;
     }
 
-    // Live preview in iframe from running server
     const frame = document.getElementById('preview-frame');
     const statusEl = document.getElementById('preview-status');
-    
+
     if (preview_url) {
       statusEl.innerHTML = '<span class="status-running">&#9679; Live</span> Your app is running at ' + preview_url;
       statusEl.style.display = 'block';
@@ -124,7 +167,7 @@ const UI = {
       statusEl.style.display = 'none';
     }
 
-    // #4  Show all files in code tab with file switching
+    // File switching in code tab
     State.currentFile = 'app.py';
     switchFile('app.py');
   },
@@ -152,7 +195,6 @@ const State = {
 
   async startWizard() {
     const description = document.getElementById('description').value.trim();
-    
     if (description.length < 10) {
       alert('Please describe your app with at least 10 characters');
       return;
@@ -160,37 +202,55 @@ const State = {
 
     this.description = description;
     const result = await API.start(description);
-    
-    if (result.error) {
-      alert(result.error);
-      return;
-    }
+    if (result.error) { alert(result.error); return; }
 
     this.profile = result.profile;
-    this.step = 'questions';
+    this.answered = result.inferred || {};
+    this.totalQuestions = result.total_questions;
     this.questionIndex = 1;
-    this.totalQuestions = result.total_questions || 9;  // #10 dynamic count
-    
-    UI.showStep('questions');
-    
+
+    // Show what was inferred
+    const panel = document.getElementById('detection-panel');
+    panel.style.display = 'none';
+    if (result.inferred && Object.keys(result.inferred).length > 0) {
+      UI.showDetection(result.inferred);
+    }
+
     if (result.next_question) {
+      // Still have questions to ask
+      this.step = 'questions';
       this.currentQuestion = result.next_question;
+      UI.showStep('questions');
+      document.getElementById('questions-title').textContent =
+        this.totalQuestions <= 2 ? 'Just a couple more details' : 'A few more details';
       UI.showQuestion(this.currentQuestion);
       UI.updateQuestionCount(this.questionIndex, this.totalQuestions);
+    } else {
+      // All answered by inference — auto-generate
+      this.step = 'questions';
+      UI.showStep('questions');
+      document.getElementById('questions-title').textContent = 'Building your app';
+      UI.showGenerating();
+
+      const generated = await API.generate(this.description);
+      this.techStack = generated.tech_stack;
+      this.files = generated.files;
+      this.step = 'review';
+      UI.showStep('review');
+      UI.showResults(this.techStack, this.files, generated.preview_url, generated.preview_error);
     }
   },
 
   async answer(question_id, answer) {
     const result = await API.answer(question_id, answer);
-    
     this.answered = result.answered;
-    if (result.total_questions) this.totalQuestions = result.total_questions; // #10 dynamic
-    
+    if (result.total_questions !== undefined) this.totalQuestions = result.total_questions;
+
     if (result.complete) {
+      UI.showGenerating();
       const generated = await API.generate(this.description);
       this.techStack = generated.tech_stack;
       this.files = generated.files;
-      
       this.step = 'review';
       UI.showStep('review');
       UI.showResults(this.techStack, this.files, generated.preview_url, generated.preview_error);
@@ -207,7 +267,6 @@ const State = {
   async save() {
     const app_name = document.getElementById('app-name').value || 'My App';
     const result = await API.save(app_name, this.description, this.answered, this.files);
-    
     if (result.success) {
       this.projectPath = result.project_path;
       UI.showSuccess(result.project_path);
@@ -223,10 +282,10 @@ const State = {
     document.getElementById('success-message').style.display = 'none';
     document.getElementById('preview-frame').removeAttribute('src');
     document.getElementById('preview-frame').srcdoc = '';
+    document.getElementById('detection-panel').style.display = 'none';
     UI.showStep('describe');
   },
 
-  // #6 Iterate mode — go back to questions keeping answers
   async changeAnswers() {
     API.stopPreview();
     const result = await API.regenerate();
@@ -235,7 +294,6 @@ const State = {
     this.questionIndex = Object.keys(this.answered).length + 1;
 
     if (result.complete) {
-      // All questions already answered → just regenerate
       const generated = await API.generate(this.description);
       this.techStack = generated.tech_stack;
       this.files = generated.files;
@@ -270,7 +328,7 @@ function switchTab(tab) {
   }
 }
 
-// #4 File switching in code tab
+// File switching in code tab
 function switchFile(filename) {
   document.querySelectorAll('.file-tab').forEach(t => t.classList.remove('active'));
   const tab = document.querySelector(`.file-tab[data-file="${filename}"]`);
@@ -291,7 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-back-review').addEventListener('click', () => State.goBack());
   document.getElementById('btn-change-answers').addEventListener('click', () => State.changeAnswers());
   document.getElementById('btn-save').addEventListener('click', () => State.save());
-  
+
   document.getElementById('btn-export-github').addEventListener('click', async () => {
     if (!State.projectPath) {
       alert('Please save to desktop first, then export to GitHub.');

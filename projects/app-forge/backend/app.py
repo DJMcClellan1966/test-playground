@@ -6,7 +6,7 @@ import json
 import os
 
 from smartq import *
-from smartq import total_relevant_count
+from smartq import total_relevant_count, infer_from_description
 from solver import solver
 from codegen import generator
 from project_manager import manager
@@ -48,18 +48,24 @@ def start_wizard():
     if not description or len(description) < 10:
         return jsonify({"error": "Please describe your app (at least 10 characters)"}), 400
     
+    # Auto-infer answers from description
+    inferred = infer_from_description(description)
+    
     # Create profile
     profile = Profile(description)
     session['profile'] = profile.to_dict()
-    session['answered'] = {}
+    session['answered'] = inferred.copy()
+    session['inferred_count'] = len(inferred)
     session.modified = True
     
-    # Get first question
-    next_q = get_next_question({})
+    # Get remaining questions after inference
+    remaining = get_relevant_questions(inferred)
+    next_q = remaining[0] if remaining else None
     
     return jsonify({
         "profile": session['profile'],
-        "total_questions": total_relevant_count({}),
+        "inferred": inferred,
+        "total_questions": len(remaining),
         "next_question": {
             "id": next_q.id,
             "text": next_q.text,
@@ -84,16 +90,19 @@ def answer_question():
         return jsonify({
             "complete": True,
             "answered": answered,
-            "total_questions": total_relevant_count(answered),
+            "total_questions": 0,
         })
     
     # Get next question
     next_q = get_next_question(answered)
+    remaining = get_relevant_questions(answered)
+    inferred_count = session.get('inferred_count', 0)
+    user_answered = len(answered) - inferred_count
     
     return jsonify({
         "complete": False,
         "answered": answered,
-        "total_questions": total_relevant_count(answered),
+        "total_questions": user_answered + len(remaining),
         "next_question": {
             "id": next_q.id,
             "text": next_q.text,

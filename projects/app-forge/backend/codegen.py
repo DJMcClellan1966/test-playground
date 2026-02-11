@@ -1,23 +1,47 @@
 """Code generator - Builds working Flask apps from requirements.
 
-Improvements over v1:
- - #1  Description-aware domain models (via domain_parser)
- - #2  Fully working auth (register, login, logout, session gate)
- - #3  Generates Flask + flask-socketio (matches solver)
- - #5  Search endpoint and CSV export when flags are set
- - #9  requirements.txt lists flask-socketio (not python-socketio)
+Features:
+ - Description-aware domain models (via domain_parser)
+ - Working auth (register, login, logout, session gate)
+ - Search / CSV export endpoints
+ - Standalone HTML for non-data apps (games, calculators, tools)
+ - Improved CRUD UI (labelled forms, clear-on-submit, toast, empty state)
 """
 
+import re
 from typing import Dict, List
 from domain_parser import DomainModel, parse_description
+
+
+# =====================================================================
+# App type detection (non-data apps)
+# =====================================================================
+APP_TYPE_PATTERNS = [
+    ("guess_game", r"guess\s*(the\s*)?number|number\s*guess"),
+    ("quiz", r"quiz|trivia|flashcard"),
+    ("tictactoe", r"tic.?tac.?toe|noughts.*crosses|x.?and.?o"),
+    ("memory_game", r"memory\s*(game|card|match)"),
+    ("calculator", r"calculator"),
+    ("converter", r"converter|convert\s+unit|unit\s+convert"),
+    ("timer", r"timer|countdown|stopwatch|pomodoro"),
+    ("game", r"game|puzzle|play"),
+]
+
+
+def detect_app_type(description: str) -> str:
+    desc_lower = description.lower()
+    for app_type, pattern in APP_TYPE_PATTERNS:
+        if re.search(pattern, desc_lower):
+            return app_type
+    return "generic"
 
 
 class CodeGenerator:
     """Generates Flask app boilerplate from requirements + description."""
 
-    # ------------------------------------------------------------------
-    # app.py
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # app.py  (backend generation — unchanged)
+    # ==================================================================
     def generate_app_py(self, app_name: str, answers: Dict[str, bool],
                         description: str = "") -> str:
         needs_db = answers.get("has_data", False)
@@ -26,24 +50,17 @@ class CodeGenerator:
         needs_search = answers.get("search", False)
         needs_export = answers.get("export", False)
 
-        # Domain models from description
         models = parse_description(description) if (needs_db and description) else []
 
         parts: List[str] = []
-
-        # --- imports ---
         parts.append(self._imports(needs_db, needs_auth, needs_realtime,
                                    needs_search, needs_export))
-        # --- app init ---
         parts.append(self._app_init(app_name, needs_db, needs_realtime))
-        # --- user model (auth) ---
         if needs_auth and needs_db:
             parts.append(self._user_model())
-        # --- domain models ---
         if needs_db:
             for m in models:
                 parts.append(self._domain_model(m, needs_auth))
-        # --- routes ---
         parts.append(self._base_routes(app_name))
         if needs_auth and needs_db:
             parts.append(self._auth_routes())
@@ -51,14 +68,12 @@ class CodeGenerator:
             for m in models:
                 parts.append(self._crud_routes(m, needs_auth, needs_search,
                                                needs_export))
-        # --- main ---
         parts.append(self._main_block(needs_db, needs_realtime))
-
         return "\n".join(parts)
 
-    # ------------------------------------------------------------------
-    # requirements.txt  (#9 fix: flask-socketio not python-socketio)
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # requirements.txt
+    # ==================================================================
     def generate_requirements_txt(self, answers: Dict[str, bool]) -> str:
         reqs = ["flask==3.0.2", "flask-cors==4.0.0"]
         if answers.get("has_data"):
@@ -67,85 +82,22 @@ class CodeGenerator:
             reqs.append("flask-socketio==5.3.6")
         return "\n".join(reqs) + "\n"
 
-    # ------------------------------------------------------------------
-    # index.html  (richer generated page)
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # index.html  — routes to standalone or CRUD
+    # ==================================================================
     def generate_index_html(self, app_name: str, answers: Dict[str, bool],
                             description: str = "") -> str:
-        title = app_name.title()
-        needs_auth = answers.get("needs_auth", False)
+        title = app_name.replace("-", " ").title()
         needs_db = answers.get("has_data", False)
-        needs_search = answers.get("search", False)
-        needs_export = answers.get("export", False)
-        models = parse_description(description) if (needs_db and description) else []
 
-        nav_links = ""
-        model_sections = ""
-        auth_js = ""
-        scripts = ""
+        if not needs_db:
+            app_type = detect_app_type(description)
+            return self._standalone_html(title, app_type, description)
 
-        if needs_auth:
-            nav_links += self._html_auth_nav()
-            auth_js = self._html_auth_js()
-
-        for m in models:
-            nav_links += f'        <a href="#" onclick="showSection(\'{m.table_name}\')">{m.name}s</a>\n'
-            model_sections += self._html_model_section(m, needs_search, needs_export)
-
-        scripts = self._html_scripts(models, needs_auth)
-
-        return f"""<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{title}</title>
-    <style>
-        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; }}
-        .navbar {{ background: #ff7a59; color: white; padding: 14px 20px; display: flex; align-items: center; gap: 20px; }}
-        .navbar h1 {{ font-size: 20px; }}
-        .navbar a {{ color: white; text-decoration: none; font-size: 14px; opacity: .85; }}
-        .navbar a:hover {{ opacity: 1; }}
-        .container {{ max-width: 900px; margin: 24px auto; padding: 0 16px; }}
-        .card {{ background: white; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }}
-        .status {{ padding: 10px; background: #d4edda; color: #155724; border-radius: 4px; margin-bottom: 16px; font-size: 14px; }}
-        input, textarea, select {{ padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; width: 100%; margin-bottom: 8px; }}
-        button {{ padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }}
-        .btn-primary {{ background: #ff7a59; color: white; }}
-        .btn-primary:hover {{ background: #ff6b3f; }}
-        .btn-secondary {{ background: #6c757d; color: white; }}
-        .btn-danger {{ background: #dc3545; color: white; }}
-        table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }}
-        th, td {{ padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; }}
-        th {{ background: #f8f8f8; font-weight: 600; }}
-        .hidden {{ display: none; }}
-        .section {{ display: none; }}
-        .section.active {{ display: block; }}
-        .form-row {{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }}
-        .form-row > * {{ flex: 1; min-width: 150px; }}
-        #auth-section {{ margin-bottom: 16px; }}
-    </style>
-</head>
-<body>
-    <nav class="navbar">
-        <h1>{title}</h1>
-{nav_links}
-        <span style="flex:1"></span>
-        <span id="auth-nav"></span>
-    </nav>
-    <div class="container">
-        <div class="status" id="status-bar">&#10003; App is running</div>
-{auth_js}
-{model_sections}
-    </div>
-{scripts}
-</body>
-</html>
-"""
+        return self._crud_html(title, answers, description)
 
     # ==================================================================
-    # Private helpers
+    # Backend helper methods (unchanged)
     # ==================================================================
 
     def _imports(self, db, auth, rt, search, export):
@@ -294,7 +246,6 @@ def current_user():
         text_fields = [f for f, t, _ in m.fields if "String" in t or "Text" in t]
 
         lines = [f"\n# ==== {cls} CRUD ===="]
-        # LIST + search
         lines.append(f"@app.route('/api/{lower}s'){auth_dec}")
         lines.append(f"def list_{lower}s():")
         lines.append(f"    query = {cls}.query{user_filter}")
@@ -306,7 +257,6 @@ def current_user():
         lines.append(f"    items = query.order_by({cls}.created_at.desc()).all()")
         lines.append(f"    return jsonify([i.to_dict() for i in items])")
 
-        # CREATE
         lines.append(f"\n@app.route('/api/{lower}s', methods=['POST']){auth_dec}")
         lines.append(f"def create_{lower}():")
         lines.append(f"    data = request.get_json()")
@@ -323,7 +273,6 @@ def current_user():
         lines.append(f"    db.session.commit()")
         lines.append(f"    return jsonify(item.to_dict()), 201")
 
-        # UPDATE
         lines.append(f"\n@app.route('/api/{lower}s/<int:id>', methods=['PUT']){auth_dec}")
         lines.append(f"def update_{lower}(id):")
         lines.append(f"    item = {cls}.query.get_or_404(id)")
@@ -333,7 +282,6 @@ def current_user():
         lines.append(f"    db.session.commit()")
         lines.append(f"    return jsonify(item.to_dict())")
 
-        # DELETE
         lines.append(f"\n@app.route('/api/{lower}s/<int:id>', methods=['DELETE']){auth_dec}")
         lines.append(f"def delete_{lower}(id):")
         lines.append(f"    item = {cls}.query.get_or_404(id)")
@@ -341,7 +289,6 @@ def current_user():
         lines.append(f"    db.session.commit()")
         lines.append(f"    return jsonify({{'ok': True}})")
 
-        # CSV export
         if has_export:
             lines.append(f"\n@app.route('/api/{lower}s/export'){auth_dec}")
             lines.append(f"def export_{lower}s():")
@@ -370,10 +317,430 @@ def current_user():
         return s
 
     # ==================================================================
-    # HTML helpers
+    # STANDALONE HTML  (non-data apps — games, tools, etc.)
     # ==================================================================
-    def _html_auth_nav(self):
-        return ""
+
+    def _base_page(self, title, body_html, css="", js=""):
+        return f"""<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f5f5;color:#333}}
+.navbar{{background:#ff7a59;color:#fff;padding:16px 20px;text-align:center}}
+.navbar h1{{font-size:22px;font-weight:700}}
+.container{{max-width:640px;margin:30px auto;padding:0 16px}}
+.card{{background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,.08);margin-bottom:16px;text-align:center}}
+button{{padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600;transition:all .2s}}
+.btn-primary{{background:#ff7a59;color:#fff}}.btn-primary:hover{{background:#ff6b3f;transform:translateY(-1px)}}
+.btn-secondary{{background:#6c757d;color:#fff}}.btn-secondary:hover{{background:#5a6268}}
+input,select{{padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;width:100%;margin-bottom:10px}}
+input:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122,89,.15)}}
+{css}
+</style>
+</head>
+<body>
+<nav class="navbar"><h1>{title}</h1></nav>
+<div class="container">
+{body_html}
+</div>
+<script>
+{js}
+</script>
+</body>
+</html>"""
+
+    def _standalone_html(self, title, app_type, description):
+        generators = {
+            "guess_game": self._guess_game_html,
+            "quiz": self._quiz_html,
+            "tictactoe": self._tictactoe_html,
+            "memory_game": self._memory_game_html,
+            "calculator": self._calculator_html,
+            "converter": self._converter_html,
+            "timer": self._timer_html,
+            "game": self._generic_game_html,
+        }
+        gen = generators.get(app_type, self._generic_app_html)
+        return gen(title, description)
+
+    # --- Guess the Number ---
+    def _guess_game_html(self, title, desc):
+        body = """<div class="card">
+    <h2 id="message">I'm thinking of a number between 1 and 100</h2>
+    <p id="hint" style="color:#888;margin:12px 0;font-size:18px">Take a guess!</p>
+    <div style="max-width:260px;margin:0 auto">
+        <input type="number" id="guess" min="1" max="100" placeholder="Enter 1-100..." autofocus>
+        <button class="btn-primary" onclick="makeGuess()" style="width:100%">Guess</button>
+    </div>
+    <p id="attempts" style="margin-top:12px;font-size:14px;color:#888"></p>
+    <button class="btn-secondary" onclick="newGame()" style="margin-top:8px;display:none" id="btn-new">Play Again</button>
+</div>"""
+        js = """var target,attempts,gameOver;
+function newGame(){target=Math.floor(Math.random()*100)+1;attempts=0;gameOver=false;
+document.getElementById('message').textContent="I'm thinking of a number between 1 and 100";
+document.getElementById('hint').textContent='Take a guess!';document.getElementById('hint').style.color='#888';
+document.getElementById('attempts').textContent='';document.getElementById('guess').value='';
+document.getElementById('guess').disabled=false;document.getElementById('btn-new').style.display='none';}
+function makeGuess(){if(gameOver)return;var g=parseInt(document.getElementById('guess').value);
+if(isNaN(g)||g<1||g>100){document.getElementById('hint').textContent='Please enter a number 1-100!';return;}
+attempts++;if(g===target){document.getElementById('message').textContent='You got it!';
+document.getElementById('hint').textContent=target+' in '+attempts+' attempt'+(attempts>1?'s':'')+'!';
+document.getElementById('hint').style.color='#2ecc71';document.getElementById('guess').disabled=true;
+document.getElementById('btn-new').style.display='inline-block';gameOver=true;
+}else{document.getElementById('hint').textContent=g<target?'Higher!':'Lower!';
+document.getElementById('hint').style.color=g<target?'#1c7ed6':'#e74c3c';}
+document.getElementById('attempts').textContent='Attempts: '+attempts;
+document.getElementById('guess').value='';document.getElementById('guess').focus();}
+document.getElementById('guess').addEventListener('keydown',function(e){if(e.key==='Enter')makeGuess();});
+newGame();"""
+        return self._base_page(title, body, "", js)
+
+    # --- Quiz ---
+    def _quiz_html(self, title, desc):
+        css = """.progress{width:100%;height:6px;background:#eee;border-radius:3px;margin-bottom:16px}
+.progress-bar{height:100%;background:#ff7a59;border-radius:3px;transition:width .3s}
+.options{display:flex;flex-direction:column;gap:10px;margin:20px 0;text-align:left}
+.option{padding:14px 18px;background:#f8f8f8;border:2px solid #e0e0e0;border-radius:8px;cursor:pointer;font-size:15px;transition:all .2s}
+.option:hover{border-color:#ff7a59;background:#fff5f2}
+.option.correct{border-color:#2ecc71;background:#d4edda}
+.option.wrong{border-color:#e74c3c;background:#ffeaea}
+.score-big{font-size:56px;font-weight:700;color:#ff7a59;margin:16px 0}"""
+        body = """<div class="card" id="quiz-card">
+    <div class="progress"><div class="progress-bar" id="progress" style="width:0%"></div></div>
+    <p id="q-count" style="font-size:13px;color:#888;margin-bottom:10px"></p>
+    <h2 id="question" style="font-size:20px"></h2>
+    <div class="options" id="options"></div>
+</div>
+<div class="card" id="results" style="display:none">
+    <h2>Quiz Complete!</h2>
+    <div class="score-big" id="final-score"></div>
+    <p id="score-msg" style="font-size:16px;color:#666"></p>
+    <button class="btn-primary" onclick="startQuiz()" style="margin-top:16px">Play Again</button>
+</div>"""
+        js = """var questions=[
+{q:"What is the capital of France?",o:["Berlin","Madrid","Paris","Rome"],a:2},
+{q:"Which planet is closest to the sun?",o:["Venus","Mercury","Earth","Mars"],a:1},
+{q:"What is 12 x 12?",o:["124","144","132","156"],a:1},
+{q:"Who painted the Mona Lisa?",o:["Picasso","Van Gogh","Da Vinci","Rembrandt"],a:2},
+{q:"What is the largest ocean?",o:["Atlantic","Indian","Arctic","Pacific"],a:3},
+{q:"In what year did the Titanic sink?",o:["1905","1912","1918","1923"],a:1},
+{q:"What gas do plants absorb?",o:["Oxygen","Nitrogen","CO2","Hydrogen"],a:2},
+{q:"How many continents are there?",o:["5","6","7","8"],a:2},
+{q:"What is the speed of light (approx km/s)?",o:["150,000","300,000","450,000","600,000"],a:1},
+{q:"Which element has the symbol 'O'?",o:["Gold","Osmium","Oxygen","Oganesson"],a:2}];
+var cur=0,score=0,answered=false;
+function startQuiz(){cur=0;score=0;questions.sort(function(){return Math.random()-.5;});
+document.getElementById('quiz-card').style.display='block';
+document.getElementById('results').style.display='none';showQ();}
+function showQ(){answered=false;var q=questions[cur];
+document.getElementById('progress').style.width=((cur/questions.length)*100)+'%';
+document.getElementById('q-count').textContent='Question '+(cur+1)+' of '+questions.length;
+document.getElementById('question').textContent=q.q;
+var opts=document.getElementById('options');opts.innerHTML='';
+q.o.forEach(function(o,i){var b=document.createElement('button');b.className='option';
+b.textContent=o;b.onclick=function(){pick(i);};opts.appendChild(b);});}
+function pick(i){if(answered)return;answered=true;var q=questions[cur];
+var btns=document.getElementById('options').children;btns[q.a].classList.add('correct');
+if(i===q.a){score++;}else{btns[i].classList.add('wrong');}
+setTimeout(function(){cur++;if(cur<questions.length)showQ();else{
+document.getElementById('quiz-card').style.display='none';
+document.getElementById('results').style.display='block';
+document.getElementById('progress').style.width='100%';
+var pct=Math.round((score/questions.length)*100);
+document.getElementById('final-score').textContent=score+'/'+questions.length;
+var msg=pct>=80?'Excellent!':pct>=60?'Good job!':pct>=40?'Not bad!':'Keep practicing!';
+document.getElementById('score-msg').textContent=pct+'% — '+msg;}},800);}
+startQuiz();"""
+        return self._base_page(title, body, css, js)
+
+    # --- Tic Tac Toe ---
+    def _tictactoe_html(self, title, desc):
+        css = """.board{display:grid;grid-template-columns:repeat(3,100px);gap:4px;margin:16px auto;width:fit-content}
+.cell{width:100px;height:100px;background:#fff;border:2px solid #ddd;border-radius:8px;font-size:36px;font-weight:700;cursor:pointer;transition:all .15s}
+.cell:hover{background:#fff5f2;border-color:#ff7a59}.cell.x{color:#ff7a59}.cell.o{color:#1c7ed6}
+.cell.win{background:#d4edda;border-color:#2ecc71}
+.score{display:flex;justify-content:center;gap:30px;margin:10px 0;font-size:15px}"""
+        body = """<div class="card">
+    <h2 id="status">X's turn</h2>
+    <div class="score"><span>X: <strong id="sx">0</strong></span><span>O: <strong id="so">0</strong></span><span>Draws: <strong id="sd">0</strong></span></div>
+    <div class="board" id="board"></div>
+    <button class="btn-primary" onclick="newGame()">New Game</button>
+</div>"""
+        js = """var board,turn,over,scores={x:0,o:0,d:0};
+function newGame(){board=Array(9).fill('');turn='X';over=false;document.getElementById('status').textContent="X's turn";render();}
+function render(){var b=document.getElementById('board');b.innerHTML='';
+board.forEach(function(v,i){var c=document.createElement('button');c.className='cell'+(v?' '+v.toLowerCase():'');c.textContent=v;c.onclick=function(){move(i);};b.appendChild(c);});}
+function move(i){if(over||board[i])return;board[i]=turn;
+var w=checkWin();if(w){over=true;highlight(w);scores[turn.toLowerCase()]++;
+document.getElementById('s'+turn.toLowerCase()).textContent=scores[turn.toLowerCase()];
+document.getElementById('status').textContent=turn+' wins!';}
+else if(board.every(function(c){return c;})){over=true;scores.d++;
+document.getElementById('sd').textContent=scores.d;document.getElementById('status').textContent="It's a draw!";}
+else{turn=turn==='X'?'O':'X';document.getElementById('status').textContent=turn+"'s turn";}render();}
+function checkWin(){var lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+for(var i=0;i<lines.length;i++){var l=lines[i];if(board[l[0]]&&board[l[0]]===board[l[1]]&&board[l[1]]===board[l[2]])return l;}return null;}
+function highlight(cells){var btns=document.getElementById('board').children;cells.forEach(function(i){btns[i].classList.add('win');});}
+newGame();"""
+        return self._base_page(title, body, css, js)
+
+    # --- Memory Match ---
+    def _memory_game_html(self, title, desc):
+        css = """.board{display:grid;grid-template-columns:repeat(4,80px);gap:8px;margin:16px auto;width:fit-content}
+.mem{width:80px;height:80px;border-radius:8px;font-size:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .3s;border:2px solid #ddd}
+.mem.hidden{background:#ff7a59;color:transparent}.mem.hidden:hover{background:#ff6b3f}
+.mem.revealed{background:#fff;border-color:#1c7ed6}.mem.matched{background:#d4edda;border-color:#2ecc71;cursor:default}
+.stats{display:flex;gap:24px;justify-content:center;margin:10px 0;font-size:15px;color:#555}"""
+        body = """<div class="card">
+    <h2>Memory Match</h2>
+    <div class="stats"><span>Moves: <strong id="moves">0</strong></span><span>Pairs: <strong id="pairs">0</strong>/8</span></div>
+    <div class="board" id="board"></div>
+    <button class="btn-primary" onclick="startGame()" style="margin-top:12px">New Game</button>
+</div>"""
+        js = """var emojis=['&#x1F34E;','&#x1F355;','&#x1F3AE;','&#x1F3B8;','&#x2B50;','&#x1F3AF;','&#x1F431;','&#x1F308;'];
+var cards,flipped,matched,moves,lock;
+function startGame(){var pairs=emojis.concat(emojis);pairs.sort(function(){return Math.random()-.5;});
+cards=pairs;flipped=[];matched=new Set();moves=0;lock=false;
+document.getElementById('moves').textContent='0';document.getElementById('pairs').textContent='0';
+var b=document.getElementById('board');b.innerHTML='';
+cards.forEach(function(e,i){var c=document.createElement('div');c.className='mem hidden';c.innerHTML=e;c.dataset.i=i;c.onclick=function(){flip(i);};b.appendChild(c);});}
+function flip(i){if(lock||flipped.includes(i)||matched.has(i))return;
+var els=document.getElementById('board').children;els[i].className='mem revealed';flipped.push(i);
+if(flipped.length===2){moves++;document.getElementById('moves').textContent=moves;lock=true;
+var a=flipped[0],b=flipped[1];
+if(cards[a]===cards[b]){matched.add(a);matched.add(b);els[a].className='mem matched';els[b].className='mem matched';
+document.getElementById('pairs').textContent=(matched.size/2);flipped=[];lock=false;
+if(matched.size===cards.length)setTimeout(function(){alert('You won in '+moves+' moves!');},400);}
+else{setTimeout(function(){els[a].className='mem hidden';els[b].className='mem hidden';flipped=[];lock=false;},700);}}}
+startGame();"""
+        return self._base_page(title, body, css, js)
+
+    # --- Calculator ---
+    def _calculator_html(self, title, desc):
+        css = """.display{background:#1a1b1e;color:#fff;padding:20px;font-size:32px;text-align:right;border-radius:8px;margin-bottom:10px;min-height:60px;word-break:break-all;font-family:'Courier New',monospace}
+.keys{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.key{padding:18px;font-size:20px;border-radius:8px;background:#f0f0f0;border:none;cursor:pointer;font-weight:600;transition:all .1s}
+.key:hover{background:#e0e0e0}.key:active{transform:scale(.95)}
+.key.op{background:#ff7a59;color:#fff}.key.op:hover{background:#ff6b3f}
+.key.eq{background:#2ecc71;color:#fff;grid-column:span 2}.key.eq:hover{background:#27ae60}
+.key.wide{grid-column:span 2}"""
+        body = """<div class="card" style="max-width:340px;margin:0 auto">
+    <div class="display" id="display">0</div>
+    <div class="keys">
+        <button class="key" onclick="press('7')">7</button><button class="key" onclick="press('8')">8</button>
+        <button class="key" onclick="press('9')">9</button><button class="key op" onclick="pressOp('/')">&#247;</button>
+        <button class="key" onclick="press('4')">4</button><button class="key" onclick="press('5')">5</button>
+        <button class="key" onclick="press('6')">6</button><button class="key op" onclick="pressOp('*')">&#215;</button>
+        <button class="key" onclick="press('1')">1</button><button class="key" onclick="press('2')">2</button>
+        <button class="key" onclick="press('3')">3</button><button class="key op" onclick="pressOp('-')">&#8722;</button>
+        <button class="key wide" onclick="press('0')">0</button><button class="key" onclick="press('.')">.</button>
+        <button class="key op" onclick="pressOp('+')">+</button>
+        <button class="key" onclick="clearAll()">C</button><button class="key" onclick="backspace()">&#9003;</button>
+        <button class="key eq" onclick="compute()">=</button>
+    </div>
+</div>"""
+        js = """var current='0',operator='',previous='',fresh=true;
+function show(){document.getElementById('display').textContent=current;}
+function press(d){if(fresh){current=d==='.'?'0.':d;fresh=false;}else{if(d==='.'&&current.includes('.'))return;current+=d;}show();}
+function pressOp(op){if(operator&&!fresh)compute();previous=current;operator=op;fresh=true;}
+function compute(){if(!operator||fresh)return;var a=parseFloat(previous),b=parseFloat(current),r=0;
+if(operator==='+')r=a+b;else if(operator==='-')r=a-b;else if(operator==='*')r=a*b;
+else if(operator==='/'){if(b===0){current='Error';operator='';fresh=true;show();return;}r=a/b;}
+current=parseFloat(r.toFixed(10)).toString();operator='';fresh=true;show();}
+function clearAll(){current='0';operator='';previous='';fresh=true;show();}
+function backspace(){if(fresh)return;current=current.slice(0,-1)||'0';show();}
+document.addEventListener('keydown',function(e){if(e.key>='0'&&e.key<='9'||e.key==='.')press(e.key);
+else if('+-*/'.includes(e.key))pressOp(e.key);else if(e.key==='Enter'||e.key==='=')compute();
+else if(e.key==='Backspace')backspace();else if(e.key==='Escape')clearAll();});"""
+        return self._base_page(title, body, css, js)
+
+    # --- Unit Converter ---
+    def _converter_html(self, title, desc):
+        css = """.group{margin:14px 0;padding:16px;background:#f8f8f8;border-radius:8px;text-align:left}
+.group h3{font-size:14px;color:#888;margin-bottom:8px}
+.row{display:flex;gap:8px;align-items:center}
+.row input,.row select{flex:1;margin-bottom:0}
+.row span{font-weight:600;color:#888;flex-shrink:0}"""
+        body = """<div class="card" style="max-width:500px;margin:0 auto;text-align:left">
+    <h2 style="text-align:center">Unit Converter</h2>
+    <div class="group"><h3>Temperature</h3>
+        <div class="row"><input type="number" id="tv" value="100" oninput="ct()">
+        <select id="tf" onchange="ct()"><option value="c">C</option><option value="f">F</option><option value="k">K</option></select>
+        <span>&rarr;</span><input id="tr" readonly style="background:#eee">
+        <select id="tt" onchange="ct()"><option value="f">F</option><option value="c">C</option><option value="k">K</option></select></div></div>
+    <div class="group"><h3>Length</h3>
+        <div class="row"><input type="number" id="lv" value="1" oninput="cl()">
+        <select id="lf" onchange="cl()"><option value="m">m</option><option value="ft">ft</option><option value="km">km</option><option value="mi">mi</option><option value="cm">cm</option></select>
+        <span>&rarr;</span><input id="lr" readonly style="background:#eee">
+        <select id="lt" onchange="cl()"><option value="ft">ft</option><option value="m">m</option><option value="km">km</option><option value="mi">mi</option><option value="cm">cm</option></select></div></div>
+    <div class="group"><h3>Weight</h3>
+        <div class="row"><input type="number" id="wv" value="1" oninput="cw()">
+        <select id="wf" onchange="cw()"><option value="kg">kg</option><option value="lb">lb</option><option value="oz">oz</option><option value="g">g</option></select>
+        <span>&rarr;</span><input id="wr" readonly style="background:#eee">
+        <select id="wt" onchange="cw()"><option value="lb">lb</option><option value="kg">kg</option><option value="oz">oz</option><option value="g">g</option></select></div></div>
+</div>"""
+        js = """function ct(){var v=parseFloat(document.getElementById('tv').value),f=document.getElementById('tf').value,t=document.getElementById('tt').value;
+var c=f==='c'?v:f==='f'?(v-32)*5/9:v-273.15;var r=t==='c'?c:t==='f'?c*9/5+32:c+273.15;
+document.getElementById('tr').value=isNaN(r)?'':r.toFixed(2);}
+var lf={m:1,ft:0.3048,km:1000,mi:1609.344,cm:0.01};
+function cl(){var v=parseFloat(document.getElementById('lv').value),f=document.getElementById('lf').value,t=document.getElementById('lt').value;
+document.getElementById('lr').value=isNaN(v)?'':(v*lf[f]/lf[t]).toFixed(4);}
+var wf={kg:1,lb:0.453592,oz:0.0283495,g:0.001};
+function cw(){var v=parseFloat(document.getElementById('wv').value),f=document.getElementById('wf').value,t=document.getElementById('wt').value;
+document.getElementById('wr').value=isNaN(v)?'':(v*wf[f]/wf[t]).toFixed(4);}
+ct();cl();cw();"""
+        return self._base_page(title, body, css, js)
+
+    # --- Timer / Pomodoro ---
+    def _timer_html(self, title, desc):
+        css = """.time{font-size:72px;font-weight:700;font-family:'Courier New',monospace;margin:20px 0;color:#1a1b1e}
+.presets{display:flex;gap:8px;justify-content:center;margin-bottom:16px;flex-wrap:wrap}
+.presets button{font-size:13px;padding:8px 14px}
+.controls{display:flex;gap:10px;justify-content:center}"""
+        body = """<div class="card">
+    <h2>Timer</h2>
+    <div class="presets">
+        <button class="btn-secondary" onclick="set(1)">1 min</button>
+        <button class="btn-secondary" onclick="set(5)">5 min</button>
+        <button class="btn-secondary" onclick="set(15)">15 min</button>
+        <button class="btn-secondary" onclick="set(25)">25 min</button>
+        <button class="btn-secondary" onclick="set(60)">60 min</button>
+    </div>
+    <div class="time" id="display">25:00</div>
+    <div class="controls">
+        <button class="btn-primary" id="btn-go" onclick="toggle()">Start</button>
+        <button class="btn-secondary" onclick="reset()">Reset</button>
+    </div>
+</div>"""
+        js = """var total=25*60,remain=25*60,iv=null,on=false;
+function fmt(s){var m=Math.floor(s/60),sec=s%60;return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');}
+function show(){document.getElementById('display').textContent=fmt(remain);document.getElementById('display').style.color=remain<=10&&remain>0?'#e74c3c':'#1a1b1e';}
+function set(min){stop();total=min*60;remain=total;show();}
+function toggle(){on?stop():start();}
+function start(){if(remain<=0)return;on=true;document.getElementById('btn-go').textContent='Pause';
+iv=setInterval(function(){remain--;show();if(remain<=0){stop();document.getElementById('display').style.color='#2ecc71';alert('Time is up!');}},1000);}
+function stop(){on=false;clearInterval(iv);iv=null;document.getElementById('btn-go').textContent='Start';}
+function reset(){stop();remain=total;show();}
+show();"""
+        return self._base_page(title, body, css, js)
+
+    # --- Generic Game (reaction time) ---
+    def _generic_game_html(self, title, desc):
+        css = """.game-area{width:280px;height:280px;border-radius:16px;margin:20px auto;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;font-weight:600;color:#fff;transition:background .3s;user-select:none}
+.wait{background:#e74c3c}.go{background:#2ecc71}
+.result{font-size:28px;font-weight:700;margin:10px 0;color:#ff7a59}"""
+        body = """<div class="card">
+    <h2>Reaction Time</h2>
+    <p style="color:#888;margin:6px 0">Click the box when it turns green!</p>
+    <div class="game-area wait" id="game" onclick="click2()">Click to start</div>
+    <div class="result" id="result"></div>
+    <p id="best" style="font-size:14px;color:#888"></p>
+</div>"""
+        js = """var state='idle',to=null,t0=0,best=Infinity;
+function startRound(){state='waiting';var g=document.getElementById('game');g.className='game-area wait';g.textContent='Wait...';document.getElementById('result').textContent='';
+to=setTimeout(function(){state='ready';g.className='game-area go';g.textContent='CLICK NOW!';t0=Date.now();},1000+Math.random()*3000);}
+function click2(){var g=document.getElementById('game');
+if(state==='idle'){startRound();}
+else if(state==='waiting'){clearTimeout(to);g.className='game-area wait';g.textContent='Too early! Click to retry';document.getElementById('result').textContent='';state='idle';}
+else if(state==='ready'){var ms=Date.now()-t0;if(ms<best)best=ms;
+document.getElementById('result').textContent=ms+'ms';document.getElementById('best').textContent='Best: '+best+'ms';
+g.className='game-area wait';g.textContent='Click to play again';state='idle';}}"""
+        return self._base_page(title, body, css, js)
+
+    # --- Generic App (fallback) ---
+    def _generic_app_html(self, title, desc):
+        body = f"""<div class="card">
+    <h2>{title}</h2>
+    <p style="color:#666;margin:12px 0;font-size:16px">{desc or 'Your app is ready!'}</p>
+    <div style="background:#f8f8f8;border-radius:8px;padding:20px;margin:20px 0;text-align:left">
+        <p style="font-size:14px;color:#555;line-height:1.6">This app is set up and running with Flask.
+        Edit <code style="background:#eee;padding:2px 6px;border-radius:3px">templates/index.html</code> to build your interface.</p>
+    </div>
+    <p style="font-size:13px;color:#aaa">Powered by Flask</p>
+</div>"""
+        return self._base_page(title, body)
+
+    # ==================================================================
+    # CRUD HTML  (data apps — improved forms, feedback, empty state)
+    # ==================================================================
+
+    def _crud_html(self, title, answers, description):
+        needs_auth = answers.get("needs_auth", False)
+        needs_search = answers.get("search", False)
+        needs_export = answers.get("export", False)
+        models = parse_description(description) if description else []
+
+        nav_links = ""
+        model_sections = ""
+        auth_html = ""
+
+        if needs_auth:
+            auth_html = self._html_auth_js()
+
+        for m in models:
+            nav_links += f'        <a href="#" onclick="showSection(\'{m.table_name}\')">{m.name}s</a>\n'
+            model_sections += self._html_model_section(m, needs_search, needs_export)
+
+        scripts = self._html_scripts(models, needs_auth)
+
+        return f"""<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{title}</title>
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; }}
+        .navbar {{ background: #ff7a59; color: white; padding: 14px 20px; display: flex; align-items: center; gap: 20px; }}
+        .navbar h1 {{ font-size: 20px; }}
+        .navbar a {{ color: white; text-decoration: none; font-size: 14px; opacity: .85; }}
+        .navbar a:hover {{ opacity: 1; }}
+        .container {{ max-width: 900px; margin: 24px auto; padding: 0 16px; }}
+        .card {{ background: white; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }}
+        input, textarea, select {{ padding: 9px 11px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; width: 100%; font-family: inherit; }}
+        input:focus, textarea:focus {{ outline: none; border-color: #ff7a59; box-shadow: 0 0 0 3px rgba(255,122,89,.12); }}
+        button {{ padding: 9px 18px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all .2s; }}
+        .btn-primary {{ background: #ff7a59; color: white; }}
+        .btn-primary:hover {{ background: #ff6b3f; transform: translateY(-1px); }}
+        .btn-secondary {{ background: #6c757d; color: white; }}
+        .btn-danger {{ background: transparent; color: #dc3545; font-size: 18px; padding: 4px 10px; border-radius: 4px; }}
+        .btn-danger:hover {{ background: #ffeaea; }}
+        table {{ width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }}
+        th, td {{ padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }}
+        th {{ background: #fafafa; font-weight: 600; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .5px; }}
+        tr:hover td {{ background: #fafafa; }}
+        .hidden {{ display: none; }}
+        .section {{ display: none; }}
+        .section.active {{ display: block; }}
+        .form-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }}
+        .form-field {{ display: flex; flex-direction: column; }}
+        .form-field.full-width {{ grid-column: 1 / -1; }}
+        .form-field label {{ font-size: 13px; font-weight: 600; color: #555; margin-bottom: 4px; }}
+        .form-field label input[type="checkbox"] {{ width: auto; margin-right: 6px; }}
+        .empty-state {{ text-align: center; padding: 40px 20px; color: #bbb; font-size: 15px; }}
+        .toast {{ position: fixed; bottom: 24px; right: 24px; background: #2ecc71; color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; transform: translateY(80px); opacity: 0; transition: all .3s; z-index: 999; pointer-events: none; }}
+        .toast.show {{ transform: translateY(0); opacity: 1; }}
+        #auth-section {{ margin-bottom: 16px; }}
+        .form-row {{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }}
+        .form-row > * {{ flex: 1; min-width: 150px; }}
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>{title}</h1>
+{nav_links}
+    </nav>
+    <div class="container">
+{auth_html}
+{model_sections}
+    </div>
+    <div id="toast" class="toast"></div>
+{scripts}
+</body>
+</html>
+"""
 
     def _html_auth_js(self):
         return """
@@ -397,46 +764,66 @@ def current_user():
     def _html_model_section(self, m: DomainModel, has_search, has_export):
         lower = m.table_name
         cls = m.name
-        form_inputs = []
-        for fname, ftype, _ in m.fields:
+        form_fields = []
+        for fname, ftype, nullable in m.fields:
             label = fname.replace("_", " ").title()
+            req = " required" if not nullable else ""
+            star = " *" if not nullable else ""
             if "Text" in ftype:
-                form_inputs.append(f'<textarea id="add-{lower}-{fname}" placeholder="{label}"></textarea>')
+                form_fields.append(f"""
+                    <div class="form-field full-width">
+                        <label for="add-{lower}-{fname}">{label}{star}</label>
+                        <textarea id="add-{lower}-{fname}" rows="3"{req}></textarea>
+                    </div>""")
             elif "Boolean" in ftype:
-                form_inputs.append(
-                    f'<label><input type="checkbox" id="add-{lower}-{fname}"> {label}</label>')
+                form_fields.append(f"""
+                    <div class="form-field">
+                        <label><input type="checkbox" id="add-{lower}-{fname}"> {label}</label>
+                    </div>""")
             elif "Integer" in ftype or "Float" in ftype:
-                form_inputs.append(
-                    f'<input type="number" id="add-{lower}-{fname}" placeholder="{label}">')
+                step = '0.1' if 'Float' in ftype else '1'
+                form_fields.append(f"""
+                    <div class="form-field">
+                        <label for="add-{lower}-{fname}">{label}{star}</label>
+                        <input type="number" step="{step}" id="add-{lower}-{fname}"{req}>
+                    </div>""")
             elif "DateTime" in ftype:
-                form_inputs.append(
-                    f'<input type="datetime-local" id="add-{lower}-{fname}" placeholder="{label}">')
+                form_fields.append(f"""
+                    <div class="form-field">
+                        <label for="add-{lower}-{fname}">{label}{star}</label>
+                        <input type="datetime-local" id="add-{lower}-{fname}"{req}>
+                    </div>""")
             else:
-                form_inputs.append(
-                    f'<input id="add-{lower}-{fname}" placeholder="{label}">')
+                form_fields.append(f"""
+                    <div class="form-field">
+                        <label for="add-{lower}-{fname}">{label}{star}</label>
+                        <input id="add-{lower}-{fname}"{req}>
+                    </div>""")
 
         search_bar = ""
         if has_search:
-            search_bar = f'<input id="search-{lower}" placeholder="Search {cls}s..." oninput="load{cls}s()">'
+            search_bar = f'\n            <input id="search-{lower}" placeholder="Search {cls}s..." oninput="load{cls}s()" style="margin-bottom:16px">'
 
         export_btn = ""
         if has_export:
-            export_btn = f'<button class="btn-secondary" onclick="window.location=\'/api/{lower}s/export\'">Export CSV</button>'
+            export_btn = f' <button type="button" class="btn-secondary" onclick="window.location=\'/api/{lower}s/export\'">Export CSV</button>'
 
-        visible_fields = [(f, f.replace("_", " ").title()) for f, t, _ in m.fields if "Text" not in t][:5]
-        th_cells = "".join(f"<th>{label}</th>" for _, label in visible_fields)
+        visible = [(f, f.replace("_", " ").title()) for f, t, _ in m.fields if "Text" not in t][:5]
+        th_cells = "".join(f"<th>{lbl}</th>" for _, lbl in visible)
 
         return f"""
         <div id="section-{lower}" class="section card">
-            <h2>{cls}s</h2>
-            {search_bar}
-            <div class="form-row">
-                {"".join(form_inputs)}
-            </div>
-            <button class="btn-primary" onclick="add{cls}()">Add {cls}</button>
-            {export_btn}
-            <table>
-                <thead><tr>{th_cells}<th>Actions</th></tr></thead>
+            <h2 style="margin-bottom:16px">{cls}s</h2>{search_bar}
+            <form id="form-{lower}" onsubmit="return add{cls}()">
+                <div class="form-grid">{"".join(form_fields)}
+                </div>
+                <div style="margin-top:14px">
+                    <button type="submit" class="btn-primary">Add {cls}</button>{export_btn}
+                </div>
+            </form>
+            <div id="empty-{lower}" class="empty-state">No {lower}s yet &mdash; add your first one above!</div>
+            <table id="table-wrap-{lower}" style="display:none">
+                <thead><tr>{th_cells}<th style="width:50px"></th></tr></thead>
                 <tbody id="table-{lower}"></tbody>
             </table>
         </div>"""
@@ -445,8 +832,13 @@ def current_user():
         parts = ["<script>"]
 
         parts.append("""
+    function showToast(msg) {
+        var t = document.getElementById('toast');
+        t.textContent = msg; t.classList.add('show');
+        setTimeout(function(){ t.classList.remove('show'); }, 2000);
+    }
     function showSection(name) {
-        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.section').forEach(function(s){ s.classList.remove('active'); });
         var el = document.getElementById('section-' + name);
         if (el) el.classList.add('active');
     }
@@ -502,13 +894,6 @@ def current_user():
             td_cells = ""
             for fname, ftype in visible:
                 if "Boolean" in ftype:
-                    td_cells += "${item." + fname + " ? '&#10003;' : ''}"
-                    td_cells = td_cells.replace("${", "<td>${")
-                    # Simpler approach
-            # Rebuild td_cells cleanly
-            td_cells = ""
-            for fname, ftype in visible:
-                if "Boolean" in ftype:
                     td_cells += "<td>${item." + fname + " ? '&#10003;' : ''}</td>"
                 else:
                     td_cells += "<td>${item." + fname + " || ''}</td>"
@@ -533,16 +918,28 @@ def current_user():
         var url = '/api/{lower}s' + (q ? '?q=' + encodeURIComponent(q) : '');
         var res = await fetch(url);
         var items = await res.json();
-        var tbody = document.getElementById('table-{lower}');
-        tbody.innerHTML = items.map(function(item) {{ return `<tr>{td_cells}</tr>`; }}).join('');
+        if (items.length === 0) {{
+            document.getElementById('empty-{lower}').style.display = 'block';
+            document.getElementById('table-wrap-{lower}').style.display = 'none';
+        }} else {{
+            document.getElementById('empty-{lower}').style.display = 'none';
+            document.getElementById('table-wrap-{lower}').style.display = 'table';
+            document.getElementById('table-{lower}').innerHTML = items.map(function(item) {{
+                return `<tr>{td_cells}</tr>`;
+            }}).join('');
+        }}
     }}
     async function add{cls}() {{
         await fetch('/api/{lower}s', {{ method:'POST', headers:{{'Content-Type':'application/json'}},
             body: JSON.stringify({{ {body_str} }}) }});
+        document.getElementById('form-{lower}').reset();
+        showToast('{cls} added!');
         load{cls}s();
+        return false;
     }}
     async function delete{cls}(id) {{
         await fetch('/api/{lower}s/' + id, {{ method:'DELETE' }});
+        showToast('{cls} removed');
         load{cls}s();
     }}
     load{cls}s();

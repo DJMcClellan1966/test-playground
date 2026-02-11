@@ -445,3 +445,56 @@ h1 {
   width: auto;
   flex: 1;
 }
+
+/* Detection panel (inferred answers) */
+.detection-panel {
+  padding: 16px;
+  background: #f0f8f0;
+  border: 1px solid #c3e6c3;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.detection-panel h3 {
+  font-size: 14px;
+  color: #2d8a2d;
+  margin-bottom: 10px;
+}
+
+.detection-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.detection-item {
+  display: inline-block;
+  padding: 4px 10px;
+  background: white;
+  border: 1px solid #c3e6c3;
+  border-radius: 20px;
+  font-size: 12px;
+  color: #333;
+}
+
+/* Auto-generating spinner */
+.generating-message {
+  text-align: center;
+  padding: 30px;
+  color: var(--muted);
+}
+
+.generating-message h2 {
+  font-size: 20px;
+  margin-bottom: 8px;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.generating-message .dots {
+  animation: pulse 1.5s infinite;
+  font-size: 24px;
+}
