@@ -29,9 +29,9 @@ class ProjectManager:
         (project_path / "static").mkdir(exist_ok=True)
         
         # Write files
-        (project_path / "app.py").write_text(app_py)
-        (project_path / "requirements.txt").write_text(requirements_txt)
-        (project_path / "templates" / "index.html").write_text(index_html)
+        (project_path / "app.py").write_text(app_py, encoding="utf-8")
+        (project_path / "requirements.txt").write_text(requirements_txt, encoding="utf-8")
+        (project_path / "templates" / "index.html").write_text(index_html, encoding="utf-8")
         
         # Write metadata
         metadata = {

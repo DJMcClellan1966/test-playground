@@ -11,29 +11,16 @@ Features:
 import re
 from typing import Dict, List
 from domain_parser import DomainModel, parse_description
-
-
-# =====================================================================
-# App type detection (non-data apps)
-# =====================================================================
-APP_TYPE_PATTERNS = [
-    ("guess_game", r"guess\s*(the\s*)?number|number\s*guess"),
-    ("quiz", r"quiz|trivia|flashcard"),
-    ("tictactoe", r"tic.?tac.?toe|noughts.*crosses|x.?and.?o"),
-    ("memory_game", r"memory\s*(game|card|match)"),
-    ("calculator", r"calculator"),
-    ("converter", r"converter|convert\s+unit|unit\s+convert"),
-    ("timer", r"timer|countdown|stopwatch|pomodoro"),
-    ("game", r"game|puzzle|play"),
-]
+from template_registry import match_template, extract_features
 
 
 def detect_app_type(description: str) -> str:
-    desc_lower = description.lower()
-    for app_type, pattern in APP_TYPE_PATTERNS:
-        if re.search(pattern, desc_lower):
-            return app_type
-    return "generic"
+    """Use scored template registry instead of flat regex."""
+    best_id, features, scores = match_template(description)
+    # If 'data_app' feature found and no game features dominate → CRUD
+    if "data_app" in features and scores[0][1] < 5:
+        return "generic"  # Will trigger CRUD path in generate_index_html
+    return best_id
 
 
 class CodeGenerator:
@@ -360,7 +347,11 @@ input:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122
             "calculator": self._calculator_html,
             "converter": self._converter_html,
             "timer": self._timer_html,
-            "game": self._generic_game_html,
+            "sliding_puzzle": self._sliding_puzzle_html,
+            "hangman": self._hangman_html,
+            "wordle": self._wordle_html,
+            "reaction_game": self._generic_game_html,
+            "generic_game": self._generic_game_html,
         }
         gen = generators.get(app_type, self._generic_app_html)
         return gen(title, description)
@@ -623,6 +614,190 @@ iv=setInterval(function(){remain--;show();if(remain<=0){stop();document.getEleme
 function stop(){on=false;clearInterval(iv);iv=null;document.getElementById('btn-go').textContent='Start';}
 function reset(){stop();remain=total;show();}
 show();"""
+        return self._base_page(title, body, css, js)
+
+    # --- Sliding Tile Puzzle ---
+    def _sliding_puzzle_html(self, title, desc):
+        # Extract grid size from features
+        features = extract_features(desc)
+        size = 3
+        if "grid_size" in features:
+            try:
+                size = int(features["grid_size"].value)
+                if size < 2:
+                    size = 3
+                if size > 6:
+                    size = 6
+            except ValueError:
+                size = 3
+
+        cell_px = max(60, 280 // size)
+        board_px = cell_px * size + (size - 1) * 4
+
+        css = f""".board{{display:grid;grid-template-columns:repeat({size},{cell_px}px);gap:4px;margin:16px auto;width:{board_px}px}}
+.tile{{width:{cell_px}px;height:{cell_px}px;display:flex;align-items:center;justify-content:center;font-size:{max(16, 36 - size * 4)}px;font-weight:700;border-radius:8px;cursor:pointer;transition:all .15s;user-select:none}}
+.tile.num{{background:#ff7a59;color:#fff;border:2px solid #e8694a}}.tile.num:hover{{background:#ff6b3f;transform:scale(1.03)}}
+.tile.empty{{background:transparent;cursor:default}}
+.moves{{font-size:15px;color:#888;margin:10px 0}}
+.win{{animation:celebrate .6s ease-in-out}}
+@keyframes celebrate{{0%,100%{{transform:scale(1)}}50%{{transform:scale(1.05)}}}}"""
+
+        body = f"""<div class="card">
+    <h2>Sliding Puzzle ({size}×{size})</h2>
+    <p class="moves">Moves: <strong id="moves">0</strong></p>
+    <div class="board" id="board"></div>
+    <button class="btn-primary" onclick="newGame()" style="margin-top:12px">Shuffle</button>
+</div>"""
+
+        js = f"""var SIZE={size},board,moves,won;
+function newGame(){{
+  board=[];for(var i=1;i<SIZE*SIZE;i++)board.push(i);board.push(0);
+  // Fisher-Yates shuffle that produces solvable state
+  do{{for(var i=board.length-1;i>0;i--){{var j=Math.floor(Math.random()*(i+1));var t=board[i];board[i]=board[j];board[j]=t;}}}}while(!isSolvable());
+  moves=0;won=false;document.getElementById('moves').textContent='0';render();
+}}
+function isSolvable(){{
+  var inv=0;var flat=board.filter(function(x){{return x!==0;}});
+  for(var i=0;i<flat.length;i++)for(var j=i+1;j<flat.length;j++)if(flat[i]>flat[j])inv++;
+  if(SIZE%2===1)return inv%2===0;
+  var emptyRow=Math.floor(board.indexOf(0)/SIZE);
+  return(inv+emptyRow)%2===1;
+}}
+function render(){{
+  var b=document.getElementById('board');b.innerHTML='';
+  board.forEach(function(v,i){{
+    var d=document.createElement('div');
+    if(v===0){{d.className='tile empty';}}
+    else{{d.className='tile num';d.textContent=v;d.onclick=function(){{clickTile(i);}};}}
+    b.appendChild(d);
+  }});
+  if(won)b.classList.add('win');else b.classList.remove('win');
+}}
+function clickTile(i){{
+  if(won)return;var ei=board.indexOf(0);
+  var row=Math.floor(i/SIZE),col=i%SIZE,er=Math.floor(ei/SIZE),ec=ei%SIZE;
+  if((Math.abs(row-er)+Math.abs(col-ec))!==1)return;
+  board[ei]=board[i];board[i]=0;moves++;document.getElementById('moves').textContent=moves;
+  if(checkWin()){{won=true;}}render();
+  if(won)setTimeout(function(){{alert('Solved in '+moves+' moves!');}},300);
+}}
+function checkWin(){{
+  for(var i=0;i<SIZE*SIZE-1;i++)if(board[i]!==i+1)return false;return true;
+}}
+newGame();"""
+        return self._base_page(title, body, css, js)
+
+    # --- Hangman ---
+    def _hangman_html(self, title, desc):
+        css = """.word{font-size:36px;letter-spacing:12px;font-weight:700;margin:20px 0;font-family:'Courier New',monospace}
+.keyboard{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;max-width:420px;margin:16px auto}
+.key{width:38px;height:42px;border-radius:6px;font-size:16px;font-weight:700;background:#f0f0f0;border:none;cursor:pointer}
+.key:hover{background:#ff7a59;color:#fff}.key.used{opacity:.3;cursor:default}.key.hit{background:#2ecc71;color:#fff}
+.key.miss{background:#e74c3c;color:#fff;opacity:.5}
+.hangman-drawing{font-size:14px;font-family:'Courier New',monospace;white-space:pre;line-height:1.3;margin:10px 0;color:#e74c3c}
+.status{font-size:18px;font-weight:600;margin:10px 0}"""
+        body = """<div class="card">
+    <h2>Hangman</h2>
+    <div class="hangman-drawing" id="drawing"></div>
+    <div class="word" id="word"></div>
+    <div class="status" id="status"></div>
+    <div class="keyboard" id="keyboard"></div>
+    <button class="btn-primary" onclick="newGame()" id="btn-new" style="margin-top:12px;display:none">New Word</button>
+</div>"""
+        js = r"""var WORDS=["PYTHON","JAVASCRIPT","ALGORITHM","FUNCTION","VARIABLE","BROWSER","KEYBOARD","PROGRAM","DATABASE","NETWORK",
+"ABSTRACT","COMPILER","LIBRARY","CONSOLE","INTEGER","BOOLEAN","ELEMENT","FRAMEWORK","SYNTAX","MODULE"];
+var word,guessed,wrong,maxWrong=6,over;
+var STAGES=["","  O","  O\n  |","  O\n /|","  O\n /|\\","  O\n /|\\\n /","  O\n /|\\\n / \\"];
+function newGame(){word=WORDS[Math.floor(Math.random()*WORDS.length)];guessed=new Set();wrong=0;over=false;
+document.getElementById('btn-new').style.display='none';document.getElementById('status').textContent='';
+buildKeyboard();render();}
+function buildKeyboard(){var kb=document.getElementById('keyboard');kb.innerHTML='';
+'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(function(ch){
+var b=document.createElement('button');b.className='key';b.textContent=ch;
+b.onclick=function(){guess(ch,b);};kb.appendChild(b);});}
+function guess(ch,btn){if(over||guessed.has(ch))return;guessed.add(ch);
+if(word.includes(ch)){btn.classList.add('used','hit');}
+else{wrong++;btn.classList.add('used','miss');}
+render();checkEnd();}
+function render(){
+document.getElementById('word').textContent=word.split('').map(function(c){return guessed.has(c)?c:'_';}).join('');
+document.getElementById('drawing').textContent="  -----\n  |   |\n"+(STAGES[wrong]||"")+"\n  |\n=====";
+}
+function checkEnd(){var won=word.split('').every(function(c){return guessed.has(c);});
+if(won){over=true;document.getElementById('status').innerHTML='You won! &#127881;';document.getElementById('status').style.color='#2ecc71';document.getElementById('btn-new').style.display='inline-block';}
+else if(wrong>=maxWrong){over=true;document.getElementById('word').textContent=word;document.getElementById('status').textContent='Game over! The word was '+word;document.getElementById('status').style.color='#e74c3c';document.getElementById('btn-new').style.display='inline-block';}}
+document.addEventListener('keydown',function(e){var ch=e.key.toUpperCase();if(ch.length===1&&ch>='A'&&ch<='Z'){
+var btn=document.querySelector('.key:not(.used)');
+var btns=document.getElementById('keyboard').children;
+for(var i=0;i<btns.length;i++){if(btns[i].textContent===ch&&!btns[i].classList.contains('used')){guess(ch,btns[i]);break;}}}});
+newGame();"""
+        return self._base_page(title, body, css, js)
+
+    # --- Wordle-style ---
+    def _wordle_html(self, title, desc):
+        css = """.grid{display:grid;grid-template-columns:repeat(5,56px);gap:6px;margin:16px auto;width:fit-content}
+.cell{width:56px;height:56px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;
+border:2px solid #ddd;border-radius:6px;text-transform:uppercase;transition:all .3s}
+.cell.correct{background:#2ecc71;color:#fff;border-color:#2ecc71}
+.cell.present{background:#f1c40f;color:#fff;border-color:#f1c40f}
+.cell.absent{background:#888;color:#fff;border-color:#888}
+.cell.filled{border-color:#999}
+.kb{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;max-width:480px;margin:12px auto}
+.kb button{min-width:32px;height:42px;border-radius:6px;font-size:13px;font-weight:700;background:#ddd;border:none;cursor:pointer}
+.kb button:hover{background:#ccc}
+.kb button.correct{background:#2ecc71;color:#fff}.kb button.present{background:#f1c40f;color:#fff}
+.kb button.absent{background:#888;color:#fff}
+.msg{font-size:18px;font-weight:600;margin:8px 0;min-height:28px}"""
+        body = """<div class="card">
+    <h2>Wordle</h2>
+    <p class="msg" id="msg"></p>
+    <div class="grid" id="grid"></div>
+    <div class="kb" id="kb"></div>
+    <button class="btn-primary" onclick="newGame()" id="btn-new" style="margin-top:12px;display:none">New Game</button>
+</div>"""
+        js = r"""var WORDS=["CRANE","SLATE","TRACE","AUDIO","RAISE","STARE","ARISE","TEARS","LEARN","CROWN",
+"FLAME","GHOST","BRAVE","DROWN","FUNGI","JUICE","KNELT","PLUMB","QUERY","SWIRL",
+"FLASK","PIXEL","GRAPH","STORM","WITCH","BLAZE","CHUNK","DRIFT","FROST","GRIND"];
+var VALID=new Set(WORDS);
+var word,guesses,current,over,maxGuesses=6;
+function newGame(){word=WORDS[Math.floor(Math.random()*WORDS.length)];guesses=[];current='';over=false;
+document.getElementById('msg').textContent='';document.getElementById('btn-new').style.display='none';
+buildGrid();buildKB();}
+function buildGrid(){var g=document.getElementById('grid');g.innerHTML='';
+for(var r=0;r<maxGuesses;r++)for(var c=0;c<5;c++){var d=document.createElement('div');d.className='cell';d.id='c'+r+'_'+c;g.appendChild(d);}}
+function buildKB(){var kb=document.getElementById('kb');kb.innerHTML='';
+'QWERTYUIOP ASDFGHJKL ZXCVBNM'.split(' ').forEach(function(row){
+row.split('').forEach(function(ch){var b=document.createElement('button');b.textContent=ch;b.id='kb_'+ch;
+b.onclick=function(){typeLetter(ch);};kb.appendChild(b);});
+if(row==='ASDFGHJKL'){var bk=document.createElement('button');bk.textContent='⌫';bk.style.minWidth='48px';bk.onclick=backspace;kb.appendChild(bk);}
+if(row==='ZXCVBNM'){var en=document.createElement('button');en.textContent='ENTER';en.style.minWidth='56px';en.onclick=submitGuess;kb.appendChild(en);}});}
+function typeLetter(ch){if(over||current.length>=5)return;current+=ch;updateRow();}
+function backspace(){if(over||current.length===0)return;current=current.slice(0,-1);updateRow();}
+function updateRow(){var r=guesses.length;for(var c=0;c<5;c++){var cell=document.getElementById('c'+r+'_'+c);
+cell.textContent=current[c]||'';cell.className='cell'+(current[c]?' filled':'');}}
+function submitGuess(){if(over||current.length!==5)return;
+var row=guesses.length;var result=checkWord(current);
+for(var c=0;c<5;c++){var cell=document.getElementById('c'+row+'_'+c);cell.className='cell '+result[c];
+var kb=document.getElementById('kb_'+current[c]);if(kb){
+if(result[c]==='correct')kb.className='correct';
+else if(result[c]==='present'&&kb.className!=='correct')kb.className='present';
+else if(result[c]==='absent'&&kb.className==='')kb.className='absent';}}
+guesses.push(current);
+if(current===word){over=true;document.getElementById('msg').innerHTML='You got it in '+(guesses.length)+' tries! &#127881;';
+document.getElementById('msg').style.color='#2ecc71';document.getElementById('btn-new').style.display='inline-block';}
+else if(guesses.length>=maxGuesses){over=true;document.getElementById('msg').textContent='The word was '+word;
+document.getElementById('msg').style.color='#e74c3c';document.getElementById('btn-new').style.display='inline-block';}
+current='';}
+function checkWord(g){var result=Array(5).fill('absent');var wArr=word.split('');var gArr=g.split('');
+// First pass: exact matches
+for(var i=0;i<5;i++){if(gArr[i]===wArr[i]){result[i]='correct';wArr[i]=null;gArr[i]=null;}}
+// Second pass: present but wrong position
+for(var i=0;i<5;i++){if(gArr[i]){var idx=wArr.indexOf(gArr[i]);if(idx!==-1){result[i]='present';wArr[idx]=null;}}}
+return result;}
+document.addEventListener('keydown',function(e){if(e.key==='Enter')submitGuess();
+else if(e.key==='Backspace')backspace();
+else{var ch=e.key.toUpperCase();if(ch.length===1&&ch>='A'&&ch<='Z')typeLetter(ch);}});
+newGame();"""
         return self._base_page(title, body, css, js)
 
     # --- Generic Game (reaction time) ---

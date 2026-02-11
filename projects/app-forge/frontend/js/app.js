@@ -13,6 +13,23 @@ const ANSWER_LABELS = {
   performance_critical: ["Performance critical", "Standard performance"],
 };
 
+// Human-readable template names
+const TEMPLATE_NAMES = {
+  sliding_puzzle: "Sliding Tile Puzzle",
+  tictactoe: "Tic Tac Toe",
+  memory_game: "Memory Match",
+  guess_game: "Guess the Number",
+  quiz: "Quiz / Trivia",
+  hangman: "Hangman",
+  wordle: "Wordle",
+  calculator: "Calculator",
+  converter: "Unit Converter",
+  timer: "Timer / Pomodoro",
+  reaction_game: "Reaction Time Game",
+  generic_game: "Game",
+  generic: "Custom App",
+};
+
 const API = {
   async start(description) {
     const res = await fetch('/api/start', {
@@ -108,10 +125,28 @@ const UI = {
     }
   },
 
-  showDetection(inferred) {
+  showDetection(inferred, detected) {
     const panel = document.getElementById('detection-panel');
     const items = document.getElementById('detection-items');
     const badges = [];
+
+    // Show matched template
+    if (detected && detected.template) {
+      const name = TEMPLATE_NAMES[detected.template] || detected.template;
+      badges.push(`<span class="detection-item template-badge">Building: ${name}</span>`);
+    }
+
+    // Show extracted features
+    if (detected && detected.features) {
+      for (const [key, val] of Object.entries(detected.features)) {
+        if (key !== 'data_app') {
+          const label = key.replace(/_/g, ' ');
+          badges.push(`<span class="detection-item feature-badge">${label}: ${val}</span>`);
+        }
+      }
+    }
+
+    // Show inferred answers
     for (const [key, val] of Object.entries(inferred)) {
       const labels = ANSWER_LABELS[key];
       if (labels) {
@@ -119,6 +154,7 @@ const UI = {
         badges.push(`<span class="detection-item">${label}</span>`);
       }
     }
+
     if (badges.length > 0) {
       items.innerHTML = badges.join('');
       panel.style.display = 'block';
@@ -209,11 +245,11 @@ const State = {
     this.totalQuestions = result.total_questions;
     this.questionIndex = 1;
 
-    // Show what was inferred
+    // Show what was detected (template + features + inferred answers)
     const panel = document.getElementById('detection-panel');
     panel.style.display = 'none';
-    if (result.inferred && Object.keys(result.inferred).length > 0) {
-      UI.showDetection(result.inferred);
+    if ((result.inferred && Object.keys(result.inferred).length > 0) || result.detected) {
+      UI.showDetection(result.inferred || {}, result.detected || {});
     }
 
     if (result.next_question) {

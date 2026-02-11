@@ -31,9 +31,9 @@ class PreviewServer:
         (preview_dir / "templates").mkdir(exist_ok=True)
         (preview_dir / "static").mkdir(exist_ok=True)
 
-        (preview_dir / "app.py").write_text(app_py)
-        (preview_dir / "requirements.txt").write_text(requirements_txt)
-        (preview_dir / "templates" / "index.html").write_text(index_html)
+        (preview_dir / "app.py").write_text(app_py, encoding="utf-8")
+        (preview_dir / "requirements.txt").write_text(requirements_txt, encoding="utf-8")
+        (preview_dir / "templates" / "index.html").write_text(index_html, encoding="utf-8")
 
         return preview_dir
 

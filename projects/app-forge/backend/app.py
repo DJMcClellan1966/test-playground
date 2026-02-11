@@ -8,9 +8,10 @@ import os
 from smartq import *
 from smartq import total_relevant_count, infer_from_description
 from solver import solver
-from codegen import generator
+from codegen import generator, detect_app_type
 from project_manager import manager
 from preview_server import preview
+from template_registry import match_template, extract_features, explain_match
 
 app = Flask(__name__, template_folder='../frontend', static_folder='../frontend', static_url_path='')
 CORS(app)
@@ -51,6 +52,10 @@ def start_wizard():
     # Auto-infer answers from description
     inferred = infer_from_description(description)
     
+    # Detect what template will be used (for frontend display)
+    best_template, features, scores = match_template(description)
+    feature_summary = {k: f.value for k, f in features.items()}
+    
     # Create profile
     profile = Profile(description)
     session['profile'] = profile.to_dict()
@@ -70,6 +75,10 @@ def start_wizard():
             "id": next_q.id,
             "text": next_q.text,
         } if next_q else None,
+        "detected": {
+            "template": best_template,
+            "features": feature_summary,
+        },
     })
 
 
@@ -248,6 +257,24 @@ def list_projects():
 @app.route('/health')
 def health():
     return jsonify({"status": "ok"})
+
+
+@app.route('/api/explain', methods=['POST'])
+def explain_template():
+    """Show what features were extracted and which template was chosen."""
+    data = request.get_json()
+    description = data.get('description', '').strip()
+    if not description:
+        return jsonify({"error": "No description"}), 400
+
+    best_id, features, scores = match_template(description)
+    return jsonify({
+        "template": best_id,
+        "features": {k: {"value": f.value, "confidence": f.confidence}
+                     for k, f in features.items()},
+        "scores": [{"id": tid, "score": s} for tid, s in scores[:5]],
+        "explanation": explain_match(description),
+    })
 
 
 if __name__ == '__main__':

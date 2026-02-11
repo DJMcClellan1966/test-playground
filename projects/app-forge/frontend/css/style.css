@@ -477,6 +477,19 @@ h1 {
   color: #333;
 }
 
+.detection-item.template-badge {
+  background: #ff7a59;
+  color: white;
+  border-color: #ff7a59;
+  font-weight: 600;
+}
+
+.detection-item.feature-badge {
+  background: #e8f4fd;
+  border-color: #b8d4e8;
+  color: #1c5a85;
+}
+
 /* Auto-generating spinner */
 .generating-message {
   text-align: center;
