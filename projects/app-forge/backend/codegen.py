@@ -343,7 +343,9 @@ input:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122
         # Templates that matched via required features — always trustworthy
         REQUIRED_FEATURE_TEMPLATES = {
             "tictactoe", "hangman", "wordle", "calculator", "converter", "timer",
-            "reaction_game", "simon_game", "reflex_game", "minesweeper"
+            "reaction_game", "simon_game", "reflex_game", "minesweeper",
+            "snake", "tetris", "game_2048",
+            "platformer", "shooter", "breakout"
         }
 
         # Check the component assembler FIRST for novel apps
@@ -368,6 +370,12 @@ input:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122
             "simon_game": self._simon_grid_html,
             "reflex_game": self._simon_grid_html,
             "minesweeper": self._minesweeper_html,
+            "snake": self._snake_html,
+            "tetris": self._tetris_html,
+            "game_2048": self._2048_html,
+            "platformer": self._phaser_platformer_html,
+            "shooter": self._phaser_shooter_html,
+            "breakout": self._phaser_breakout_html,
             "generic_game": self._generic_game_html,
         }
         gen = generators.get(app_type)
@@ -473,8 +481,10 @@ startQuiz();"""
 
     # --- Tic Tac Toe ---
     def _tictactoe_html(self, title, desc):
-        css = """.board{display:grid;grid-template-columns:repeat(3,100px);gap:4px;margin:16px auto;width:fit-content}
-.cell{width:100px;height:100px;background:#fff;border:2px solid #ddd;border-radius:8px;font-size:36px;font-weight:700;cursor:pointer;transition:all .15s}
+        css = """*{box-sizing:border-box}html,body{height:100%;margin:0;overflow:auto}
+.card{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.board{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;width:min(90vw,90vh,400px);height:min(90vw,90vh,400px);margin:16px auto}
+.cell{width:100%;aspect-ratio:1;background:#fff;border:2px solid #ddd;border-radius:8px;font-size:min(10vw,48px);font-weight:700;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center}
 .cell:hover{background:#fff5f2;border-color:#ff7a59}.cell.x{color:#ff7a59}.cell.o{color:#1c7ed6}
 .cell.win{background:#d4edda;border-color:#2ecc71}
 .score{display:flex;justify-content:center;gap:30px;margin:10px 0;font-size:15px}"""
@@ -503,8 +513,10 @@ newGame();"""
 
     # --- Memory Match ---
     def _memory_game_html(self, title, desc):
-        css = """.board{display:grid;grid-template-columns:repeat(4,80px);gap:8px;margin:16px auto;width:fit-content}
-.mem{width:80px;height:80px;border-radius:8px;font-size:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .3s;border:2px solid #ddd}
+        css = """*{box-sizing:border-box}html,body{height:100%;margin:0;overflow:auto}
+.card{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px}
+.board{display:grid;grid-template-columns:repeat(4,1fr);gap:min(2vw,8px);width:min(90vw,90vh,400px);margin:16px auto}
+.mem{width:100%;aspect-ratio:1;border-radius:8px;font-size:min(8vw,32px);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .3s;border:2px solid #ddd}
 .mem.hidden{background:#ff7a59;color:transparent}.mem.hidden:hover{background:#ff6b3f}
 .mem.revealed{background:#fff;border-color:#1c7ed6}.mem.matched{background:#d4edda;border-color:#2ecc71;cursor:default}
 .stats{display:flex;gap:24px;justify-content:center;margin:10px 0;font-size:15px;color:#555}"""
@@ -643,7 +655,7 @@ show();"""
 
     # --- Sliding Tile Puzzle ---
     def _sliding_puzzle_html(self, title, desc):
-        # Extract grid size from features
+        # Extract grid size and layout features
         features = extract_features(desc)
         size = 3
         if "grid_size" in features:
@@ -656,13 +668,29 @@ show();"""
             except ValueError:
                 size = 3
 
-        cell_px = max(60, 280 // size)
-        board_px = cell_px * size + (size - 1) * 4
+        # Check for explicit fixed-size request
+        use_fixed = "fixed_size" in features
 
-        css = f""".board{{display:grid;grid-template-columns:repeat({size},{cell_px}px);gap:4px;margin:16px auto;width:{board_px}px}}
+        if use_fixed:
+            cell_px = max(60, 280 // size)
+            board_px = cell_px * size + (size - 1) * 4
+            css = f"""*{{box-sizing:border-box}}
+.card{{padding:20px;text-align:center}}
+.board{{display:grid;grid-template-columns:repeat({size},{cell_px}px);gap:4px;width:{board_px}px;margin:16px auto}}
 .tile{{width:{cell_px}px;height:{cell_px}px;display:flex;align-items:center;justify-content:center;font-size:{max(16, 36 - size * 4)}px;font-weight:700;border-radius:8px;cursor:pointer;transition:all .15s;user-select:none}}
 .tile.num{{background:#ff7a59;color:#fff;border:2px solid #e8694a}}.tile.num:hover{{background:#ff6b3f;transform:scale(1.03)}}
-.tile.empty{{background:transparent;cursor:default}}
+.tile.empty{{background:#f0f0f0;border:2px dashed #ccc;cursor:default}}
+.moves{{font-size:15px;color:#888;margin:10px 0}}
+.win{{animation:celebrate .6s ease-in-out}}
+@keyframes celebrate{{0%,100%{{transform:scale(1)}}50%{{transform:scale(1.05)}}}}"""
+        else:
+            # Responsive (default)
+            css = f"""*{{box-sizing:border-box}}html,body{{margin:0;min-height:100%;overflow:auto}}
+.card{{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}}
+.board{{display:grid;grid-template-columns:repeat({size},1fr);gap:4px;width:min(90vw,90vh,400px);margin:16px auto}}
+.tile{{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:clamp(14px,calc(80vw/{size}/2),{max(20, 40 - size * 4)}px);font-weight:700;border-radius:8px;cursor:pointer;transition:all .15s;user-select:none}}
+.tile.num{{background:#ff7a59;color:#fff;border:2px solid #e8694a}}.tile.num:hover{{background:#ff6b3f;transform:scale(1.03)}}
+.tile.empty{{background:#f0f0f0;border:2px dashed #ccc;cursor:default}}
 .moves{{font-size:15px;color:#888;margin:10px 0}}
 .win{{animation:celebrate .6s ease-in-out}}
 @keyframes celebrate{{0%,100%{{transform:scale(1)}}50%{{transform:scale(1.05)}}}}"""
@@ -760,15 +788,17 @@ newGame();"""
 
     # --- Wordle-style ---
     def _wordle_html(self, title, desc):
-        css = """.grid{display:grid;grid-template-columns:repeat(5,56px);gap:6px;margin:16px auto;width:fit-content}
-.cell{width:56px;height:56px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;
+        css = """*{box-sizing:border-box}html,body{height:100%;margin:0;overflow:auto}
+.card{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:min(1.5vw,6px);width:min(90vw,45vh,350px);margin:16px auto}
+.cell{width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:min(6vw,24px);font-weight:700;
 border:2px solid #ddd;border-radius:6px;text-transform:uppercase;transition:all .3s}
 .cell.correct{background:#2ecc71;color:#fff;border-color:#2ecc71}
 .cell.present{background:#f1c40f;color:#fff;border-color:#f1c40f}
 .cell.absent{background:#888;color:#fff;border-color:#888}
 .cell.filled{border-color:#999}
-.kb{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;max-width:480px;margin:12px auto}
-.kb button{min-width:32px;height:42px;border-radius:6px;font-size:13px;font-weight:700;background:#ddd;border:none;cursor:pointer}
+.kb{display:flex;flex-wrap:wrap;justify-content:center;gap:min(1vw,4px);max-width:min(95vw,480px);margin:12px auto}
+.kb button{min-width:min(8vw,32px);height:min(10vw,42px);border-radius:6px;font-size:min(3.5vw,13px);font-weight:700;background:#ddd;border:none;cursor:pointer}
 .kb button:hover{background:#ccc}
 .kb button.correct{background:#2ecc71;color:#fff}.kb button.present{background:#f1c40f;color:#fff}
 .kb button.absent{background:#888;color:#fff}
@@ -827,9 +857,11 @@ newGame();"""
 
     # --- Generic Game (reaction time) ---
     def _generic_game_html(self, title, desc):
-        css = """.game-area{width:280px;height:280px;border-radius:16px;margin:20px auto;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;font-weight:600;color:#fff;transition:background .3s;user-select:none}
+        css = """*{box-sizing:border-box}html,body{height:100%;margin:0;overflow:auto}
+.card{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px}
+.game-area{width:min(80vw,80vh,400px);height:min(80vw,80vh,400px);border-radius:16px;margin:20px auto;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:min(5vw,18px);font-weight:600;color:#fff;transition:background .3s;user-select:none}
 .wait{background:#e74c3c}.go{background:#2ecc71}
-.result{font-size:28px;font-weight:700;margin:10px 0;color:#ff7a59}"""
+.result{font-size:min(8vw,28px);font-weight:700;margin:10px 0;color:#ff7a59}"""
         body = """<div class="card">
     <h2>Reaction Time</h2>
     <p style="color:#888;margin:6px 0">Click the box when it turns green!</p>
@@ -849,12 +881,18 @@ g.className='game-area wait';g.textContent='Click to play again';state='idle';}}
         return self._base_page(title, body, css, js)
 
     def _simon_grid_html(self, title, desc):
-        """Simon-style grid reaction game with score tracking"""
-        css = """.game-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}
+        """Simon-style grid reaction game with score tracking - RESPONSIVE"""
+        css = """*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;overflow:auto}
+body{display:flex;flex-direction:column}
+.card{flex:1;display:flex;flex-direction:column;padding:10px;max-height:100vh}
+.game-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-shrink:0}
 .score-box{background:#f0f0f0;padding:8px 16px;border-radius:8px;font-weight:600}
 .score-box span{color:#ff7a59;font-size:20px}
-.grid{display:grid;grid-template-columns:repeat(9,1fr);gap:4px;max-width:360px;margin:0 auto 20px}
-.cell{aspect-ratio:1;background:#3498db;border-radius:6px;cursor:pointer;transition:all .15s;border:none}
+.grid-container{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
+.grid{display:grid;grid-template-columns:repeat(9,1fr);gap:clamp(2px,0.5vmin,6px);
+width:min(90vw,90vh,600px);height:min(90vw,90vh,600px);aspect-ratio:1}
+.cell{background:#3498db;border-radius:clamp(4px,1vmin,8px);cursor:pointer;transition:all .15s;border:none;width:100%;height:100%}
 .cell:hover{transform:scale(1.05);opacity:0.9}
 .cell.target{background:#2ecc71!important;box-shadow:0 0 12px #2ecc71}
 .cell.distractor{box-shadow:0 0 8px rgba(0,0,0,0.3)}
@@ -862,22 +900,25 @@ g.className='game-area wait';g.textContent='Click to play again';state='idle';}}
 .cell.correct{background:#27ae60!important;animation:pulse .2s}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
 @keyframes pulse{50%{transform:scale(1.15)}}
-.stats{display:flex;gap:20px;justify-content:center;margin:15px 0;font-size:14px;color:#666}
+.stats{display:flex;gap:15px;justify-content:center;padding:8px 0;font-size:14px;color:#666;flex-shrink:0}
 .game-btn{background:#ff7a59;color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;transition:background .2s}
 .game-btn:hover{background:#e5684a}
 .game-btn:disabled{background:#ccc;cursor:not-allowed}
-.level-indicator{text-align:center;font-size:14px;color:#888;margin-bottom:10px}
+.level-indicator{text-align:center;font-size:14px;color:#888;margin-bottom:5px;flex-shrink:0}
 .game-over{text-align:center;padding:20px}
 .game-over h3{color:#e74c3c;margin-bottom:10px}
-.high-score{color:#27ae60;font-weight:600}"""
+.high-score{color:#27ae60;font-weight:600}
+.controls{text-align:center;padding:10px 0;flex-shrink:0}"""
         body = """<div class="card">
     <div class="game-header">
-        <h2>""" + title + """</h2>
+        <h2 style="margin:0;font-size:clamp(16px,4vw,24px)">""" + title + """</h2>
         <div class="score-box">Score: <span id="score">0</span></div>
     </div>
     <div class="level-indicator">Level <span id="level">1</span> - Speed: <span id="speed">Normal</span></div>
     <div id="gameArea">
-        <div class="grid" id="grid"></div>
+        <div class="grid-container">
+            <div class="grid" id="grid"></div>
+        </div>
         <div class="stats">
             <span>Hits: <strong id="hits">0</strong></span>
             <span>Misses: <strong id="misses">0</strong></span>
@@ -889,7 +930,7 @@ g.className='game-area wait';g.textContent='Click to play again';state='idle';}}
         <p>Final Score: <span id="finalScore">0</span></p>
         <p id="newRecord" class="high-score" style="display:none">🎉 New High Score!</p>
     </div>
-    <div style="text-align:center;margin-top:15px">
+    <div class="controls">
         <button class="game-btn" id="startBtn" onclick="startGame()">Start Game</button>
     </div>
 </div>"""
@@ -900,7 +941,12 @@ var distractorColors=['#e74c3c','#f39c12','#9b59b6','#e91e63','#ff5722'];
 function init(){grid=document.getElementById('grid');grid.innerHTML='';
 for(var i=0;i<81;i++){var c=document.createElement('button');c.className='cell';c.dataset.idx=i;
 c.onclick=function(){cellClick(this)};grid.appendChild(c);}
-document.getElementById('best').textContent=best;}
+document.getElementById('best').textContent=best;
+window.addEventListener('resize',adjustGrid);adjustGrid();}
+
+function adjustGrid(){var container=document.querySelector('.grid-container');
+var size=Math.min(container.clientWidth,container.clientHeight,window.innerWidth*0.95,window.innerHeight*0.6);
+grid.style.width=size+'px';grid.style.height=size+'px';}
 
 function startGame(){if(playing)return;
 playing=true;score=0;hits=0;misses=0;level=1;showTime=1500;
@@ -965,11 +1011,13 @@ init();"""
 
     def _minesweeper_html(self, title, desc):
         """Classic Minesweeper game with 9x9 grid and 10 mines"""
-        css = """.game-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;padding:0 10px}
-.info-box{background:#f0f0f0;padding:8px 16px;border-radius:8px;font-weight:600;font-size:18px}
+        css = """*{box-sizing:border-box}html,body{height:100%;margin:0;overflow:auto}
+.card{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px}
+.game-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;padding:0 10px;width:100%;max-width:min(90vw,400px)}
+.info-box{background:#f0f0f0;padding:8px 16px;border-radius:8px;font-weight:600;font-size:min(4.5vw,18px)}
 .info-box.mines{color:#e74c3c}.info-box.timer{color:#3498db}
-.grid{display:grid;grid-template-columns:repeat(9,1fr);gap:2px;max-width:324px;margin:0 auto 20px;background:#888;padding:3px;border-radius:6px}
-.cell{width:34px;height:34px;background:#bbb;border:none;font-size:16px;font-weight:700;cursor:pointer;border-radius:3px;transition:all .1s}
+.grid{display:grid;grid-template-columns:repeat(9,1fr);gap:2px;width:min(90vw,90vh,400px);margin:0 auto 20px;background:#888;padding:3px;border-radius:6px}
+.cell{width:100%;aspect-ratio:1;background:#bbb;border:none;font-size:min(4vw,16px);font-weight:700;cursor:pointer;border-radius:3px;transition:all .1s;display:flex;align-items:center;justify-content:center}
 .cell:hover:not(.revealed){background:#ccc}
 .cell.revealed{background:#ddd;cursor:default}
 .cell.mine{background:#e74c3c!important}
@@ -978,7 +1026,7 @@ init();"""
 .cell.n5{color:#800000}.cell.n6{color:#008080}.cell.n7{color:#000}.cell.n8{color:#808080}
 .game-over{text-align:center;padding:20px;display:none}
 .game-over h3{margin-bottom:10px}.game-over.win h3{color:#27ae60}.game-over.lose h3{color:#e74c3c}
-.game-btn{background:#ff7a59;color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer}
+.game-btn{background:#ff7a59;color:#fff;border:none;padding:min(3vw,12px) min(7vw,28px);border-radius:8px;font-size:min(4vw,16px);font-weight:600;cursor:pointer}
 .game-btn:hover{background:#e5684a}"""
         body = """<div class="card">
     <h2>""" + title + """</h2>
@@ -1035,6 +1083,527 @@ document.getElementById('gameOver').style.display='block';
 if(!won)mines.forEach(function(m){var cell=getCell(m[0],m[1]);cell.classList.add('mine');cell.innerHTML='&#128163;';});}
 newGame();"""
         return self._base_page(title, body, css, js)
+
+    # --- Snake Game ---
+    def _snake_html(self, title, desc):
+        """Classic Snake game with arrow key controls"""
+        css = """*{box-sizing:border-box}html,body{height:100%;margin:0;overflow:auto}
+.card{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.game-header{display:flex;gap:20px;align-items:center;margin-bottom:15px}
+.info-box{background:#f0f0f0;padding:8px 16px;border-radius:8px;font-weight:600;font-size:16px}
+.info-box.score{color:#27ae60}.info-box.high{color:#9b59b6}
+canvas{border:2px solid #333;border-radius:8px;background:#1a1a2e;touch-action:none}
+.controls{display:flex;gap:10px;margin-top:15px;flex-wrap:wrap;justify-content:center}
+.game-btn{background:#ff7a59;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+.game-btn:hover{background:#e5684a}
+.mobile-controls{display:none;margin-top:15px}
+.d-pad{display:grid;grid-template-columns:repeat(3,50px);grid-template-rows:repeat(3,50px);gap:4px}
+.d-btn{background:#444;color:#fff;border:none;border-radius:8px;font-size:20px;cursor:pointer}
+.d-btn:active{background:#ff7a59}
+@media(max-width:600px){.mobile-controls{display:block}canvas{width:min(90vw,320px);height:min(90vw,320px)}}"""
+        body = """<div class="card">
+    <h2>""" + title + """</h2>
+    <div class="game-header">
+        <div class="info-box score">Score: <span id="score">0</span></div>
+        <div class="info-box high">Best: <span id="high">0</span></div>
+    </div>
+    <canvas id="canvas" width="400" height="400"></canvas>
+    <div class="controls">
+        <button class="game-btn" onclick="startGame()">New Game</button>
+        <button class="game-btn" onclick="togglePause()">Pause</button>
+    </div>
+    <div class="mobile-controls">
+        <div class="d-pad">
+            <div></div><button class="d-btn" onclick="setDir(0,-1)">&#9650;</button><div></div>
+            <button class="d-btn" onclick="setDir(-1,0)">&#9664;</button>
+            <div></div>
+            <button class="d-btn" onclick="setDir(1,0)">&#9654;</button>
+            <div></div><button class="d-btn" onclick="setDir(0,1)">&#9660;</button><div></div>
+        </div>
+    </div>
+    <p style="color:#888;font-size:13px;margin-top:10px">Use arrow keys or WASD to move</p>
+</div>"""
+        js = """var canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');
+var GRID=20,SIZE=canvas.width/GRID;
+var snake,dir,food,score,highScore,gameLoop,paused,gameOver;
+try{highScore=parseInt(localStorage.getItem('snake_high'))||0;}catch(e){highScore=0;}
+document.getElementById('high').textContent=highScore;
+function startGame(){snake=[{x:10,y:10}];dir={x:1,y:0};score=0;paused=false;gameOver=false;
+document.getElementById('score').textContent=0;placeFood();
+if(gameLoop)clearInterval(gameLoop);gameLoop=setInterval(update,120);}
+function placeFood(){do{food={x:Math.floor(Math.random()*GRID),y:Math.floor(Math.random()*GRID)};}
+while(snake.some(s=>s.x===food.x&&s.y===food.y));}
+function setDir(dx,dy){if((dx!==0&&dir.x===0)||(dy!==0&&dir.y===0)){dir={x:dx,y:dy};}}
+function togglePause(){if(gameOver)return;paused=!paused;}
+function update(){if(paused||gameOver)return;
+var head={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
+if(head.x<0||head.x>=GRID||head.y<0||head.y>=GRID||snake.some(s=>s.x===head.x&&s.y===head.y)){
+gameOver=true;clearInterval(gameLoop);if(score>highScore){highScore=score;localStorage.setItem('snake_high',highScore);
+document.getElementById('high').textContent=highScore;}return;}
+snake.unshift(head);
+if(head.x===food.x&&head.y===food.y){score++;document.getElementById('score').textContent=score;placeFood();}
+else{snake.pop();}draw();}
+function draw(){ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,canvas.width,canvas.height);
+ctx.fillStyle='#e74c3c';ctx.beginPath();ctx.arc((food.x+0.5)*SIZE,(food.y+0.5)*SIZE,SIZE/2-2,0,Math.PI*2);ctx.fill();
+snake.forEach((s,i)=>{ctx.fillStyle=i===0?'#2ecc71':'#27ae60';
+ctx.fillRect(s.x*SIZE+1,s.y*SIZE+1,SIZE-2,SIZE-2);});}
+document.addEventListener('keydown',function(e){
+if(e.key==='ArrowUp'||e.key==='w')setDir(0,-1);
+else if(e.key==='ArrowDown'||e.key==='s')setDir(0,1);
+else if(e.key==='ArrowLeft'||e.key==='a')setDir(-1,0);
+else if(e.key==='ArrowRight'||e.key==='d')setDir(1,0);
+else if(e.key===' ')togglePause();});
+startGame();"""
+        return self._base_page(title, body, css, js)
+
+    # --- 2048 Game ---
+    def _2048_html(self, title, desc):
+        """Classic 2048 tile merging game"""
+        css = """*{box-sizing:border-box}html,body{height:100%;margin:0;overflow:auto}
+.card{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.game-header{display:flex;gap:20px;align-items:center;margin-bottom:15px}
+.info-box{background:#bbada0;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;font-size:16px;text-align:center}
+.info-box span{display:block;font-size:22px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;background:#bbada0;padding:10px;border-radius:8px;width:min(90vw,340px)}
+.cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:clamp(16px,6vw,32px);font-weight:700;border-radius:6px;background:#cdc1b4;color:#776e65;transition:all .1s}
+.cell[data-val="2"]{background:#eee4da}.cell[data-val="4"]{background:#ede0c8}
+.cell[data-val="8"]{background:#f2b179;color:#f9f6f2}.cell[data-val="16"]{background:#f59563;color:#f9f6f2}
+.cell[data-val="32"]{background:#f67c5f;color:#f9f6f2}.cell[data-val="64"]{background:#f65e3b;color:#f9f6f2}
+.cell[data-val="128"]{background:#edcf72;color:#f9f6f2;font-size:clamp(14px,5vw,28px)}
+.cell[data-val="256"]{background:#edcc61;color:#f9f6f2;font-size:clamp(14px,5vw,28px)}
+.cell[data-val="512"]{background:#edc850;color:#f9f6f2;font-size:clamp(14px,5vw,28px)}
+.cell[data-val="1024"]{background:#edc53f;color:#f9f6f2;font-size:clamp(12px,4vw,24px)}
+.cell[data-val="2048"]{background:#edc22e;color:#f9f6f2;font-size:clamp(12px,4vw,24px)}
+.controls{display:flex;gap:10px;margin-top:15px}
+.game-btn{background:#8f7a66;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+.game-btn:hover{background:#9f8b77}
+.mobile-controls{display:none;margin-top:15px}
+.d-pad{display:grid;grid-template-columns:repeat(3,50px);grid-template-rows:repeat(3,50px);gap:4px}
+.d-btn{background:#8f7a66;color:#fff;border:none;border-radius:8px;font-size:20px;cursor:pointer}
+.d-btn:active{background:#ff7a59}
+@media(max-width:500px){.mobile-controls{display:block}}"""
+        body = """<div class="card">
+    <h2>""" + title + """</h2>
+    <div class="game-header">
+        <div class="info-box">SCORE<span id="score">0</span></div>
+        <div class="info-box">BEST<span id="best">0</span></div>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="controls">
+        <button class="game-btn" onclick="newGame()">New Game</button>
+    </div>
+    <div class="mobile-controls">
+        <div class="d-pad">
+            <div></div><button class="d-btn" onclick="move('up')">&#9650;</button><div></div>
+            <button class="d-btn" onclick="move('left')">&#9664;</button><div></div>
+            <button class="d-btn" onclick="move('right')">&#9654;</button>
+            <div></div><button class="d-btn" onclick="move('down')">&#9660;</button><div></div>
+        </div>
+    </div>
+    <p style="color:#888;font-size:13px;margin-top:10px">Use arrow keys to slide tiles</p>
+</div>"""
+        js = """var grid,score,best=0;
+try{best=parseInt(localStorage.getItem('2048_best'))||0;}catch(e){}
+document.getElementById('best').textContent=best;
+function newGame(){grid=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];score=0;
+document.getElementById('score').textContent=0;addTile();addTile();render();}
+function addTile(){var empty=[];for(var r=0;r<4;r++)for(var c=0;c<4;c++)if(grid[r][c]===0)empty.push([r,c]);
+if(empty.length===0)return;var[r,c]=empty[Math.floor(Math.random()*empty.length)];
+grid[r][c]=Math.random()<0.9?2:4;}
+function render(){var el=document.getElementById('grid');el.innerHTML='';
+for(var r=0;r<4;r++)for(var c=0;c<4;c++){var cell=document.createElement('div');
+cell.className='cell';var v=grid[r][c];if(v>0){cell.textContent=v;cell.dataset.val=v;}
+el.appendChild(cell);}}
+function slide(row){var arr=row.filter(v=>v>0);var merged=[];
+for(var i=0;i<arr.length;i++){if(i<arr.length-1&&arr[i]===arr[i+1]){merged.push(arr[i]*2);
+score+=arr[i]*2;i++;}else{merged.push(arr[i]);}}
+while(merged.length<4)merged.push(0);return merged;}
+function move(dir){var moved=false,oldGrid=JSON.stringify(grid);
+if(dir==='left'){for(var r=0;r<4;r++)grid[r]=slide(grid[r]);}
+else if(dir==='right'){for(var r=0;r<4;r++)grid[r]=slide(grid[r].reverse()).reverse();}
+else if(dir==='up'){for(var c=0;c<4;c++){var col=[grid[0][c],grid[1][c],grid[2][c],grid[3][c]];
+var s=slide(col);for(var r=0;r<4;r++)grid[r][c]=s[r];}}
+else if(dir==='down'){for(var c=0;c<4;c++){var col=[grid[3][c],grid[2][c],grid[1][c],grid[0][c]];
+var s=slide(col);grid[3][c]=s[0];grid[2][c]=s[1];grid[1][c]=s[2];grid[0][c]=s[3];}}
+if(JSON.stringify(grid)!==oldGrid){addTile();document.getElementById('score').textContent=score;
+if(score>best){best=score;localStorage.setItem('2048_best',best);document.getElementById('best').textContent=best;}}
+render();checkGameOver();}
+function checkGameOver(){for(var r=0;r<4;r++)for(var c=0;c<4;c++){if(grid[r][c]===0)return;
+if(c<3&&grid[r][c]===grid[r][c+1])return;if(r<3&&grid[r][c]===grid[r+1][c])return;}
+alert('Game Over! Score: '+score);}
+document.addEventListener('keydown',function(e){
+if(e.key==='ArrowUp'){e.preventDefault();move('up');}
+else if(e.key==='ArrowDown'){e.preventDefault();move('down');}
+else if(e.key==='ArrowLeft'){e.preventDefault();move('left');}
+else if(e.key==='ArrowRight'){e.preventDefault();move('right');}});
+var touchStartX,touchStartY;
+document.addEventListener('touchstart',function(e){touchStartX=e.touches[0].clientX;touchStartY=e.touches[0].clientY;},{passive:true});
+document.addEventListener('touchend',function(e){if(!touchStartX)return;
+var dx=e.changedTouches[0].clientX-touchStartX,dy=e.changedTouches[0].clientY-touchStartY;
+if(Math.abs(dx)>Math.abs(dy)){if(dx>30)move('right');else if(dx<-30)move('left');}
+else{if(dy>30)move('down');else if(dy<-30)move('up');}touchStartX=null;},{passive:true});
+newGame();"""
+        return self._base_page(title, body, css, js)
+
+    # --- Tetris Game ---
+    def _tetris_html(self, title, desc):
+        """Classic Tetris with falling blocks"""
+        css = """*{box-sizing:border-box}html,body{height:100%;margin:0;overflow:auto}
+.card{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.game-wrap{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+.game-area{display:flex;flex-direction:column;align-items:center}
+canvas{border:2px solid #333;background:#111}
+.side-panel{display:flex;flex-direction:column;gap:10px}
+.info-box{background:#333;color:#fff;padding:10px 16px;border-radius:8px;text-align:center;min-width:100px}
+.info-box .label{font-size:12px;color:#888;text-transform:uppercase}.info-box .val{font-size:20px;font-weight:700}
+.next-box{background:#333;padding:10px;border-radius:8px}
+.next-box canvas{border:none;background:#222}
+.controls{display:flex;gap:8px;margin-top:15px;flex-wrap:wrap;justify-content:center}
+.game-btn{background:#ff7a59;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}
+.game-btn:hover{background:#e5684a}
+.mobile-controls{display:none;margin-top:15px}
+.m-row{display:flex;gap:8px;justify-content:center;margin:4px 0}
+.m-btn{width:50px;height:50px;background:#444;color:#fff;border:none;border-radius:8px;font-size:18px;cursor:pointer}
+.m-btn:active{background:#ff7a59}
+@media(max-width:500px){.mobile-controls{display:block}.game-wrap{flex-direction:column;align-items:center}}"""
+        body = """<div class="card">
+    <h2>""" + title + """</h2>
+    <div class="game-wrap">
+        <div class="game-area"><canvas id="board" width="200" height="400"></canvas></div>
+        <div class="side-panel">
+            <div class="info-box"><div class="label">Score</div><div class="val" id="score">0</div></div>
+            <div class="info-box"><div class="label">Level</div><div class="val" id="level">1</div></div>
+            <div class="info-box"><div class="label">Lines</div><div class="val" id="lines">0</div></div>
+            <div class="next-box"><div class="label" style="color:#888;font-size:12px;margin-bottom:5px">NEXT</div>
+                <canvas id="next" width="80" height="80"></canvas></div>
+        </div>
+    </div>
+    <div class="controls">
+        <button class="game-btn" onclick="startGame()">New Game</button>
+        <button class="game-btn" onclick="togglePause()">Pause</button>
+    </div>
+    <div class="mobile-controls">
+        <div class="m-row"><button class="m-btn" onclick="rotate()">&#8635;</button></div>
+        <div class="m-row">
+            <button class="m-btn" onclick="moveP(-1)">&#9664;</button>
+            <button class="m-btn" onclick="drop()">&#9660;</button>
+            <button class="m-btn" onclick="moveP(1)">&#9654;</button>
+        </div>
+    </div>
+    <p style="color:#888;font-size:12px;margin-top:8px">&#8592;&#8594; Move, &#8593; Rotate, &#8595; Drop, Space Hard Drop</p>
+</div>"""
+        js = """var canvas=document.getElementById('board'),ctx=canvas.getContext('2d');
+var nextCanvas=document.getElementById('next'),nextCtx=nextCanvas.getContext('2d');
+var COLS=10,ROWS=20,SZ=20,NEXTSZ=20;
+var SHAPES=[[[1,1,1,1]],[[1,1],[1,1]],[[0,1,0],[1,1,1]],[[1,0,0],[1,1,1]],[[0,0,1],[1,1,1]],[[1,1,0],[0,1,1]],[[0,1,1],[1,1,0]]];
+var COLORS=['#00f0f0','#f0f000','#a000f0','#f0a000','#0000f0','#00f000','#f00000'];
+var board,piece,nextPiece,px,py,score,level,lines,gameLoop,paused,gameOver;
+function newPiece(){var i=Math.floor(Math.random()*SHAPES.length);return{shape:SHAPES[i].map(r=>[...r]),color:COLORS[i]};}
+function startGame(){board=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+piece=newPiece();nextPiece=newPiece();px=3;py=0;score=0;level=1;lines=0;paused=false;gameOver=false;
+updateUI();if(gameLoop)clearInterval(gameLoop);gameLoop=setInterval(tick,1000-level*80);drawNext();}
+function updateUI(){document.getElementById('score').textContent=score;
+document.getElementById('level').textContent=level;document.getElementById('lines').textContent=lines;}
+function drawNext(){nextCtx.fillStyle='#222';nextCtx.fillRect(0,0,80,80);
+var s=nextPiece.shape;var ox=(4-s[0].length)*NEXTSZ/2,oy=(4-s.length)*NEXTSZ/2;
+nextCtx.fillStyle=nextPiece.color;
+for(var r=0;r<s.length;r++)for(var c=0;c<s[0].length;c++)if(s[r][c])nextCtx.fillRect(ox+c*NEXTSZ+1,oy+r*NEXTSZ+1,NEXTSZ-2,NEXTSZ-2);}
+function valid(nx,ny,shape){var s=shape||piece.shape;
+for(var r=0;r<s.length;r++)for(var c=0;c<s[0].length;c++)
+if(s[r][c]){var x=nx+c,y=ny+r;if(x<0||x>=COLS||y>=ROWS)return false;if(y>=0&&board[y][x])return false;}return true;}
+function lock(){var s=piece.shape;for(var r=0;r<s.length;r++)for(var c=0;c<s[0].length;c++)
+if(s[r][c]){var y=py+r;if(y<0){gameOver=true;clearInterval(gameLoop);alert('Game Over! Score: '+score);return;}
+board[y][px+c]=piece.color;}clearLines();piece=nextPiece;nextPiece=newPiece();px=3;py=0;drawNext();}
+function clearLines(){var cleared=0;for(var r=ROWS-1;r>=0;r--){if(board[r].every(c=>c)){board.splice(r,1);board.unshift(Array(COLS).fill(0));cleared++;r++;}}
+if(cleared){lines+=cleared;score+=cleared*100*level;var newLevel=Math.floor(lines/10)+1;
+if(newLevel>level){level=newLevel;clearInterval(gameLoop);gameLoop=setInterval(tick,Math.max(100,1000-level*80));}updateUI();}}
+function tick(){if(paused||gameOver)return;if(valid(px,py+1))py++;else lock();draw();}
+function moveP(d){if(!paused&&!gameOver&&valid(px+d,py))px+=d;draw();}
+function rotate(){if(paused||gameOver)return;var s=piece.shape;var rotated=s[0].map((_,i)=>s.map(r=>r[i]).reverse());
+if(valid(px,py,rotated))piece.shape=rotated;draw();}
+function drop(){if(paused||gameOver)return;while(valid(px,py+1))py++;lock();draw();}
+function togglePause(){if(!gameOver)paused=!paused;}
+function draw(){ctx.fillStyle='#111';ctx.fillRect(0,0,canvas.width,canvas.height);
+for(var r=0;r<ROWS;r++)for(var c=0;c<COLS;c++)if(board[r][c]){ctx.fillStyle=board[r][c];ctx.fillRect(c*SZ+1,r*SZ+1,SZ-2,SZ-2);}
+var s=piece.shape;ctx.fillStyle=piece.color;
+for(var r=0;r<s.length;r++)for(var c=0;c<s[0].length;c++)if(s[r][c])ctx.fillRect((px+c)*SZ+1,(py+r)*SZ+1,SZ-2,SZ-2);}
+document.addEventListener('keydown',function(e){if(gameOver)return;
+if(e.key==='ArrowLeft'){moveP(-1);e.preventDefault();}
+else if(e.key==='ArrowRight'){moveP(1);e.preventDefault();}
+else if(e.key==='ArrowUp'){rotate();e.preventDefault();}
+else if(e.key==='ArrowDown'){if(valid(px,py+1))py++;draw();e.preventDefault();}
+else if(e.key===' '){drop();e.preventDefault();}
+else if(e.key==='p')togglePause();});
+startGame();"""
+        return self._base_page(title, body, css, js)
+
+    # ==================================================================
+    # Phaser.js Game Templates (advanced 2D game framework)
+    # ==================================================================
+
+    def _phaser_platformer_html(self, title, desc):
+        """Phaser.js platformer with physics, platforms, and collectibles"""
+        return f'''<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif}}
+#game-container{{border-radius:8px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.5)}}
+.hud{{color:#fff;padding:10px 20px;display:flex;gap:30px;font-size:18px;background:rgba(0,0,0,0.3);border-radius:8px;margin-bottom:10px}}
+.hud span{{font-weight:700;color:#ffd700}}
+.instructions{{color:#888;font-size:13px;margin-top:10px}}
+</style>
+</head><body>
+<div class="hud">Score: <span id="score">0</span> | Lives: <span id="lives">3</span></div>
+<div id="game-container"></div>
+<p class="instructions">Arrow keys or WASD to move, Space to jump</p>
+<script>
+const config={{
+    type:Phaser.AUTO,parent:'game-container',width:800,height:500,
+    backgroundColor:'#87ceeb',
+    physics:{{default:'arcade',arcade:{{gravity:{{y:800}},debug:false}}}},
+    scene:{{preload,create,update}}
+}};
+let player,platforms,coins,enemies,cursors,score=0,lives=3,gameOver=false;
+function preload(){{}}
+function create(){{
+    // Platforms (ground + floating)
+    platforms=this.physics.add.staticGroup();
+    const ground=this.add.rectangle(400,490,800,20,0x228b22);
+    platforms.add(ground);this.physics.add.existing(ground,true);
+    [[150,380,200],[400,300,150],[650,400,180],[300,200,120],[550,150,100]].forEach(([x,y,w])=>{{
+        const p=this.add.rectangle(x,y,w,20,0x8b4513);platforms.add(p);this.physics.add.existing(p,true);
+    }});
+    // Player (simple rectangle)
+    player=this.add.rectangle(100,400,32,48,0x4169e1);
+    this.physics.add.existing(player);player.body.setCollideWorldBounds(true);player.body.setBounce(0.1);
+    this.physics.add.collider(player,platforms);
+    // Coins
+    coins=this.physics.add.group();
+    [[200,340],[400,260],[600,360],[350,160],[550,110],[100,340],[700,360]].forEach(([x,y])=>{{
+        const c=this.add.circle(x,y,12,0xffd700);coins.add(c);this.physics.add.existing(c,true);
+    }});
+    this.physics.add.overlap(player,coins,(p,c)=>{{c.destroy();score+=10;document.getElementById('score').textContent=score;}});
+    // Enemies (moving hazards)
+    enemies=this.physics.add.group();
+    [[300,370,100],[500,290,80]].forEach(([x,y,range])=>{{
+        const e=this.add.rectangle(x,y,24,24,0xff4444);enemies.add(e);this.physics.add.existing(e);
+        e.body.setImmovable(true);e.body.setAllowGravity(false);
+        e.startX=x;e.range=range;e.dir=1;
+    }});
+    this.physics.add.collider(enemies,platforms);
+    this.physics.add.overlap(player,enemies,hitEnemy,null,this);
+    // Controls
+    cursors=this.input.keyboard.createCursorKeys();
+    this.input.keyboard.addKeys('W,A,S,D,SPACE');
+}}
+function hitEnemy(p,e){{
+    if(gameOver)return;
+    lives--;document.getElementById('lives').textContent=lives;
+    if(lives<=0){{gameOver=true;this.physics.pause();this.add.text(400,250,'GAME OVER',{{fontSize:'48px',fill:'#ff0000'}}).setOrigin(0.5);}}
+    else{{player.x=100;player.y=400;}}
+}}
+function update(){{
+    if(gameOver)return;
+    const keys=this.input.keyboard;
+    // Horizontal movement
+    if(cursors.left.isDown||keys.checkDown(keys.addKey('A'))){{player.body.setVelocityX(-200);}}
+    else if(cursors.right.isDown||keys.checkDown(keys.addKey('D'))){{player.body.setVelocityX(200);}}
+    else{{player.body.setVelocityX(0);}}
+    // Jump
+    if((cursors.up.isDown||cursors.space.isDown||keys.checkDown(keys.addKey('W')))&&player.body.touching.down){{
+        player.body.setVelocityY(-450);
+    }}
+    // Move enemies
+    enemies.children.iterate(e=>{{
+        if(!e)return;
+        e.x+=e.dir*1.5;
+        if(e.x>e.startX+e.range||e.x<e.startX-e.range)e.dir*=-1;
+    }});
+    // Win condition
+    if(coins.countActive()===0&&!gameOver){{
+        gameOver=true;this.add.text(400,250,'YOU WIN!',{{fontSize:'48px',fill:'#00ff00'}}).setOrigin(0.5);
+    }}
+}}
+new Phaser.Game(config);
+</script></body></html>'''
+
+    def _phaser_shooter_html(self, title, desc):
+        """Phaser.js space shooter with enemies and bullets"""
+        return f'''<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#0a0a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif}}
+#game-container{{border-radius:8px;overflow:hidden;box-shadow:0 4px 20px rgba(0,100,255,0.3)}}
+.hud{{color:#fff;padding:10px 20px;display:flex;gap:30px;font-size:18px;background:rgba(0,50,100,0.5);border-radius:8px;margin-bottom:10px}}
+.hud span{{font-weight:700;color:#00ffff}}
+.instructions{{color:#666;font-size:13px;margin-top:10px}}
+</style>
+</head><body>
+<div class="hud">Score: <span id="score">0</span> | Wave: <span id="wave">1</span> | Lives: <span id="lives">3</span></div>
+<div id="game-container"></div>
+<p class="instructions">Arrow keys to move, Space to shoot</p>
+<script>
+const config={{
+    type:Phaser.AUTO,parent:'game-container',width:800,height:600,
+    backgroundColor:'#0a0a2e',
+    physics:{{default:'arcade',arcade:{{debug:false}}}},
+    scene:{{preload,create,update}}
+}};
+let player,bullets,enemies,cursors,score=0,lives=3,wave=1,lastFire=0,gameOver=false;
+function preload(){{}}
+function create(){{
+    // Stars background
+    for(let i=0;i<100;i++){{
+        const s=this.add.circle(Phaser.Math.Between(0,800),Phaser.Math.Between(0,600),Phaser.Math.Between(1,2),0xffffff,Phaser.Math.FloatBetween(0.3,1));
+        this.tweens.add({{targets:s,alpha:0.2,duration:Phaser.Math.Between(500,2000),yoyo:true,repeat:-1}});
+    }}
+    // Player ship (triangle)
+    player=this.add.polygon(400,550,[0,-20,15,15,-15,15],0x00ff88);
+    this.physics.add.existing(player);player.body.setCollideWorldBounds(true);
+    // Bullets group
+    bullets=this.physics.add.group({{maxSize:50}});
+    // Enemies group
+    enemies=this.physics.add.group();
+    spawnWave.call(this);
+    // Collisions
+    this.physics.add.overlap(bullets,enemies,(b,e)=>{{
+        b.destroy();e.destroy();score+=10;document.getElementById('score').textContent=score;
+        if(enemies.countActive()===0){{wave++;document.getElementById('wave').textContent=wave;spawnWave.call(this);}}
+    }});
+    this.physics.add.overlap(player,enemies,(p,e)=>{{
+        e.destroy();lives--;document.getElementById('lives').textContent=lives;
+        if(lives<=0){{gameOver=true;this.physics.pause();this.add.text(400,300,'GAME OVER',{{fontSize:'48px',fill:'#ff0000'}}).setOrigin(0.5);}}
+    }});
+    cursors=this.input.keyboard.createCursorKeys();
+    this.input.keyboard.addKey('SPACE');
+}}
+function spawnWave(){{
+    const cols=5+wave,rows=2+Math.floor(wave/2);
+    for(let r=0;r<rows;r++){{
+        for(let c=0;c<cols;c++){{
+            const x=100+c*((600)/(cols-1||1)),y=50+r*40;
+            const e=this.add.polygon(x,y,[0,-12,10,10,-10,10],0xff4444);
+            enemies.add(e);this.physics.add.existing(e);
+            e.body.setVelocity(Phaser.Math.Between(-30,30)*wave,20+wave*5);
+            e.body.setBounce(1,0);e.body.setCollideWorldBounds(true);
+        }}
+    }}
+}}
+function update(time){{
+    if(gameOver)return;
+    // Movement
+    if(cursors.left.isDown)player.body.setVelocityX(-300);
+    else if(cursors.right.isDown)player.body.setVelocityX(300);
+    else player.body.setVelocityX(0);
+    if(cursors.up.isDown)player.body.setVelocityY(-200);
+    else if(cursors.down.isDown)player.body.setVelocityY(200);
+    else player.body.setVelocityY(0);
+    // Shooting
+    if(cursors.space.isDown&&time>lastFire+150){{
+        lastFire=time;
+        const b=this.add.rectangle(player.x,player.y-25,4,16,0x00ffff);
+        bullets.add(b);this.physics.add.existing(b);b.body.setVelocityY(-500);
+    }}
+    // Cleanup off-screen bullets
+    bullets.children.iterate(b=>{{if(b&&b.y<-20)b.destroy();}});
+    // Check enemies reaching bottom
+    enemies.children.iterate(e=>{{if(e&&e.y>580){{e.destroy();lives--;document.getElementById('lives').textContent=lives;if(lives<=0){{gameOver=true;this.physics.pause();this.add.text(400,300,'GAME OVER',{{fontSize:'48px',fill:'#ff0000'}}).setOrigin(0.5);}}}}}});
+}}
+new Phaser.Game(config);
+</script></body></html>'''
+
+    def _phaser_breakout_html(self, title, desc):
+        """Phaser.js breakout / brick breaker game"""
+        return f'''<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif}}
+#game-container{{border-radius:8px;overflow:hidden;box-shadow:0 4px 20px rgba(255,100,0,0.3)}}
+.hud{{color:#fff;padding:10px 20px;display:flex;gap:30px;font-size:18px;background:rgba(100,50,0,0.5);border-radius:8px;margin-bottom:10px}}
+.hud span{{font-weight:700;color:#ffa500}}
+.instructions{{color:#666;font-size:13px;margin-top:10px}}
+</style>
+</head><body>
+<div class="hud">Score: <span id="score">0</span> | Lives: <span id="lives">3</span></div>
+<div id="game-container"></div>
+<p class="instructions">Move mouse or use arrow keys to control paddle. Click to launch ball.</p>
+<script>
+const config={{
+    type:Phaser.AUTO,parent:'game-container',width:800,height:600,
+    backgroundColor:'#1a1a2e',
+    physics:{{default:'arcade',arcade:{{debug:false}}}},
+    scene:{{preload,create,update}}
+}};
+let paddle,ball,bricks,cursors,score=0,lives=3,ballLaunched=false,gameOver=false;
+function preload(){{}}
+function create(){{
+    // Paddle
+    paddle=this.add.rectangle(400,560,120,16,0x4488ff);
+    this.physics.add.existing(paddle);paddle.body.setImmovable(true);paddle.body.setCollideWorldBounds(true);
+    // Ball
+    ball=this.add.circle(400,540,10,0xffffff);
+    this.physics.add.existing(ball);ball.body.setCollideWorldBounds(true);ball.body.setBounce(1);
+    ball.body.setMaxSpeed(600);
+    // Bricks
+    bricks=this.physics.add.staticGroup();
+    const colors=[0xff4444,0xff8844,0xffff44,0x44ff44,0x4444ff,0xff44ff];
+    for(let row=0;row<6;row++){{
+        for(let col=0;col<10;col++){{
+            const x=80+col*65,y=60+row*28;
+            const b=this.add.rectangle(x,y,60,22,colors[row]);
+            bricks.add(b);this.physics.add.existing(b,true);
+        }}
+    }}
+    // Collisions
+    this.physics.add.collider(ball,paddle,(b,p)=>{{
+        const diff=b.x-p.x;
+        b.body.setVelocityX(diff*5);
+    }});
+    this.physics.add.collider(ball,bricks,(b,brick)=>{{
+        brick.destroy();score+=10;document.getElementById('score').textContent=score;
+        if(bricks.countActive()===0){{
+            gameOver=true;this.physics.pause();
+            this.add.text(400,300,'YOU WIN!',{{fontSize:'48px',fill:'#00ff00'}}).setOrigin(0.5);
+        }}
+    }});
+    // Controls
+    cursors=this.input.keyboard.createCursorKeys();
+    this.input.on('pointermove',(p)=>{{if(!gameOver)paddle.x=Phaser.Math.Clamp(p.x,60,740);}});
+    this.input.on('pointerdown',()=>{{if(!ballLaunched&&!gameOver){{ballLaunched=true;ball.body.setVelocity(Phaser.Math.Between(-200,200),-400);}}}});
+}}
+function update(){{
+    if(gameOver)return;
+    // Keyboard paddle control
+    if(cursors.left.isDown)paddle.body.setVelocityX(-400);
+    else if(cursors.right.isDown)paddle.body.setVelocityX(400);
+    else paddle.body.setVelocityX(0);
+    // Ball follows paddle before launch
+    if(!ballLaunched){{ball.x=paddle.x;ball.y=paddle.y-20;}}
+    // Ball fell off bottom
+    if(ball.y>590){{
+        lives--;document.getElementById('lives').textContent=lives;
+        if(lives<=0){{
+            gameOver=true;this.physics.pause();
+            this.add.text(400,300,'GAME OVER',{{fontSize:'48px',fill:'#ff0000'}}).setOrigin(0.5);
+        }}else{{
+            ballLaunched=false;ball.body.setVelocity(0,0);ball.x=paddle.x;ball.y=paddle.y-20;
+        }}
+    }}
+}}
+new Phaser.Game(config);
+</script></body></html>'''
 
     # --- Generic App (fallback) ---
     def _generic_app_html(self, title, desc):

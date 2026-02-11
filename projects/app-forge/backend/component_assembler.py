@@ -643,6 +643,189 @@ render();""",
     }
 
 
+def _component_pomodoro(label: str) -> dict:
+    """Pomodoro timer with work/break cycles."""
+    return {
+        "id": "pomodoro",
+        "css": """.timer-display{font-size:80px;font-weight:700;color:#ff7a59;margin:20px 0;font-variant-numeric:tabular-nums}
+.mode{font-size:18px;color:#888;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px}
+.mode.work{color:#27ae60}.mode.break{color:#3498db}
+.controls{display:flex;gap:12px;justify-content:center;margin:20px 0}
+.settings{margin-top:20px;padding-top:16px;border-top:1px solid #eee}
+.settings label{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:14px}
+.settings input[type=number]{width:60px;padding:6px;text-align:center}
+.cycle-dots{display:flex;gap:6px;justify-content:center;margin:12px 0}
+.dot{width:10px;height:10px;border-radius:50%;background:#ddd}.dot.done{background:#27ae60}""",
+
+        "body": f"""<div class="card">
+    <h2>{label}</h2>
+    <div class="mode" id="mode">Work Time</div>
+    <div class="timer-display" id="timer">25:00</div>
+    <div class="cycle-dots" id="dots"></div>
+    <div class="controls">
+        <button class="btn-primary" id="startBtn" onclick="toggle()">Start</button>
+        <button class="btn-secondary" onclick="reset()">Reset</button>
+        <button class="btn-secondary" onclick="skip()">Skip</button>
+    </div>
+    <div class="settings">
+        <label>Work: <input type="number" id="workMin" value="25" min="1" max="60"> min</label>
+        <label>Break: <input type="number" id="breakMin" value="5" min="1" max="30"> min</label>
+        <label>Cycles: <input type="number" id="cycles" value="4" min="1" max="10"></label>
+    </div>
+</div>""",
+
+        "js": """var timer,running=false,isWork=true,seconds,cycle=0,totalCycles=4;
+function getWorkSec(){return parseInt(document.getElementById('workMin').value)*60||1500;}
+function getBreakSec(){return parseInt(document.getElementById('breakMin').value)*60||300;}
+function updateDots(){totalCycles=parseInt(document.getElementById('cycles').value)||4;
+var el=document.getElementById('dots');el.innerHTML='';
+for(var i=0;i<totalCycles;i++){var d=document.createElement('div');d.className='dot'+(i<cycle?' done':'');el.appendChild(d);}}
+function display(){var m=Math.floor(seconds/60),s=seconds%60;
+document.getElementById('timer').textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');}
+function toggle(){if(running){clearInterval(timer);running=false;document.getElementById('startBtn').textContent='Start';}
+else{if(!seconds)seconds=getWorkSec();timer=setInterval(tick,1000);running=true;document.getElementById('startBtn').textContent='Pause';}}
+function tick(){seconds--;display();if(seconds<=0){new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU'+btoa(String.fromCharCode.apply(null,new Uint8Array(2000).fill(128)))).play().catch(()=>{});
+if(isWork){cycle++;updateDots();if(cycle>=totalCycles){alert('Pomodoro complete!');reset();return;}}
+isWork=!isWork;seconds=isWork?getWorkSec():getBreakSec();
+document.getElementById('mode').textContent=isWork?'Work Time':'Break Time';
+document.getElementById('mode').className='mode '+(isWork?'work':'break');}}
+function reset(){clearInterval(timer);running=false;isWork=true;cycle=0;seconds=getWorkSec();
+document.getElementById('startBtn').textContent='Start';
+document.getElementById('mode').textContent='Work Time';document.getElementById('mode').className='mode work';
+display();updateDots();}
+function skip(){clearInterval(timer);running=false;if(isWork)cycle++;
+isWork=!isWork;seconds=isWork?getWorkSec():getBreakSec();
+document.getElementById('mode').textContent=isWork?'Work Time':'Break Time';
+document.getElementById('mode').className='mode '+(isWork?'work':'break');
+display();updateDots();}
+reset();""",
+    }
+
+
+def _component_habit_tracker(label: str) -> dict:
+    """Daily habit tracker with streak counting."""
+    return {
+        "id": "habit_tracker",
+        "css": """.habits{margin:16px 0}
+.habit{display:flex;align-items:center;gap:12px;padding:12px;background:#f8f8f8;border-radius:8px;margin-bottom:8px}
+.habit-name{flex:1;font-weight:600}
+.streak{font-size:13px;color:#888}
+.streak span{color:#ff7a59;font-weight:700}
+.check-btn{width:32px;height:32px;border-radius:50%;border:2px solid #ddd;background:#fff;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.check-btn.done{background:#27ae60;border-color:#27ae60;color:#fff}
+.del-btn{background:none;border:none;color:#ccc;cursor:pointer;font-size:18px;padding:4px}
+.del-btn:hover{color:#e74c3c}
+.add-row{display:flex;gap:8px;margin-top:16px}
+.week-view{display:flex;gap:4px;margin:16px 0;justify-content:center}
+.day{width:28px;height:28px;border-radius:4px;background:#f0f0f0;font-size:10px;display:flex;align-items:center;justify-content:center;color:#888}
+.day.today{border:2px solid #ff7a59;font-weight:700}.day.done{background:#27ae60;color:#fff}""",
+
+        "body": f"""<div class="card">
+    <h2>{label}</h2>
+    <div class="week-view" id="weekView"></div>
+    <div class="habits" id="habits"></div>
+    <div class="add-row">
+        <input id="newHabit" placeholder="New habit...">
+        <button class="btn-primary" onclick="addHabit()">Add</button>
+    </div>
+</div>""",
+
+        "js": """var habits=JSON.parse(localStorage.getItem('habits')||'[]');
+var today=new Date().toISOString().slice(0,10);
+function save(){localStorage.setItem('habits',JSON.stringify(habits));}
+function renderWeek(){var el=document.getElementById('weekView');el.innerHTML='';
+var names=['S','M','T','W','T','F','S'];var d=new Date();d.setDate(d.getDate()-d.getDay());
+for(var i=0;i<7;i++){var day=new Date(d);day.setDate(d.getDate()+i);var ds=day.toISOString().slice(0,10);
+var isToday=ds===today;var allDone=habits.length>0&&habits.every(h=>(h.done||[]).includes(ds));
+var div=document.createElement('div');div.className='day'+(isToday?' today':'')+(allDone?' done':'');
+div.textContent=names[i];el.appendChild(div);}}
+function render(){var el=document.getElementById('habits');el.innerHTML='';
+habits.forEach(function(h,i){var doneToday=(h.done||[]).includes(today);
+var streak=0;var d=new Date();while((h.done||[]).includes(d.toISOString().slice(0,10))){streak++;d.setDate(d.getDate()-1);}
+var div=document.createElement('div');div.className='habit';
+div.innerHTML='<button class="check-btn'+(doneToday?' done':'')+'" onclick="toggleHabit('+i+')">'+(doneToday?'✓':'')+'</button>'+
+'<span class="habit-name">'+h.name+'</span><span class="streak">Streak: <span>'+streak+'</span></span>'+
+'<button class="del-btn" onclick="delHabit('+i+')">&times;</button>';
+el.appendChild(div);});renderWeek();}
+function addHabit(){var input=document.getElementById('newHabit');var name=input.value.trim();
+if(!name)return;habits.push({name:name,done:[]});input.value='';save();render();}
+function toggleHabit(i){var h=habits[i];h.done=h.done||[];var idx=h.done.indexOf(today);
+if(idx>=0)h.done.splice(idx,1);else h.done.push(today);save();render();}
+function delHabit(i){if(confirm('Delete this habit?')){habits.splice(i,1);save();render();}}
+document.getElementById('newHabit').addEventListener('keydown',function(e){if(e.key==='Enter')addHabit();});
+render();""",
+    }
+
+
+def _component_expense_tracker(label: str) -> dict:
+    """Simple expense tracker with categories and totals."""
+    return {
+        "id": "expense_tracker",
+        "css": """.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
+.summary-box{background:#f8f8f8;padding:12px;border-radius:8px;text-align:center}
+.summary-box .label{font-size:12px;color:#888;text-transform:uppercase}
+.summary-box .val{font-size:24px;font-weight:700;margin-top:4px}
+.summary-box.income .val{color:#27ae60}.summary-box.expense .val{color:#e74c3c}
+.entries{margin:16px 0;max-height:300px;overflow-y:auto}
+.entry{display:flex;align-items:center;gap:12px;padding:10px;border-bottom:1px solid #eee}
+.entry:last-child{border:none}
+.entry-cat{width:10px;height:10px;border-radius:50%}
+.entry-desc{flex:1}
+.entry-amount{font-weight:600;font-variant-numeric:tabular-nums}
+.entry-amount.income{color:#27ae60}.entry-amount.expense{color:#e74c3c}
+.entry-del{background:none;border:none;color:#ccc;cursor:pointer}
+.entry-del:hover{color:#e74c3c}
+.add-form{display:grid;grid-template-columns:1fr 100px 120px auto;gap:8px;margin-top:16px}
+.cat-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:12px}
+.cat-legend span{display:flex;align-items:center;gap:4px}
+@media(max-width:500px){.add-form{grid-template-columns:1fr 1fr}.summary{grid-template-columns:1fr}}""",
+
+        "body": f"""<div class="card">
+    <h2>{label}</h2>
+    <div class="summary">
+        <div class="summary-box income"><div class="label">Income</div><div class="val" id="income">$0</div></div>
+        <div class="summary-box expense"><div class="label">Expenses</div><div class="val" id="expenses">$0</div></div>
+        <div class="summary-box"><div class="label">Balance</div><div class="val" id="balance">$0</div></div>
+    </div>
+    <div class="entries" id="entries"></div>
+    <div class="add-form">
+        <input id="desc" placeholder="Description">
+        <input id="amount" type="number" step="0.01" placeholder="Amount">
+        <select id="cat"><option value="food">🍔 Food</option><option value="transport">🚗 Transport</option>
+        <option value="bills">📄 Bills</option><option value="shopping">🛒 Shopping</option>
+        <option value="income">💰 Income</option><option value="other">📦 Other</option></select>
+        <button class="btn-primary" onclick="addEntry()">Add</button>
+    </div>
+</div>""",
+
+        "js": """var entries=JSON.parse(localStorage.getItem('expenses')||'[]');
+var catColors={food:'#e67e22',transport:'#3498db',bills:'#9b59b6',shopping:'#e74c3c',income:'#27ae60',other:'#95a5a6'};
+function save(){localStorage.setItem('expenses',JSON.stringify(entries));}
+function render(){var el=document.getElementById('entries');el.innerHTML='';
+var income=0,expense=0;entries.forEach(function(e,i){
+if(e.cat==='income')income+=e.amount;else expense+=e.amount;
+var div=document.createElement('div');div.className='entry';
+var sign=e.cat==='income'?'+':'-';var cls=e.cat==='income'?'income':'expense';
+div.innerHTML='<div class="entry-cat" style="background:'+catColors[e.cat]+'"></div>'+
+'<span class="entry-desc">'+e.desc+'</span>'+
+'<span class="entry-amount '+cls+'">'+sign+'$'+e.amount.toFixed(2)+'</span>'+
+'<button class="entry-del" onclick="delEntry('+i+')">&times;</button>';
+el.appendChild(div);});
+document.getElementById('income').textContent='$'+income.toFixed(2);
+document.getElementById('expenses').textContent='$'+expense.toFixed(2);
+document.getElementById('balance').textContent='$'+(income-expense).toFixed(2);
+document.getElementById('balance').style.color=(income-expense)>=0?'#27ae60':'#e74c3c';}
+function addEntry(){var desc=document.getElementById('desc').value.trim();
+var amount=parseFloat(document.getElementById('amount').value);
+var cat=document.getElementById('cat').value;
+if(!desc||isNaN(amount)||amount<=0){alert('Enter description and valid amount');return;}
+entries.unshift({desc:desc,amount:amount,cat:cat,date:new Date().toISOString()});
+document.getElementById('desc').value='';document.getElementById('amount').value='';save();render();}
+function delEntry(i){entries.splice(i,1);save();render();}
+render();""",
+    }
+
+
 # =====================================================================
 # Pattern detection — what components does the description need?
 # =====================================================================
@@ -663,6 +846,9 @@ COMPONENT_PATTERNS: List[Tuple[str, object, int]] = [
     (r"(user)?name\s*gen|random\s*name", lambda s, l: _component_generator("name", l), 85),
     
     # Game patterns
+    (r"snake\s*game|snake\b.*game|classic\s*snake", lambda s, l: _component_game("snake", l), 92),
+    (r"tetris|falling\s*blocks?|block\s*stack", lambda s, l: _component_game("tetris", l), 92),
+    (r"2048|twenty.?forty.?eight|tile\s*merge|merge\s*tiles?", lambda s, l: _component_game("game_2048", l), 92),
     (r"wordle|word\s*guess|guess\s*the\s*word", lambda s, l: _component_game("wordle", l), 90),
     (r"hangman|hang\s*man", lambda s, l: _component_game("hangman", l), 90),
     (r"tic\s*tac\s*toe|noughts?\s*(and|&)\s*crosses?|x\s*(and|&)\s*o", lambda s, l: _component_game("tictactoe", l), 90),
@@ -672,6 +858,11 @@ COMPONENT_PATTERNS: List[Tuple[str, object, int]] = [
     (r"quiz|trivia|question\s*(game|app)", lambda s, l: _component_game("quiz", l), 85),
     (r"guess\s*(the\s*)?(number|num)|number\s*guess", lambda s, l: _component_game("guess_game", l), 85),
     (r"reaction\s*(time|game|test)|reflex\s*(test|game)|simon\s*(game|says)?|grid\s*click|click\s*(the\s*)?(green|tile|target)|whack\s*a\s*mole", lambda s, l: _component_game("reaction_game", l), 85),
+
+    # Productivity / Tracker patterns
+    (r"pomodoro|focus\s*timer|work\s*timer|productivity\s*timer", lambda s, l: _component_pomodoro(l), 90),
+    (r"habit\s*(track|log|app)|daily\s*habit|streak\s*(track|count)|routine\s*track", lambda s, l: _component_habit_tracker(l), 88),
+    (r"expense\s*(track|log|app)|budget\s*(track|app)|money\s*track|spending\s*(track|log)|finance\s*track", lambda s, l: _component_expense_tracker(l), 88),
 
     # UI patterns
     (r"typing\s*(speed|test|practic)|speed\s*typ|wpm\s*test", lambda s, l: _component_typing_test(l), 88),

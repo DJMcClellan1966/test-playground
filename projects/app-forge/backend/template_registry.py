@@ -3,17 +3,117 @@
 This replaces flat regex matching with a scored approach:
  1. Extract structured features from the description
  2. Score every template against those features
- 3. Pick the highest-scoring template
+ 3. Apply user preference boost from build history
+ 4. Pick the highest-scoring template
 
 Concepts used:
  - Feature Store:  extract_features() pulls structured signals from text
  - App Store:      TEMPLATE_REGISTRY is a searchable catalogue of templates
  - Attention:      score_template() weights features differently per template
+ - Learning:       User preferences boost frequently-used templates
 """
 
 import re
 from dataclasses import dataclass, field
+from difflib import get_close_matches
 from typing import Dict, List, Optional, Tuple
+
+# User preference learning (AI-free)
+try:
+    from user_prefs import get_template_boost
+    USER_PREFS_ENABLED = True
+except ImportError:
+    USER_PREFS_ENABLED = False
+    def get_template_boost(template_id: str) -> float:
+        return 0.0
+
+
+# =====================================================================
+# Fuzzy Typo Correction
+# =====================================================================
+# Known keywords that users commonly misspell. Maps correct -> [variants]
+KNOWN_KEYWORDS = {
+    # Templates
+    "calculator": ["calculater", "calcualtor", "calulator", "calcultor"],
+    "timer": ["timmer", "tmer", "timr"],
+    "quiz": ["quize", "quis", "quix"],
+    "memory": ["memroy", "memoyr", "memry", "mermory"],
+    "puzzle": ["puzzel", "puzzl", "puzle", "puzzlle"],
+    "reaction": ["recation", "reacton", "reacion", "rection"],
+    "minesweeper": ["miensweper", "minesweep", "minseweeper"],
+    "hangman": ["hangmna", "hanman", "hangmam"],
+    "wordle": ["wordel", "wroddle", "wordel"],
+    "converter": ["convertr", "convertor", "conveter"],
+    # Game terms
+    "tic": ["tik", "tick"],
+    "tac": ["tak", "tack"],
+    "toe": ["tow", "to"],
+    "sliding": ["slidng", "slideing", "slidin"],
+    "matching": ["matchng", "matchin", "matcing"],
+    "guessing": ["guesing", "gussing", "guessing"],
+    "trivia": ["trivia", "trivea", "tirvia"],
+}
+
+# Build reverse lookup: misspelling -> correct
+_TYPO_MAP: Dict[str, str] = {}
+for correct, typos in KNOWN_KEYWORDS.items():
+    for typo in typos:
+        _TYPO_MAP[typo] = correct
+
+
+def fuzzy_correct(text: str, cutoff: float = 0.80) -> str:
+    """Correct common typos in the input text.
+    
+    Uses two strategies:
+    1. Direct lookup of known misspellings
+    2. Fuzzy matching for unknown typos (Levenshtein-based)
+    """
+    # Common words that look like keywords but aren't typos
+    BLOCKLIST = {
+        "timed", "timing", "time", "times",  # not timer typos
+        "thing", "things", "thinking",  # not matching typos
+        "puzzle", "puzzles",  # already correct
+        "match", "matches",  # already correct  
+        "calculate", "calculated",  # not calculator typos
+        "convert", "converted", "converting",  # not converter typos
+        "react", "reacting", "reacted",  # not reaction typos
+        "guess", "guessed",  # not guessing typos
+        "memory", "memories",  # already correct
+        "slide", "slides", "sliding",  # already correct
+    }
+    
+    words = text.lower().split()
+    corrected = []
+    all_keywords = list(KNOWN_KEYWORDS.keys())
+    
+    for word in words:
+        # Strip punctuation for matching
+        clean = re.sub(r'[^\w]', '', word)
+        
+        # Skip blocklisted common words
+        if clean in BLOCKLIST:
+            corrected.append(word)
+            continue
+        
+        # Strategy 1: Direct typo lookup
+        if clean in _TYPO_MAP:
+            corrected.append(word.replace(clean, _TYPO_MAP[clean]))
+            continue
+        
+        # Strategy 2: Fuzzy match if word looks like a keyword attempt
+        # Only apply if word is long enough and similar length to keywords
+        if len(clean) >= 5:  # Longer minimum to avoid false positives
+            matches = get_close_matches(clean, all_keywords, n=1, cutoff=cutoff)
+            if matches and matches[0] != clean:
+                # Only correct if lengths are similar (typo, not different word)
+                if abs(len(clean) - len(matches[0])) <= 2:
+                    corrected.append(word.replace(clean, matches[0]))
+                    continue
+        
+        # No correction needed
+        corrected.append(word)
+    
+    return ' '.join(corrected)
 
 
 # =====================================================================
@@ -27,9 +127,10 @@ class Feature:
     name: str
     value: str          # e.g. "3" for grid_size, "numbers" for tile_content
     confidence: float   # 0.0 - 1.0
+    position: int = 0   # Character position in description (0 = start)
 
     def __repr__(self):
-        return f"Feature({self.name}={self.value}, conf={self.confidence:.2f})"
+        return f"Feature({self.name}={self.value}, conf={self.confidence:.2f}, pos={self.position})"
 
 
 # Extraction rules: (feature_name, pattern, value_extractor, confidence)
@@ -45,27 +146,40 @@ FEATURE_RULES: List[Tuple[str, str, object, float]] = [
     ("puzzle",       r"puzzle|solving|solve|brain\s*tease",    "true",   0.80),
     ("matching",     r"match(ing)?|pair|flip|memory",          "true",   0.80),
     ("guessing",     r"guess(ing)?|random\s*number",           "true",   0.85),
-    ("trivia",       r"quiz|trivia|question\s*(and|&)\s*answer|flashcard", "true", 0.85),
+    ("trivia",       r"quiz|trivia|question\s*(and|&)\s*answer|flashcard|knowledge\s*test", "true", 0.85),
     ("turn_based",   r"turn|player\s*[12]|two\s*player|vs\b", "true",   0.75),
-    ("reaction",     r"reaction|reflex|speed\s*test|quick",    "true",   0.85),
+    ("reaction",     r"reaction|reflex|speed\s*test|quick|fast\s*(click|react|tap)|how\s*fast.*(react|click)|whack.*(button|fast)",    "true",   0.85),
     ("simon",        r"simon|whack.?a.?mole|click\s*(the\s*)?(target|green|tile)|randomly\s*(puts?|shows?|displays?)", "true", 0.95),
     ("click_target", r"click\s*(it|on|the)|tap\s*(the|on)|hit\s*the", "true", 0.80),
     ("timing",       r"timer|countdown|stopwatch|pomodoro|clock", "true", 0.85),
 
     # Specific games
-    ("tictactoe",    r"tic.?tac.?toe|noughts.*crosses|x.?and.?o", "true", 0.95),
-    ("hangman",      r"hangman|word\s*guess|spell\s*(out|a|the)?\s*word|"
+    ("tictactoe",    r"tic.?tac.?toe|noughts.*crosses|x.?s?.?and.?o.?s?|x.?and.?o", "true", 0.95),
+    ("snake",        r"snake\s*game|snake\b|moving\s*snake|eat.*(pellet|food)|grow.*eat|classic\s*snake", "true", 0.95),
+    ("tetris",       r"tetris|falling\s*blocks?|tetromino|block\s*stacking|stack.*blocks?|clear.*lines?|line\s*clear", "true", 0.95),
+    ("game_2048",    r"2048|twenty.?forty.?eight|tile\s*merge|merge\s*tiles?|slide.*numbers?|double.*numbers?", "true", 0.95),
+    ("hangman",      r"hangman|word\s*guess|secret\s*word|spell\s*(out|a|the)?\s*word|"
                      r"letter\s*by\s*letter|guess\s*(the\s*)?letters?|"
                      r"reveal\s*(hidden\s*)?word", "true", 0.95),
-    ("snake",        r"snake\s*game",                          "true",   0.90),
+
     ("wordle",       r"wordle|word\s*puzzle",                  "true",   0.85),
     ("minesweeper",  r"minesweeper|mine\s*sweep|mines?\s*game|bomb\s*grid|flag\s*mines?|"
                      r"hidden\s*(bombs?|mines?)|find\s*(the\s*)?(bombs?|mines?)|"
-                     r"bombs?\s*(on|in)\s*(a\s*)?grid", "true", 0.95),
+                     r"bombs?\s*(on|in)\s*(a\s*)?grid|bomb.{0,10}(find|game|search)|"
+                     r"(find|search).{0,10}bomb", "true", 0.95),
+
+    # Phaser.js advanced games
+    ("platformer",   r"platformer|platform\s*game|side.?scroll|jump.*(platform|game)|mario|"
+                     r"run\s*and\s*jump|collect.*coins?|2d\s*platform", "true", 0.95),
+    ("shooter",      r"space\s*shooter|shoot.?em.?up|shmup|bullet\s*hell|invaders?|"
+                     r"shoot.*enemies?|enemies?.*shoot|galaga|asteroids?|"
+                     r"shooting\s*game|bullet\s*game", "true", 0.95),
+    ("breakout",     r"breakout|brick\s*break|arkanoid|paddle.*ball|ball.*paddle|"
+                     r"bounce.*ball.*brick|break.*bricks?|pong.*bricks?", "true", 0.95),
 
     # Tools
-    ("calculator",   r"calculator|calc\b|arithmetic",          "true",   0.90),
-    ("converter",    r"converter|convert\s+unit|unit\s+convert|bmi|mortgage|"
+    ("calculator",   r"calculator|calc\b|arithmetic|number\s*crunch|math\s*problems?",          "true",   0.90),
+    ("converter",    r"converter|convert\s+unit|unit\s+convert|unit\s*transform|bmi|mortgage|"
                      r"celsius|fahrenheit|temperature|kelvin|"
                      r"kilometer|mile|inch|centimeter|meter|feet|yard|"
                      r"pound|kilogram|ounce|gram|"
@@ -76,6 +190,22 @@ FEATURE_RULES: List[Tuple[str, str, object, float]] = [
     ("tile_content", r"(number|letter|color|image|emoji|picture)\s*(tile|block|piece|square)?", "group:1", 0.80),
     ("word_based",   r"word|letter|anagram|scrabble|crossword", "true",  0.75),
 
+    # Generic "game" or "app" (fallback indicator)
+    ("generic_game", r"\bgame\b|\bplay\b|fun\s+(app|thing)|entertainment", "true", 0.50),
+    ("generic_app",  r"\bapp\b|\bapplication\b|\btool\b", "true", 0.50),
+
+    # Layout / responsiveness
+    ("responsive",   r"responsive|fullscreen|full.?screen|mobile|resiz(e|es|ing)|"
+                     r"fit\w*\s*(to|the)?\s*(screen|window)|fills?\s*(the)?\s*(window|screen)|"
+                     r"adapt|scales?|any.?size|different.?screen|device.?size", "true", 0.90),
+    ("fixed_size",   r"fixed.?size|exact\s*\d+|pixel|small\s*window|not\s*resize", "true", 0.85),
+
+    # Common app features
+    ("auth",         r"\bauth\b|login|log.?in|sign.?in|password|user\s*name|account|authentication|"
+                     r"register|sign.?up|logged.?in|session", "true", 0.85),
+    ("storage",      r"save|persist|store|local.?storage|database|remember|sync|backup|"
+                     r"import|export|load|keep\s*(the\s*)?data", "true", 0.80),
+
     # Data apps (not games)
     ("data_app",     r"recipe|cook|todo|task|inventory|product|blog|contact|event|"
                      r"calendar|note|movie|habit|collection|tracker|bookmark|catalog|"
@@ -85,8 +215,12 @@ FEATURE_RULES: List[Tuple[str, str, object, float]] = [
 
 
 def extract_features(description: str) -> Dict[str, Feature]:
-    """Pull structured features from a description."""
-    desc = description.lower()
+    """Pull structured features from a description.
+    
+    Tracks position of each feature for attention-based scoring.
+    """
+    # Apply fuzzy typo correction before matching
+    desc = fuzzy_correct(description.lower())
     features: Dict[str, Feature] = {}
 
     for feat_name, pattern, value_extractor, conf in FEATURE_RULES:
@@ -97,9 +231,11 @@ def extract_features(description: str) -> Dict[str, Feature]:
                 val = m.group(gnum)
             else:
                 val = str(value_extractor)
-            # Don't overwrite higher-confidence features
+            # Track position for attention scoring
+            pos = m.start()
+            # Don't overwrite higher-confidence features (or earlier if same conf)
             if feat_name not in features or features[feat_name].confidence < conf:
-                features[feat_name] = Feature(feat_name, val, conf)
+                features[feat_name] = Feature(feat_name, val, conf, pos)
 
     return features
 
@@ -198,7 +334,7 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         name="Calculator",
         tags=["calculator", "math", "arithmetic"],
         required=["calculator"],
-        boosted=["numbered"],
+        boosted=["numbered", "tile_content"],  # Added tile_content - numbers are calc inputs too
         anti=["grid_game", "sliding", "matching", "data_app"],
         base_score=8.0,
     ),
@@ -216,9 +352,9 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         name="Timer / Pomodoro",
         tags=["timer", "countdown", "stopwatch", "pomodoro", "clock"],
         required=["timing"],
-        boosted=[],
-        anti=["grid_game", "sliding", "matching", "data_app"],
-        base_score=7.0,
+        boosted=["timing"],
+        anti=["grid_game", "sliding", "matching", "reaction", "generic_game"],  # Removed data_app - timers often used for cooking etc
+        base_score=10.0,
     ),
     TemplateEntry(
         id="reaction_game",
@@ -226,8 +362,8 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         tags=["reaction", "reflex", "speed", "click", "simon", "whack", "mole", "target", "green"],
         required=[],
         boosted=["reaction", "simon", "reflex", "click_target"],
-        anti=["sliding", "puzzle", "numbered", "calculator", "converter", "data_app"],
-        base_score=8.0,
+        anti=["sliding", "puzzle", "numbered", "calculator", "converter", "data_app", "timing"],
+        base_score=5.0,  # Lowered - should only win with boosted features
     ),
     TemplateEntry(
         id="minesweeper",
@@ -236,6 +372,61 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         required=["minesweeper"],
         boosted=["grid_game"],
         anti=["sliding", "matching", "trivia", "guessing", "data_app"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
+        id="snake",
+        name="Snake Game",
+        tags=["snake", "eat", "grow", "pellet", "food", "classic"],
+        required=["snake"],
+        boosted=["grid_game"],
+        anti=["sliding", "matching", "trivia", "guessing", "data_app", "puzzle"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
+        id="tetris",
+        name="Tetris",
+        tags=["tetris", "falling", "blocks", "tetromino", "stack", "line", "clear"],
+        required=["tetris"],
+        boosted=["grid_game"],
+        anti=["sliding", "matching", "trivia", "guessing", "data_app"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
+        id="game_2048",
+        name="2048",
+        tags=["2048", "merge", "tiles", "slide", "numbers", "double"],
+        required=["game_2048"],
+        boosted=["grid_game", "numbered"],
+        anti=["matching", "trivia", "guessing", "data_app"],
+        base_score=12.0,
+    ),
+    # --- Phaser.js Advanced Games ---
+    TemplateEntry(
+        id="platformer",
+        name="Platformer Game",
+        tags=["platformer", "platform", "jump", "side-scroll", "mario", "coins", "run"],
+        required=["platformer"],
+        boosted=["generic_game"],
+        anti=["data_app", "calculator", "converter", "timing", "trivia", "puzzle"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
+        id="shooter",
+        name="Space Shooter",
+        tags=["shooter", "space", "shoot", "invaders", "galaga", "asteroids", "bullets", "enemies"],
+        required=["shooter"],
+        boosted=["generic_game"],
+        anti=["data_app", "calculator", "converter", "timing", "trivia", "puzzle"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
+        id="breakout",
+        name="Breakout / Brick Breaker",
+        tags=["breakout", "arkanoid", "brick", "paddle", "ball", "bounce", "pong"],
+        required=["breakout"],
+        boosted=["generic_game"],
+        anti=["data_app", "calculator", "converter", "timing", "trivia", "puzzle"],
         base_score=12.0,
     ),
     # --- CRUD / Data Apps ---
@@ -248,31 +439,34 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         required=[],
         boosted=["data_app"],
         anti=["grid_game", "sliding", "matching", "guessing", "reaction", "puzzle", 
-              "calculator", "converter", "simon", "minesweeper", "hangman", "wordle"],
+              "calculator", "converter", "simon", "minesweeper", "hangman", "wordle", "timing"],  # Added timing
         base_score=6.0,
     ),
     # --- Fallback ---
     TemplateEntry(
         id="generic_game",
         name="Generic Game",
-        tags=["game", "play"],
+        tags=["game", "play", "fun", "entertainment"],
         required=[],
-        boosted=[],
-        anti=["data_app", "calculator", "converter", "timing"],
-        base_score=0.0,  # Absolute fallback for non-data
+        boosted=["generic_game"],
+        anti=["data_app", "calculator", "converter", "timing", 
+              "sliding", "matching", "guessing", "trivia", "tictactoe",
+              "hangman", "wordle", "minesweeper", "simon", "reaction"],
+        base_score=4.0,  # Low but not zero - used when no specific game matches
     ),
 ]
 
 
-def score_template(template: TemplateEntry, features: Dict[str, Feature]) -> float:
+def score_template(template: TemplateEntry, features: Dict[str, Feature], 
+                   desc_len: int = 100, position_weight: float = 3.0) -> float:
     """Score a template against extracted features.  Higher = better match.
 
     Scoring (attention-like weighting):
      - Start with base_score (template specificity)
      - Required features: if missing → return -infinity
      - Boosted features: add  feature.confidence * 10  per match
+     - Position attention: earlier features get bonus (first-mentioned wins ties)
      - Anti features:    subtract  feature.confidence * 8  per match
-     - Tag overlap:      add 2 per tag found in description
     """
     score = template.base_score
 
@@ -281,10 +475,18 @@ def score_template(template: TemplateEntry, features: Dict[str, Feature]) -> flo
         if req not in features:
             return -999.0
 
-    # Boosted features (feature-level attention)
+    # Boosted features (feature-level attention with position bonus)
     for boost in template.boosted:
         if boost in features:
-            score += features[boost].confidence * 10.0
+            feat = features[boost]
+            # Base boost from confidence
+            score += feat.confidence * 10.0
+            # Position attention: earlier = higher bonus
+            # Formula: bonus = weight * (1 - pos/desc_len)
+            # At position 0: full bonus; at end: ~0 bonus
+            if desc_len > 0:
+                position_bonus = position_weight * (1.0 - min(feat.position / desc_len, 1.0))
+                score += position_bonus
 
     # Anti features (negative attention)
     for anti in template.anti:
@@ -294,17 +496,28 @@ def score_template(template: TemplateEntry, features: Dict[str, Feature]) -> flo
     return score
 
 
-def match_template(description: str) -> Tuple[str, Dict[str, Feature], List[Tuple[str, float]]]:
+def match_template(description: str, use_prefs: bool = True) -> Tuple[str, Dict[str, Feature], List[Tuple[str, float]]]:
     """Find the best template for a description.
+
+    Args:
+        description: Natural language app description
+        use_prefs: If True, apply user preference boosts from build history
 
     Returns:
         (best_template_id, features, all_scores)
     """
     features = extract_features(description)
+    desc_len = len(description)
 
     scores: List[Tuple[str, float]] = []
     for tmpl in TEMPLATE_REGISTRY:
-        s = score_template(tmpl, features)
+        s = score_template(tmpl, features, desc_len=desc_len)
+        
+        # Apply user preference boost (AI-free learning)
+        if use_prefs and USER_PREFS_ENABLED:
+            pref_boost = get_template_boost(tmpl.id)
+            s += pref_boost
+        
         scores.append((tmpl.id, round(s, 2)))
 
     scores.sort(key=lambda x: -x[1])

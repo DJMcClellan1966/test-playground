@@ -74,7 +74,7 @@ INFERENCE_RULES = [
     # --- Data storage (strong yes) + typical personal app defaults ---
     (r"recipe|cook|meal|todo|task|inventory|product|blog|contact|event|calendar|"
      r"note|movie|habit|collection|tracker|bookmark|catalog|library|portfolio|"
-     r"budget|expense|journal|diary|crm|warehouse|grocery|workout|log\b",
+     r"budget|expense|journal|diary|crm|warehouse|grocery|shopping|list\s*app|workout|log\b",
      {"has_data": True, "realtime": False, "performance_critical": False}),
 
     # --- No data / standalone apps (answer ALL questions to skip wizard) ---

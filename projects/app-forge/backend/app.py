@@ -16,6 +16,15 @@ from component_assembler import can_assemble, detect_components
 from build_memory import memory, BuildRecord
 from modular_kernel import builder
 
+# User preference learning (AI-free)
+try:
+    from user_prefs import record_build as record_user_pref, get_prefs
+    USER_PREFS_ENABLED = True
+except ImportError:
+    USER_PREFS_ENABLED = False
+    def record_user_pref(*args, **kwargs): pass
+    def get_prefs(): return None
+
 # Import classifier (optional ML module)
 try:
     from classifier import classifier
@@ -183,6 +192,10 @@ def generate_project():
         session.modified = True
     except Exception as e:
         print(f"Failed to save build history: {e}")
+    
+    # Record user preference (AI-free learning)
+    if USER_PREFS_ENABLED:
+        record_user_pref(best_template, features, profile.description)
     
     # Auto-start live preview server
     result = preview.start(app_py, requirements_txt, index_html)
@@ -626,6 +639,35 @@ def delete_from_history(build_id):
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/user-stats', methods=['GET'])
+def get_user_stats():
+    """Get user preference learning statistics."""
+    if not USER_PREFS_ENABLED:
+        return jsonify({"enabled": False, "message": "User preference learning not available"})
+    
+    prefs = get_prefs()
+    stats = prefs.get_stats()
+    
+    return jsonify({
+        "enabled": True,
+        "total_builds": stats.get('total_builds', 0),
+        "template_counts": stats.get('template_counts', {}),
+        "most_used_template": stats.get('most_used'),
+        "feature_preferences": stats.get('feature_prefs', {}),
+    })
+
+
+@app.route('/api/user-stats/clear', methods=['POST'])
+def clear_user_stats():
+    """Clear user preference learning history."""
+    if not USER_PREFS_ENABLED:
+        return jsonify({"success": False, "error": "User preference learning not available"})
+    
+    prefs = get_prefs()
+    prefs.clear()
+    return jsonify({"success": True, "message": "User preferences cleared"})
 
 
 if __name__ == '__main__':
