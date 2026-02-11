@@ -647,6 +647,10 @@ render();""",
 # Pattern detection — what components does the description need?
 # =====================================================================
 
+def _component_game(game_type: str, label: str) -> dict:
+    """Create a game component stub."""
+    return {"id": game_type, "label": label, "type": "game", "html": f"<!-- {game_type} game component -->"}
+
 # (pattern_regex, component_builder_function, priority)
 COMPONENT_PATTERNS: List[Tuple[str, object, int]] = [
     # Specific generators
@@ -657,6 +661,16 @@ COMPONENT_PATTERNS: List[Tuple[str, object, int]] = [
     (r"quote\s*(gen|random|daily|motiv|inspir)|random\s*quote|daily\s*quote", lambda s, l: _component_generator("quote", l), 90),
     (r"lorem\s*ipsum|placeholder\s*text|text\s*gen", lambda s, l: _component_generator("lorem", l), 90),
     (r"(user)?name\s*gen|random\s*name", lambda s, l: _component_generator("name", l), 85),
+    
+    # Game patterns
+    (r"wordle|word\s*guess|guess\s*the\s*word", lambda s, l: _component_game("wordle", l), 90),
+    (r"hangman|hang\s*man", lambda s, l: _component_game("hangman", l), 90),
+    (r"tic\s*tac\s*toe|noughts?\s*(and|&)\s*crosses?|x\s*(and|&)\s*o", lambda s, l: _component_game("tictactoe", l), 90),
+    (r"memory\s*(game|card|match)|matching\s*(game|card)|card\s*match", lambda s, l: _component_game("memory_game", l), 88),
+    (r"sliding\s*puzzle|tile\s*puzzle|15\s*puzzle|puzzle\s*game", lambda s, l: _component_game("sliding_puzzle", l), 88),
+    (r"quiz|trivia|question\s*(game|app)", lambda s, l: _component_game("quiz", l), 85),
+    (r"guess\s*(the\s*)?(number|num)|number\s*guess", lambda s, l: _component_game("guess_game", l), 85),
+    (r"reaction\s*(time|game|test)|reflex\s*test", lambda s, l: _component_game("reaction_game", l), 85),
 
     # UI patterns
     (r"typing\s*(speed|test|practic)|speed\s*typ|wpm\s*test", lambda s, l: _component_typing_test(l), 88),

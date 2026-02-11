@@ -13,6 +13,8 @@ from project_manager import manager
 from preview_server import preview
 from template_registry import match_template, extract_features, explain_match
 from component_assembler import can_assemble, detect_components
+from build_memory import memory, BuildRecord
+from modular_kernel import builder
 
 app = Flask(__name__, template_folder='../frontend', static_folder='../frontend', static_url_path='')
 CORS(app)
@@ -290,6 +292,197 @@ def explain_template():
         "scores": [{"id": tid, "score": s} for tid, s in scores[:5]],
         "explanation": explain_match(description),
     })
+
+
+# ============ Build Memory API ============
+
+@app.route('/api/builds', methods=['GET'])
+def list_builds():
+    """Get recent builds with optional status filter."""
+    status = request.args.get('status')  # 'good', 'bad', or None for all
+    limit = request.args.get('limit', 50, type=int)
+    
+    if status == 'good':
+        builds = memory.get_good_builds(limit)
+    elif status == 'bad':
+        builds = memory.get_bad_builds(limit)
+    else:
+        # Get both
+        good = memory.get_good_builds(limit // 2)
+        bad = memory.get_bad_builds(limit // 2)
+        builds = sorted(good + bad, key=lambda b: b.updated_at, reverse=True)[:limit]
+    
+    return jsonify([{
+        "id": b.id,
+        "description": b.description,
+        "template_used": b.template_used,
+        "components": b.components,
+        "status": b.status,
+        "rejection_reason": b.rejection_reason,
+        "revision": b.revision,
+        "created_at": b.created_at,
+        "updated_at": b.updated_at,
+    } for b in builds])
+
+
+@app.route('/api/builds/<build_id>')
+def get_build(build_id):
+    """Get a specific build."""
+    build = memory.get_build(build_id)
+    if not build:
+        return jsonify({"error": "Build not found"}), 404
+    return jsonify({
+        "id": build.id,
+        "description": build.description,
+        "template_used": build.template_used,
+        "components": build.components,
+        "features": build.features,
+        "answers": build.answers,
+        "status": build.status,
+        "rejection_reason": build.rejection_reason,
+        "revision": build.revision,
+        "parent_id": build.parent_id,
+        "user_edits": build.user_edits,
+        "created_at": build.created_at,
+        "updated_at": build.updated_at,
+    })
+
+
+@app.route('/api/builds/<build_id>/accept', methods=['POST'])
+def accept_build(build_id):
+    """Mark a build as accepted (move to Good store)."""
+    build = memory.accept_build(build_id)
+    if not build:
+        return jsonify({"error": "Build not found"}), 404
+    return jsonify({
+        "success": True,
+        "message": "Build accepted and moved to Good store",
+        "build_id": build.id,
+    })
+
+
+@app.route('/api/builds/<build_id>/reject', methods=['POST'])
+def reject_build(build_id):
+    """Mark a build as rejected (move to Bad store with reason)."""
+    data = request.get_json() or {}
+    reason = data.get('reason', 'Not specified')
+    
+    build = memory.reject_build(build_id, reason)
+    if not build:
+        return jsonify({"error": "Build not found"}), 404
+    return jsonify({
+        "success": True,
+        "message": "Build rejected and moved to Bad store",
+        "build_id": build.id,
+        "reason": reason,
+    })
+
+
+@app.route('/api/builds/<build_id>/delete', methods=['DELETE'])
+def delete_build(build_id):
+    """Soft delete a build with reason."""
+    data = request.get_json() or {}
+    reason = data.get('reason', 'User deleted')
+    
+    build = memory.delete_build(build_id, reason)
+    if not build:
+        return jsonify({"error": "Build not found"}), 404
+    return jsonify({
+        "success": True,
+        "message": "Build marked as deleted",
+        "build_id": build.id,
+        "reason": reason,
+    })
+
+
+@app.route('/api/builds/<build_id>/revise', methods=['POST'])
+def revise_build(build_id):
+    """Create a new revision of an existing build."""
+    data = request.get_json() or {}
+    edits = data.get('edits', {})  # Dict of what the user changed
+    
+    new_build = memory.create_revision(build_id, edits)
+    if not new_build:
+        return jsonify({"error": "Original build not found"}), 404
+    return jsonify({
+        "success": True,
+        "message": f"Created revision {new_build.revision}",
+        "build_id": new_build.id,
+        "revision": new_build.revision,
+        "parent_id": new_build.parent_id,
+    })
+
+
+@app.route('/api/builds/<build_id>/revisions')
+def get_revisions(build_id):
+    """Get the full revision chain for a build."""
+    chain = memory.get_revision_chain(build_id)
+    return jsonify([{
+        "id": b.id,
+        "revision": b.revision,
+        "status": b.status,
+        "user_edits": b.user_edits,
+        "created_at": b.created_at,
+    } for b in chain])
+
+
+@app.route('/api/builds/stats')
+def get_build_stats():
+    """Get statistics about builds."""
+    return jsonify(memory.get_stats())
+
+
+# ============ Modular Kernel API ============
+
+@app.route('/api/compose', methods=['POST'])
+def compose_modular():
+    """Use modular kernel + component architecture to compose an app."""
+    data = request.get_json()
+    description = data.get('description', '').strip()
+    
+    if not description:
+        return jsonify({"error": "No description provided"}), 400
+    
+    result = builder.compose(description)
+    return jsonify(result.to_dict())
+
+
+@app.route('/api/recommendations', methods=['POST'])
+def get_recommendations():
+    """Get recommendations based on description and build history."""
+    data = request.get_json()
+    description = data.get('description', '').strip()
+    
+    if not description:
+        return jsonify({"error": "No description provided"}), 400
+    
+    recommendations = builder.get_recommendations(description)
+    return jsonify(recommendations)
+
+
+@app.route('/api/kernels')
+def list_kernels():
+    """List available kernels."""
+    from modular_kernel import KERNELS
+    return jsonify([{
+        "id": k.id,
+        "name": k.name,
+        "description": k.description,
+        "provides": k.provides,
+    } for k in KERNELS.values()])
+
+
+@app.route('/api/components')
+def list_components():
+    """List available component slots."""
+    from modular_kernel import COMPONENT_SLOTS
+    return jsonify([{
+        "id": c.id,
+        "name": c.name,
+        "category": c.category,
+        "requires": c.requires,
+        "provides": c.provides,
+    } for c in COMPONENT_SLOTS.values()])
 
 
 if __name__ == '__main__':
