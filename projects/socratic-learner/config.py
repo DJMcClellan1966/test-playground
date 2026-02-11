@@ -15,7 +15,7 @@ LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
 
 # Ollama settings (for local LLM)
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b")  # or phi3:mini, gemma2:2b, llama3.2:3b
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")  # Updated to use available model
 OLLAMA_EXTRACT_MODEL = os.environ.get("OLLAMA_EXTRACT_MODEL", OLLAMA_MODEL)
 OLLAMA_STREAM = os.environ.get("OLLAMA_STREAM", "true").lower() == "true"
 OLLAMA_TIMEOUT_SEC = int(os.environ.get("OLLAMA_TIMEOUT_SEC", "300"))

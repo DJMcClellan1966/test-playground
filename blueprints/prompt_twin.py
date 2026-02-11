@@ -91,6 +91,12 @@ from pathlib import Path
 from datetime import datetime
 from collections import Counter, defaultdict
 import hashlib
+import concurrent.futures
+try:
+    from tqdm import tqdm
+    HAS_TQDM = True
+except ImportError:
+    HAS_TQDM = False
 
 # Configuration
 DESKTOP = Path(os.environ.get('USERPROFILE', os.path.expanduser('~'))) / 'OneDrive/Desktop'
@@ -99,6 +105,7 @@ PROFILE_FILE = DATA_DIR / 'profile.json'
 PROMPTS_FILE = DATA_DIR / 'prompts.jsonl'
 FEEDBACK_FILE = DATA_DIR / 'feedback.jsonl'  # Reality feedback loop
 EXPORT_FILE = DATA_DIR / 'context_for_ai.md'
+CACHE_FILE = DATA_DIR / 'scan_cache.json'
 
 # File patterns to scan
 CODE_EXTENSIONS = {'.py', '.js', '.ts', '.cs', '.java', '.cpp', '.c', '.go', '.rs', '.rb', '.php', '.swift', '.kt'}
@@ -418,8 +425,21 @@ class PromptTwin:
         
         return github_data
     
-    def scan_projects(self, root_dir=None):
+    def scan_projects(self, root_dir=None, use_cache=True):
         """Scan directories for project patterns"""
+        # Check cache first
+        if use_cache and CACHE_FILE.exists():
+            try:
+                cache_data = json.loads(CACHE_FILE.read_text(encoding='utf-8'))
+                cache_time = datetime.fromisoformat(cache_data.get('timestamp', '2000-01-01'))
+                if (datetime.now() - cache_time).total_seconds() < 3600:  # 1 hour cache
+                    print("Using cached scan results...")
+                    self.profile.update(cache_data['profile'])
+                    self._save_profile()
+                    return cache_data['projects']
+            except (json.JSONDecodeError, KeyError, ValueError):
+                pass  # Cache invalid, proceed with scan
+        
         # Get scan paths from config if no root specified
         if root_dir:
             roots = [Path(root_dir)]
@@ -438,7 +458,14 @@ class PromptTwin:
             print(f"Scanning {root}...")
             
             # Find project directories (those with code files)
-            for item in root.iterdir():
+            items = list(root.iterdir())
+            if HAS_TQDM:
+                items_iter = tqdm(items, desc="Scanning directories", unit="dir")
+            else:
+                items_iter = items
+                print(f"Scanning {len(items)} directories...")
+            
+            for item in items_iter:
                 if not item.is_dir():
                     continue
                 if item.name.startswith('.'):
@@ -455,6 +482,9 @@ class PromptTwin:
                             break
                 except (OSError, PermissionError) as e:
                     print(f"    Skipping {item.name}: {e}")
+                    continue
+                except Exception as e:
+                    print(f"    Skipping {item.name}: Unexpected error - {e}")
                     continue
                 
                 # Count by extension
@@ -537,20 +567,32 @@ class PromptTwin:
         all_intents = Counter()
         all_md_content = []
         
-        for name, proj in projects_found.items():
-            proj_path = proj['path']
-            
-            # Git commits
+        def extract_project_data(proj_name, proj_path):
+            """Extract git and markdown data for a single project"""
             commits, intents = self._extract_git_history(proj_path)
-            if commits:
-                print(f"    {name}: {len(commits)} commits")
-                all_commits.extend(commits)
-                all_intents.update(intents)
-            
-            # Markdown content
             md_content = self._extract_markdown_content(proj_path)
-            if md_content:
-                all_md_content.extend(md_content)
+            return proj_name, commits, intents, md_content
+        
+        # Use ThreadPoolExecutor for parallel extraction
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(projects_found))) as executor:
+            futures = [executor.submit(extract_project_data, name, proj['path']) for name, proj in projects_found.items()]
+            
+            if HAS_TQDM:
+                futures_iter = tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Extracting data", unit="project")
+            else:
+                futures_iter = concurrent.futures.as_completed(futures)
+            
+            for future in futures_iter:
+                try:
+                    proj_name, commits, intents, md_content = future.result()
+                    if commits:
+                        print(f"    {proj_name}: {len(commits)} commits")
+                        all_commits.extend(commits)
+                        all_intents.update(intents)
+                    if md_content:
+                        all_md_content.extend(md_content)
+                except Exception as e:
+                    print(f"    Error extracting data: {e}")
         
         # Update profile
         self.profile['projects'] = projects_found
@@ -564,6 +606,25 @@ class PromptTwin:
         self.profile['last_scan'] = datetime.now().isoformat()
         
         self._save_profile()
+        
+        # Save to cache
+        cache_data = {
+            'timestamp': datetime.now().isoformat(),
+            'projects': projects_found,
+            'profile': {
+                'projects': projects_found,
+                'technologies': all_techs,
+                'project_types': all_types,
+                'languages': all_langs,
+                'topics': all_topics,
+                'git_commits': all_commits[-200:],
+                'git_intents': all_intents,
+                'md_content': all_md_content,
+                'last_scan': self.profile['last_scan']
+            }
+        }
+        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        CACHE_FILE.write_text(json.dumps(cache_data, default=str, indent=2), encoding='utf-8')
         
         print(f"\nFound {len(projects_found)} projects")
         print(f"Technologies: {dict(all_techs.most_common(10))}")

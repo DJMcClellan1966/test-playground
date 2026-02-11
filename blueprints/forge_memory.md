@@ -6,12 +6,12 @@ It's written in plain markdown so you (and the AI) can read it.
 ## Preferences
 
 - Style: Python-first, Web App, Mobile App, API Service
-- Code patterns: FastAPI, SQLite, PostgreSQL, Ollama, OpenAI
-- Primary languages: .py, .js, .ts
+- Code patterns: Flask, FastAPI, Machine Learning, Auth
+- Primary languages: .py
 - Things I like: (learning from feedback)
 - Things I dislike: (learning from feedback)
 
-<!-- Auto-synced from prompt_twin.py at 2026-02-10 18:11 -->
+<!-- Auto-synced from prompt_twin.py at 2026-02-10 21:13 -->
 
 ## Project History
 

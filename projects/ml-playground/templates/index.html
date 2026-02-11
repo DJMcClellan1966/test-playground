@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <div class="hero-card">
+    <h1>Learn ML by running tiny experiments.</h1>
+    <p>Start with Iris classification, tweak the split and model, and see results instantly.</p>
+    <div class="hero-actions">
+      <a class="btn primary" href="{{ url_for('run_experiment') }}">Run an experiment</a>
+      <a class="btn ghost" href="#recent">See recent runs</a>
+    </div>
+  </div>
+  <div class="hero-card info">
+    <h2>Dataset</h2>
+    <div class="stat-grid">
+      <div>
+        <div class="stat-label">Name</div>
+        <div class="stat-value">{{ dataset.name }}</div>
+      </div>
+      <div>
+        <div class="stat-label">Samples</div>
+        <div class="stat-value">{{ dataset.samples }}</div>
+      </div>
+      <div>
+        <div class="stat-label">Features</div>
+        <div class="stat-value">{{ dataset.features }}</div>
+      </div>
+      <div>
+        <div class="stat-label">Classes</div>
+        <div class="stat-value">{{ dataset.classes | join(', ') }}</div>
+      </div>
+    </div>
+    <p class="muted">{{ dataset.description }}</p>
+  </div>
+</section>
+
+<section class="panel" id="recent">
+  <div class="panel-header">
+    <h2>Recent Experiments</h2>
+    <a class="btn small" href="{{ url_for('run_experiment') }}">New run</a>
+  </div>
+  {% if experiments %}
+  <div class="table">
+    <div class="table-row header">
+      <div>ID</div>
+      <div>Model</div>
+      <div>Accuracy</div>
+      <div>Created</div>
+      <div></div>
+    </div>
+    {% for exp in experiments %}
+      <div class="table-row">
+        <div>#{{ exp.id }}</div>
+        <div>{{ exp.model_name }}</div>
+        <div>{{ exp.metrics.accuracy }}</div>
+        <div>{{ exp.created_at }}</div>
+        <div><a class="link" href="{{ url_for('experiment_detail', experiment_id=exp.id) }}">View</a></div>
+      </div>
+    {% endfor %}
+  </div>
+  {% else %}
+    <p class="muted">No experiments yet. Run your first one.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-header">
+    <h2>Quick Models</h2>
+  </div>
+  <div class="chip-grid">
+    {% for model in models %}
+      <div class="chip">{{ model.label }}</div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+  <div class="panel-header">
+    <h2>Experiment #{{ exp.id }}</h2>
+    <a class="btn small" href="{{ url_for('run_experiment') }}">Run another</a>
+  </div>
+  <div class="meta-row">
+    <div><strong>Model:</strong> {{ exp.model_name }}</div>
+    <div><strong>Created:</strong> {{ exp.created_at }}</div>
+  </div>
+  {% if exp.note %}
+    <p class="note">{{ exp.note }}</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-header">
+    <h2>Metrics</h2>
+  </div>
+  <div class="stat-grid">
+    <div>
+      <div class="stat-label">Accuracy</div>
+      <div class="stat-value">{{ exp.metrics.accuracy }}</div>
+    </div>
+    <div>
+      <div class="stat-label">Precision (macro)</div>
+      <div class="stat-value">{{ exp.metrics.precision_macro }}</div>
+    </div>
+    <div>
+      <div class="stat-label">Recall (macro)</div>
+      <div class="stat-value">{{ exp.metrics.recall_macro }}</div>
+    </div>
+    <div>
+      <div class="stat-label">F1 (macro)</div>
+      <div class="stat-value">{{ exp.metrics.f1_macro }}</div>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-header">
+    <h2>Confusion Matrix</h2>
+  </div>
+  <div class="matrix">
+    {% for row in exp.artifacts.confusion_matrix %}
+      <div class="matrix-row">
+        {% for cell in row %}
+          <div class="matrix-cell">{{ cell }}</div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+  <div class="muted">Classes: {{ exp.artifacts.target_names | join(', ') }}</div>
+</section>
+
+<section class="panel">
+  <div class="panel-header">
+    <h2>Parameters</h2>
+  </div>
+  <pre class="code-block">{{ exp.params | pretty_json }}</pre>
+</section>
+
+<section class="panel">
+  <div class="panel-header">
+    <h2>Classification Report</h2>
+  </div>
+  <pre class="code-block">{{ exp.artifacts.report | pretty_json }}</pre>
+</section>
+{% endblock %}

@@ -1,0 +1,285 @@
+{
+  "timestamp": "2026-02-10T20:57:47.849428",
+  "projects": {
+    "toolbox": {
+      "path": "C:\\Users\\DJMcC\\OneDrive\\Desktop\\toolbox",
+      "name": "toolbox",
+      "files": 806,
+      "technologies": [
+        "Flask",
+        "FastAPI",
+        "Machine Learning",
+        "Auth"
+      ],
+      "types": [
+        "Web App",
+        "Mobile App",
+        "API Service",
+        "ML/AI Project",
+        "Data Pipeline",
+        "Game"
+      ],
+      "languages": [
+        ".py"
+      ]
+    }
+  },
+  "profile": {
+    "projects": {
+      "toolbox": {
+        "path": "C:\\Users\\DJMcC\\OneDrive\\Desktop\\toolbox",
+        "name": "toolbox",
+        "files": 806,
+        "technologies": [
+          "Flask",
+          "FastAPI",
+          "Machine Learning",
+          "Auth"
+        ],
+        "types": [
+          "Web App",
+          "Mobile App",
+          "API Service",
+          "ML/AI Project",
+          "Data Pipeline",
+          "Game"
+        ],
+        "languages": [
+          ".py"
+        ]
+      }
+    },
+    "technologies": {
+      "Flask": 1,
+      "FastAPI": 1,
+      "Machine Learning": 1,
+      "Auth": 1
+    },
+    "project_types": {
+      "Web App": 1,
+      "Mobile App": 1,
+      "API Service": 1,
+      "ML/AI Project": 1,
+      "Data Pipeline": 1,
+      "Game": 1
+    },
+    "languages": {
+      ".py": 231
+    },
+    "topics": {
+      "ml toolbox \ud83d\ude80": 1,
+      "\u2728 **why ml toolbox?**": 1,
+      "\ud83c\udfaf **core value proposition**": 1,
+      "**what makes ml toolbox different?**": 1,
+      "\ud83d\ude80 **quick start**": 1,
+      "**installation**": 1,
+      "install dependencies": 1,
+      "or install essential only": 1,
+      "**5-minute quick start**": 1,
+      "**1. basic ml task (3 lines of code)**": 1
+    },
+    "git_commits": [],
+    "git_intents": {},
+    "md_content": [
+      {
+        "file": "ADAPTIVE_NEURON_GUIDE.md",
+        "project": "toolbox",
+        "headers": [
+          "Adaptive Learning Neuron - Complete Guide",
+          "What You Just Built",
+          "How It Works",
+          "Core Concept",
+          "Learning Process",
+          "Features",
+          "\u2705 Single Neuron",
+          "\u2705 Neural Network",
+          "\u2705 Adaptive Learning",
+          "Usage Examples"
+        ],
+        "descriptions": [
+          "An adaptive learning neuron that combines:\n- Quantum Kernel semantic understanding\n- AI System knowledge storage\n- Neural Network Concepts adaptive weights, learning"
+        ],
+        "todos": []
+      },
+      {
+        "file": "ADAPTIVE_NEURON_USE_CASES.md",
+        "project": "toolbox",
+        "headers": [
+          "Adaptive Neuron - Practical Use Cases",
+          "What Can You Actually Do With It?",
+          "\ud83c\udfaf Use Case 1: Personalized AI Assistant",
+          "Create personal assistant neuron",
+          "Learn user preferences",
+          "Use it",
+          "Neuron knows: user prefers Python, wants code examples, likes concise answers",
+          "\ud83d\uded2 Use Case 2: Smart Recommendation Engine",
+          "E-commerce recommendation neuron",
+          "Learn from user behavior"
+        ],
+        "descriptions": [
+          "The adaptive neuron learns from experience and adapts over time. Here are real, practical applications:"
+        ],
+        "todos": []
+      },
+      {
+        "file": "ADDITIONAL_BOOKS_IMPLEMENTATION_SUMMARY.md",
+        "project": "toolbox",
+        "headers": [
+          "Additional Foundational Books - Implementation Summary",
+          "\u2705 **Implementation Complete**",
+          "\ud83d\udcda **What Was Implemented**",
+          "**1. Algorithm Design Patterns (`algorithm_design_patterns.py`)**",
+          "**AlgorithmDesignPatterns Class**",
+          "**ProblemSolutionMapper Class**",
+          "**BackOfEnvelopeCalculator Class**",
+          "\u2705 **What's Already Covered**",
+          "**Already Implemented:**",
+          "**What This Adds:**"
+        ],
+        "descriptions": [
+          "Additional algorithm design patterns and practical techniques have been implemented from Skiena and Bentley."
+        ],
+        "todos": []
+      },
+      {
+        "file": "ADDITIONAL_FOUNDATIONAL_BOOKS_ANALYSIS.md",
+        "project": "toolbox",
+        "headers": [
+          "Additional Foundational Books - ML Toolbox Analysis",
+          "Overview",
+          "\ud83d\udcda **Categories of Books**",
+          "**1. Theoretical Foundational**",
+          "**2. Practical & Algorithmic Focus**",
+          "**3. Broader AI Context**",
+          "\ud83c\udfaf **High-Value Candidates**",
+          "**1. Skiena \"Algorithm Design Manual\"** \u2b50\u2b50\u2b50\u2b50\u2b50",
+          "**2. Bentley \"Programming Pearls\"** \u2b50\u2b50\u2b50\u2b50",
+          "**3. Goodfellow, Bengio, Courville \"Deep Learning\"** \u2b50\u2b50\u2b50\u2b50\u2b50"
+        ],
+        "descriptions": [
+          "This analysis evaluates additional theoretical foundational, practical & algorithmic, and broader AI context books that could improve the ML Toolbox."
+        ],
+        "todos": []
+      },
+      {
+        "file": "ADDITIONAL_IMPROVEMENTS_ANALYSIS.md",
+        "project": "toolbox",
+        "headers": [
+          "Additional Methods, Theories, and Math to Improve ML Toolbox",
+          "Executive Summary",
+          "\ud83c\udfaf Category 1: Information Theory \u2b50\u2b50\u2b50\u2b50\u2b50",
+          "**Why Important:**",
+          "**Methods to Add:**",
+          "\ud83c\udfaf Category 2: Convex Optimization \u2b50\u2b50\u2b50\u2b50\u2b50",
+          "**Why Important:**",
+          "**Methods to Add:**",
+          "\ud83c\udfaf Category 3: Causal Inference \u2b50\u2b50\u2b50\u2b50",
+          "**Why Important:**"
+        ],
+        "descriptions": [
+          "YES - Several additional methods, theories, and mathematical frameworks would significantly improve the ML Toolbox. This analysis identifies the highest-value additions across multiple categories."
+        ],
+        "todos": []
+      },
+      {
+        "file": "ADDITIONAL_IMPROVEMENTS_SUMMARY.md",
+        "project": "toolbox",
+        "headers": [
+          "Additional Improvements Summary",
+          "\u2705 Completed Improvements",
+          "**1. Better RAG System** \u2b50\u2b50\u2b50\u2b50\u2b50",
+          "**2. Source Attribution** \u2b50\u2b50\u2b50",
+          "**3. Export Functionality** \u2b50\u2b50\u2b50",
+          "**4. Backup Functionality** \u2b50\u2b50\u2b50",
+          "**5. Better Error Messages** \u2b50\u2b50",
+          "\ud83d\ude80 Recommended Next Improvements",
+          "**High Priority:**",
+          "**1. Two-Way Sync** \u2b50\u2b50\u2b50\u2b50\u2b50"
+        ],
+        "descriptions": [],
+        "todos": []
+      },
+      {
+        "file": "ADDITIONAL_KNUTH_IMPROVEMENTS_ANALYSIS.md",
+        "project": "toolbox",
+        "headers": [
+          "Additional Knuth-Like Improvements Analysis",
+          "Overview",
+          "\ud83c\udfaf **High-Priority Additions**",
+          "**1. Numerical Methods (TAOCP Vol. 2)** \u2b50\u2b50\u2b50\u2b50\u2b50",
+          "**2. Advanced Data Structures (TAOCP Vol. 1)** \u2b50\u2b50\u2b50\u2b50",
+          "**3. Dynamic Programming (CLRS)** \u2b50\u2b50\u2b50\u2b50\u2b50",
+          "**4. Greedy Algorithms (CLRS)** \u2b50\u2b50\u2b50\u2b50",
+          "**5. Advanced Graph Algorithms (CLRS/Sedgewick)** \u2b50\u2b50\u2b50\u2b50",
+          "**6. String Algorithms (Advanced)** \u2b50\u2b50\u2b50",
+          "**7. Algorithm Analysis & Optimization** \u2b50\u2b50\u2b50"
+        ],
+        "descriptions": [
+          "After implementing core Knuth TAOCP algorithms, this analysis identifies additional high-value improvements from:\n- TAOCP Volume 2 Seminumerical Algorithms - Numerical methods\n- TAOCP Volume 1 Fundamental Algorithms - Data structures\n- Other foundational CS references CLRS, Sedgewick, Skiena"
+        ],
+        "todos": []
+      },
+      {
+        "file": "ADVANCED_LEARNING_COMPANION.md",
+        "project": "toolbox",
+        "headers": [
+          "Advanced AI Learning Companion",
+          "\ud83d\ude80 What Makes It Advanced",
+          "**Brain Topology** \ud83e\udde0",
+          "**Socratic Method** \ud83e\udd14",
+          "**Information Theory** \ud83d\udcca",
+          "**Adaptive Learning** \ud83c\udfaf",
+          "**Advanced Analytics** \ud83d\udcc8",
+          "\ud83c\udf93 Features",
+          "**1. Advanced Concept Learning**",
+          "**2. Advanced Question Answering**"
+        ],
+        "descriptions": [
+          "The Advanced Learning Companion uses ALL the sophisticated capabilities from your toolbox:"
+        ],
+        "todos": []
+      },
+      {
+        "file": "ADVANCED_LEARNING_SUMMARY.md",
+        "project": "toolbox",
+        "headers": [
+          "Advanced Learning Companion - Summary",
+          "\u2705 What Was Created",
+          "\ud83d\ude80 Key Improvements",
+          "**1. Brain Topology Integration** \ud83e\udde0",
+          "**2. Socratic Method** \ud83e\udd14",
+          "**3. Information Theory** \ud83d\udcca",
+          "**4. Adaptive Learning** \ud83c\udfaf",
+          "**5. Advanced Analytics** \ud83d\udcc8",
+          "\ud83d\udcca What You Get Now",
+          "**Before (Basic):**"
+        ],
+        "descriptions": [
+          "I've transformed the basic learning companion into an AMAZING advanced version that uses ALL your sophisticated toolbox capabilities!"
+        ],
+        "todos": []
+      },
+      {
+        "file": "ADVANCED_PREPROCESSOR_ARCHITECTURE.md",
+        "project": "toolbox",
+        "headers": [
+          "AdvancedDataPreprocessor Architecture",
+          "Overview",
+          "Architecture",
+          "How They Work Together",
+          "Stage 1: Safety Filtering (PocketFence Kernel)",
+          "Line 58-59: Initialize both kernels",
+          "Line 85-91: Check PocketFence availability",
+          "Line 180-203: Use PocketFence for safety filtering",
+          "Stage 2-5: Semantic Processing (Quantum Kernel)",
+          "Line 224: Use Quantum Kernel for embeddings"
+        ],
+        "descriptions": [
+          "Yes, the AdvancedDataPreprocessor is a combination of Quantum Kernel + PocketFence Kernel."
+        ],
+        "todos": []
+      }
+    ],
+    "last_scan": "2026-02-10T20:57:47.834618"
+  }
+}
