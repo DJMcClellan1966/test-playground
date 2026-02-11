@@ -6,11 +6,13 @@ import json
 import os
 
 from smartq import *
+from smartq import total_relevant_count
 from solver import solver
 from codegen import generator
 from project_manager import manager
+from preview_server import preview
 
-app = Flask(__name__, template_folder='../frontend', static_folder='../frontend/static')
+app = Flask(__name__, template_folder='../frontend', static_folder='../frontend', static_url_path='')
 CORS(app)
 app.config['SECRET_KEY'] = 'dev-secret'
 
@@ -57,6 +59,7 @@ def start_wizard():
     
     return jsonify({
         "profile": session['profile'],
+        "total_questions": total_relevant_count({}),
         "next_question": {
             "id": next_q.id,
             "text": next_q.text,
@@ -81,6 +84,7 @@ def answer_question():
         return jsonify({
             "complete": True,
             "answered": answered,
+            "total_questions": total_relevant_count(answered),
         })
     
     # Get next question
@@ -89,6 +93,7 @@ def answer_question():
     return jsonify({
         "complete": False,
         "answered": answered,
+        "total_questions": total_relevant_count(answered),
         "next_question": {
             "id": next_q.id,
             "text": next_q.text,
@@ -98,7 +103,7 @@ def answer_question():
 
 @app.route('/api/generate', methods=['POST'])
 def generate_project():
-    """Generate the app from answers."""
+    """Generate the app from answers and start live preview."""
     profile_data = session.get('profile')
     answered = session.get('answered', {})
     
@@ -110,11 +115,16 @@ def generate_project():
     # Solve for tech stack
     tech_stack = solver.solve(answered, profile.description)
     
-    # Generate code
+    # Generate code — pass description for domain-aware models
     app_name = request.get_json().get('app_name', 'My App')
-    app_py = generator.generate_app_py(app_name, answered)
+    app_py = generator.generate_app_py(app_name, answered, profile.description)
     requirements_txt = generator.generate_requirements_txt(answered)
-    index_html = generator.generate_index_html(app_name, answered)
+    index_html = generator.generate_index_html(app_name, answered, profile.description)
+    
+    # Auto-start live preview server
+    result = preview.start(app_py, requirements_txt, index_html)
+    preview_url = result.get('preview_url', '') if result.get('success') else ''
+    preview_error = result.get('error', '') if not result.get('success') else ''
     
     return jsonify({
         "tech_stack": tech_stack.to_dict(),
@@ -124,44 +134,78 @@ def generate_project():
             "requirements.txt": requirements_txt,
             "templates/index.html": index_html,
         },
+        "preview_url": preview_url,
+        "preview_error": preview_error,
+    })
+
+
+@app.route('/api/regenerate', methods=['POST'])
+def regenerate():
+    """Iterate mode: re-enter questions step keeping existing answers. #6"""
+    answered = session.get('answered', {})
+    profile_data = session.get('profile')
+    if not profile_data:
+        return jsonify({"error": "No profile"}), 400
+
+    # Client sends which answer to change (optional)
+    data = request.get_json() or {}
+    reset_from = data.get('reset_from')  # question id to clear + later ones
+    if reset_from:
+        # Remove this answer and any that depended on it
+        to_remove = []
+        found = False
+        for q in QUESTIONS:
+            if q.id == reset_from:
+                found = True
+            if found:
+                to_remove.append(q.id)
+        for qid in to_remove:
+            answered.pop(qid, None)
+        session['answered'] = answered
+        session.modified = True
+
+    next_q = get_next_question(answered)
+    return jsonify({
+        "answered": answered,
+        "total_questions": total_relevant_count(answered),
+        "next_question": {
+            "id": next_q.id,
+            "text": next_q.text
+        } if next_q else None,
+        "complete": next_q is None,
     })
 
 
 @app.route('/api/save-and-preview', methods=['POST'])
 def save_and_preview():
-    """Save project to disk and start preview server."""
+    """Save project to disk."""
     data = request.get_json()
     app_name = data.get('app_name', 'My App')
-    profile_data = session.get('profile')
-    answered = session.get('answered', {})
+    description = data.get('description', '')
+    answered = data.get('answered', {})
+    files = data.get('files', {})
     
-    if not profile_data:
-        return jsonify({"error": "No profile"}), 400
+    if not files:
+        return jsonify({"error": "No generated files to save"}), 400
     
-    profile = Profile.from_dict(profile_data)
-    
-    # Generate code
-    app_py = generator.generate_app_py(app_name, answered)
-    requirements_txt = generator.generate_requirements_txt(answered)
-    index_html = generator.generate_index_html(app_name, answered)
-    
-    # Save to filesystem
-    project_path = manager.create_project(
-        app_name=app_name,
-        description=profile.description,
-        answers=answered,
-        app_py=app_py,
-        requirements_txt=requirements_txt,
-        index_html=index_html,
-    )
-    
-    # TODO: Start preview server in subprocess
-    
-    return jsonify({
-        "success": True,
-        "project_path": str(project_path),
-        "preview_url": f"file:///{project_path}",
-    })
+    try:
+        project_path = manager.create_project(
+            app_name=app_name,
+            description=description,
+            answers=answered,
+            app_py=files.get('app.py', ''),
+            requirements_txt=files.get('requirements.txt', ''),
+            index_html=files.get('templates/index.html', ''),
+        )
+        
+        return jsonify({
+            "success": True,
+            "project_path": str(project_path),
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/export-github', methods=['POST'])
@@ -178,6 +222,13 @@ def export_github():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/preview/stop', methods=['POST'])
+def stop_preview():
+    """Stop the live preview server."""
+    preview.stop()
+    return jsonify({"success": True})
+
+
 @app.route('/api/projects')
 def list_projects():
     """Get all saved projects."""
@@ -191,4 +242,8 @@ def health():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    try:
+        app.run(debug=True, port=5000)
+    finally:
+        # Clean up preview server on exit
+        preview.stop()

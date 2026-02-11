@@ -1283,6 +1283,9 @@ When the user asks for help:
         # Generate compact context for injection
         context = self._generate_compact_context()
         
+        # Read forge_memory.md for project history & decisions
+        memory_context = self._read_memory_context(target)
+        
         results = []
         
         # 1. Create .cursorrules file (Cursor reads this automatically)
@@ -1318,12 +1321,23 @@ When helping this user:
 - Prefer SQLite for local storage
 - Keep code practical and runnable
 - Local-first when possible (Ollama over cloud APIs)
+{memory_context}
 """
         try:
             copilot_path.write_text(copilot_content, encoding='utf-8')
             results.append(f"✓ Created {copilot_path}")
         except Exception as e:
             results.append(f"✗ Failed to create copilot-instructions.md: {e}")
+        
+        # 2b. Also write to workspace .github/ if we're inside a repo
+        workspace_github = Path(__file__).parent.parent / '.github'
+        if workspace_github.exists() and workspace_github != github_dir:
+            ws_copilot = workspace_github / 'copilot-instructions.md'
+            try:
+                ws_copilot.write_text(copilot_content, encoding='utf-8')
+                results.append(f"✓ Updated workspace {ws_copilot}")
+            except Exception as e:
+                results.append(f"✗ Failed to update workspace copilot-instructions: {e}")
         
         # 3. Create Ollama system prompt wrapper
         ollama_wrapper_path = DATA_DIR / 'ollama_with_context.py'
@@ -1448,6 +1462,52 @@ if __name__ == "__main__":
         lines.append("- Interested in ML/AI, information theory")
         
         return '\n'.join(lines)
+    
+    def _read_memory_context(self, target_dir):
+        """Read forge_memory.md and extract project history, notes, decisions for context injection."""
+        memory_path = Path(__file__).parent / 'forge_memory.md'
+        if not memory_path.exists():
+            return ''
+        
+        try:
+            content = memory_path.read_text(encoding='utf-8')
+        except Exception:
+            return ''
+        
+        sections = []
+        
+        # Extract Project History
+        if '## Project History' in content:
+            block = content.split('## Project History')[1].split('##')[0].strip()
+            entries = [l.strip() for l in block.splitlines() if l.strip()]
+            if entries:
+                # Keep last 10 entries to avoid bloat
+                recent = entries[-10:]
+                sections.append('\n## Recent Project History')
+                for e in recent:
+                    sections.append(e)
+        
+        # Extract Notes & Feedback
+        if '## Notes & Feedback' in content:
+            block = content.split('## Notes & Feedback')[1].split('##')[0].strip()
+            entries = [l.strip() for l in block.splitlines() if l.strip()]
+            if entries:
+                recent = entries[-5:]
+                sections.append('\n## Notes & Feedback')
+                for e in recent:
+                    sections.append(e)
+        
+        # Extract Decisions Made
+        if '## Decisions Made' in content:
+            block = content.split('## Decisions Made')[1].split('##')[0].strip()
+            entries = [l.strip() for l in block.splitlines() if l.strip()]
+            if entries:
+                recent = entries[-5:]
+                sections.append('\n## Decisions Made')
+                for e in recent:
+                    sections.append(e)
+        
+        return '\n'.join(sections) if sections else ''
     
     # ========== WATCH MODE ==========
     

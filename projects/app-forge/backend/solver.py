@@ -1,5 +1,6 @@
 """Constraint solver - Maps app requirements to optimal tech stack."""
 
+from dataclasses import dataclass
 from typing import Dict, Any, List
 
 
@@ -24,9 +25,6 @@ class TechStack:
         }
 
 
-from dataclasses import dataclass
-
-
 class ConstraintSolver:
     """Solves for the best tech stack based on requirements."""
     
@@ -43,11 +41,10 @@ class ConstraintSolver:
         
         notes = []
         
-        # Backend choice (local-first preference = Flask or FastAPI)
+        # Backend choice (local-first = Flask always; codegen only produces Flask)
         backend = "Flask"
         if needs_realtime:
-            backend = "FastAPI"
-            notes.append("FastAPI for async/WebSocket support")
+            notes.append("Flask + flask-socketio for WebSocket support")
         
         # Database choice
         if not needs_db:

@@ -83,6 +83,16 @@ def get_relevant_questions(answered: Dict[str, bool]) -> List[Question]:
     return relevant
 
 
+def total_relevant_count(answered: Dict[str, bool]) -> int:
+    """Total questions that will be asked (answered + remaining). #10 fix."""
+    count = 0
+    for q in QUESTIONS:
+        if q.depends_on and answered.get(q.depends_on, None) is False:
+            continue
+        count += 1
+    return count
+
+
 def get_next_question(answered: Dict[str, bool]) -> Question:
     """Get the very next question to ask."""
     relevant = get_relevant_questions(answered)

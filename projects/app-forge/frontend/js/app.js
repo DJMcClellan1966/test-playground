@@ -28,11 +28,11 @@ const API = {
     return res.json();
   },
 
-  async save(app_name) {
+  async save(app_name, description, answered, files) {
     const res = await fetch('/api/save-and-preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ app_name })
+      body: JSON.stringify({ app_name, description, answered, files })
     });
     return res.json();
   },
@@ -42,6 +42,20 @@ const API = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ project_path, github_url })
+    });
+    return res.json();
+  },
+
+  async stopPreview() {
+    const res = await fetch('/api/preview/stop', { method: 'POST' });
+    return res.json();
+  },
+
+  async regenerate(resetFrom) {
+    const res = await fetch('/api/regenerate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reset_from: resetFrom || null })
     });
     return res.json();
   }
@@ -59,8 +73,8 @@ const UI = {
       <div class="question-card">
         <h2>${question.text}</h2>
         <div class="question-buttons">
-          <button class="btn btn-yes" id="btn-yes">✓ Yes</button>
-          <button class="btn btn-no" id="btn-no">✗ No</button>
+          <button class="btn btn-yes" id="btn-yes">&#10003; Yes</button>
+          <button class="btn btn-no" id="btn-no">&#10007; No</button>
         </div>
       </div>
     `;
@@ -78,26 +92,48 @@ const UI = {
     document.getElementById('question-count').textContent = `Question ${current} of ${total}`;
   },
 
-  showResults(tech_stack, files) {
+  showResults(tech_stack, files, preview_url, preview_error) {
     document.getElementById('stack-backend').textContent = tech_stack.backend;
     document.getElementById('stack-db').textContent = tech_stack.database;
     document.getElementById('stack-frontend').textContent = tech_stack.frontend;
     document.getElementById('stack-auth').textContent = tech_stack.auth;
     
     if (tech_stack.notes && tech_stack.notes.length > 0) {
-      const notesHtml = tech_stack.notes.map(n => `<div class="stack-note">💡 ${n}</div>`).join('');
+      const notesHtml = tech_stack.notes.map(n => `<div class="stack-note">&#128161; ${n}</div>`).join('');
       document.getElementById('stack-notes').innerHTML = notesHtml;
     }
 
-    // Show code preview (just first 30 lines)
-    const app_py = files['app.py'];
-    const preview = app_py.split('\n').slice(0, 30).join('\n') + '\n\n...';
-    document.getElementById('code-preview').textContent = preview;
+    // Live preview in iframe from running server
+    const frame = document.getElementById('preview-frame');
+    const statusEl = document.getElementById('preview-status');
+    
+    if (preview_url) {
+      statusEl.innerHTML = '<span class="status-running">&#9679; Live</span> Your app is running at ' + preview_url;
+      statusEl.style.display = 'block';
+      frame.removeAttribute('srcdoc');
+      frame.removeAttribute('sandbox');
+      frame.src = preview_url;
+    } else if (preview_error) {
+      statusEl.innerHTML = '<span class="status-error">&#9679; Error</span> ' + preview_error;
+      statusEl.style.display = 'block';
+      const html = files['templates/index.html'];
+      if (html) frame.srcdoc = html;
+    } else {
+      const html = files['templates/index.html'];
+      if (html) frame.srcdoc = html;
+      statusEl.style.display = 'none';
+    }
+
+    // #4  Show all files in code tab with file switching
+    State.currentFile = 'app.py';
+    switchFile('app.py');
   },
 
   showSuccess(path) {
     document.getElementById('success-message').style.display = 'block';
-    document.getElementById('success-path').textContent = `📂 Saved to: ${path}`;
+    document.getElementById('success-path').textContent = `Saved to: ${path}`;
+    const cdEl = document.getElementById('success-cd');
+    if (cdEl) cdEl.textContent = path;
   }
 };
 
@@ -111,6 +147,8 @@ const State = {
   files: null,
   totalQuestions: 0,
   questionIndex: 0,
+  projectPath: null,
+  currentFile: 'app.py',
 
   async startWizard() {
     const description = document.getElementById('description').value.trim();
@@ -131,7 +169,7 @@ const State = {
     this.profile = result.profile;
     this.step = 'questions';
     this.questionIndex = 1;
-    this.totalQuestions = 9; // Estimate
+    this.totalQuestions = result.total_questions || 9;  // #10 dynamic count
     
     UI.showStep('questions');
     
@@ -146,16 +184,16 @@ const State = {
     const result = await API.answer(question_id, answer);
     
     this.answered = result.answered;
+    if (result.total_questions) this.totalQuestions = result.total_questions; // #10 dynamic
     
     if (result.complete) {
-      // Generate code
       const generated = await API.generate(this.description);
       this.techStack = generated.tech_stack;
       this.files = generated.files;
       
       this.step = 'review';
       UI.showStep('review');
-      UI.showResults(this.techStack, this.files);
+      UI.showResults(this.techStack, this.files, generated.preview_url, generated.preview_error);
     } else {
       this.questionIndex++;
       this.currentQuestion = result.next_question;
@@ -168,32 +206,105 @@ const State = {
 
   async save() {
     const app_name = document.getElementById('app-name').value || 'My App';
-    const result = await API.save(app_name);
+    const result = await API.save(app_name, this.description, this.answered, this.files);
     
     if (result.success) {
+      this.projectPath = result.project_path;
       UI.showSuccess(result.project_path);
     } else {
-      alert('Error saving: ' + result.error);
+      alert('Error saving: ' + (result.error || 'Unknown error'));
     }
   },
 
   goBack() {
+    API.stopPreview();
     this.step = 'describe';
+    this.projectPath = null;
+    document.getElementById('success-message').style.display = 'none';
+    document.getElementById('preview-frame').removeAttribute('src');
+    document.getElementById('preview-frame').srcdoc = '';
     UI.showStep('describe');
+  },
+
+  // #6 Iterate mode — go back to questions keeping answers
+  async changeAnswers() {
+    API.stopPreview();
+    const result = await API.regenerate();
+    this.answered = result.answered;
+    this.totalQuestions = result.total_questions || this.totalQuestions;
+    this.questionIndex = Object.keys(this.answered).length + 1;
+
+    if (result.complete) {
+      // All questions already answered → just regenerate
+      const generated = await API.generate(this.description);
+      this.techStack = generated.tech_stack;
+      this.files = generated.files;
+      this.step = 'review';
+      UI.showStep('review');
+      UI.showResults(this.techStack, this.files, generated.preview_url, generated.preview_error);
+    } else {
+      this.step = 'questions';
+      this.currentQuestion = result.next_question;
+      UI.showStep('questions');
+      if (this.currentQuestion) {
+        UI.showQuestion(this.currentQuestion);
+        UI.updateQuestionCount(this.questionIndex, this.totalQuestions);
+      }
+    }
   }
 };
+
+// Tab switching for preview/code
+function switchTab(tab) {
+  document.querySelectorAll('.preview-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => {
+    t.classList.remove('active');
+    t.style.display = 'none';
+  });
+  const targetTab = document.querySelector(`.preview-tab[data-tab="${tab}"]`);
+  const targetContent = document.getElementById(`tab-${tab}`);
+  if (targetTab) targetTab.classList.add('active');
+  if (targetContent) {
+    targetContent.classList.add('active');
+    targetContent.style.display = 'block';
+  }
+}
+
+// #4 File switching in code tab
+function switchFile(filename) {
+  document.querySelectorAll('.file-tab').forEach(t => t.classList.remove('active'));
+  const tab = document.querySelector(`.file-tab[data-file="${filename}"]`);
+  if (tab) tab.classList.add('active');
+  const codeEl = document.getElementById('code-preview');
+  if (State.files && State.files[filename]) {
+    codeEl.textContent = State.files[filename];
+  } else {
+    codeEl.textContent = '(no content)';
+  }
+  State.currentFile = filename;
+}
 
 // Init
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-next').addEventListener('click', () => State.startWizard());
   document.getElementById('btn-back').addEventListener('click', () => State.goBack());
+  document.getElementById('btn-back-review').addEventListener('click', () => State.goBack());
+  document.getElementById('btn-change-answers').addEventListener('click', () => State.changeAnswers());
   document.getElementById('btn-save').addEventListener('click', () => State.save());
   
-  document.getElementById('btn-export-github').addEventListener('click', () => {
+  document.getElementById('btn-export-github').addEventListener('click', async () => {
+    if (!State.projectPath) {
+      alert('Please save to desktop first, then export to GitHub.');
+      return;
+    }
     const github_url = prompt('GitHub repo URL (e.g., https://github.com/user/my-app.git):');
     if (github_url) {
-      const app_name = document.getElementById('app-name').value || 'My App';
-      API.exportGithub(State.techStack.project_path, github_url);
+      const result = await API.exportGithub(State.projectPath, github_url);
+      if (result.success) {
+        alert('Successfully pushed to GitHub!');
+      } else {
+        alert('GitHub export error: ' + (result.error || 'Unknown error'));
+      }
     }
   });
 });

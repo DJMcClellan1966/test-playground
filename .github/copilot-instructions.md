@@ -1,12 +1,11 @@
 # Copilot Instructions
 
 ## Developer Profile
-Technologies: Machine Learning, OpenAI, Auth, Flask, SQLite
-Languages: .py(926), .cs(162), .js(116)
-Project Types: ML/AI Project, API Service, Web App
+Technologies: Flask, FastAPI, Machine Learning, Auth
+Languages: .py(231)
+Project Types: Web App, Mobile App, API Service
 GitHub: @DJMcClellan1966 (64 repos)
 GitHub Languages: Python(14), HTML(7), C#(7)
-Commit Style: add new features incrementally
 
 ## Preferences
 - Local-first (Ollama, SQLite)
@@ -19,3 +18,9 @@ Commit Style: add new features incrementally
 - Prefer SQLite for local storage
 - Keep code practical and runnable
 - Local-first when possible (Ollama over cloud APIs)
+
+## Recent Project History
+[2026-02-10 10:55] Created **workout-log** with features: auth
+
+## Notes & Feedback
+[2026-02-10 10:54] I want this to handle recipes with ingredients

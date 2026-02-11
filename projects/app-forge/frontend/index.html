@@ -87,8 +87,22 @@
           </div>
 
           <div class="preview-section">
-            <h3>Code Preview</h3>
-            <div id="code-preview" class="code-preview"></div>
+            <div class="preview-status" id="preview-status" style="display: none;"></div>
+            <div class="preview-tabs">
+              <button class="preview-tab active" data-tab="preview" onclick="switchTab('preview')">Live Preview</button>
+              <button class="preview-tab" data-tab="code" onclick="switchTab('code')">Code</button>
+            </div>
+            <div id="tab-preview" class="tab-content active">
+              <iframe id="preview-frame" class="preview-frame"></iframe>
+            </div>
+            <div id="tab-code" class="tab-content">
+              <div class="file-tabs" id="file-tabs">
+                <button class="file-tab active" data-file="app.py" onclick="switchFile('app.py')">app.py</button>
+                <button class="file-tab" data-file="requirements.txt" onclick="switchFile('requirements.txt')">requirements.txt</button>
+                <button class="file-tab" data-file="templates/index.html" onclick="switchFile('templates/index.html')">index.html</button>
+              </div>
+              <div id="code-preview" class="code-preview"></div>
+            </div>
           </div>
 
           <div class="app-name-form">
@@ -96,7 +110,9 @@
             <input type="text" id="app-name" value="My App" class="input">
           </div>
 
-          <div class="form-group">
+          <div class="form-group button-row">
+            <button id="btn-back-review" class="btn">← Start Over</button>
+            <button id="btn-change-answers" class="btn secondary">↻ Change Answers</button>
             <button id="btn-save" class="btn primary large">Save to Desktop</button>
             <button id="btn-export-github" class="btn secondary large">Export to GitHub</button>
           </div>
@@ -104,7 +120,13 @@
           <div class="success-message" id="success-message" style="display: none;">
             <h3>✓ Saved Successfully!</h3>
             <p id="success-path"></p>
-            <p class="success-next">Next: Run <code>pip install -r requirements.txt && python app.py</code></p>
+            <p class="success-next">
+              To run your app locally:<br>
+              <code>cd <span id="success-cd"></span></code><br>
+              <code>pip install -r requirements.txt</code><br>
+              <code>python app.py</code><br>
+              Then open <code>http://127.0.0.1:5000</code>
+            </p>
           </div>
         </div>
       </div>
