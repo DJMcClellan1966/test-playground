@@ -29,6 +29,14 @@ const TEMPLATE_NAMES = {
   generic_game: "Game",
   generic: "Custom App",
   crud: "Data App (CRUD)",
+  // Arcade games (vanilla JS)
+  snake: "Snake Game",
+  tetris: "Tetris",
+  game_2048: "2048 Puzzle",
+  // Phaser.js games
+  platformer: "Platformer Game",
+  shooter: "Space Shooter",
+  breakout: "Breakout / Brick Breaker",
   // Component assembler types
   password_gen: "Password Generator",
   color_gen: "Color Palette Generator",
