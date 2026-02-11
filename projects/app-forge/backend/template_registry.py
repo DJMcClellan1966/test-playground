@@ -177,6 +177,12 @@ FEATURE_RULES: List[Tuple[str, str, object, float]] = [
     ("breakout",     r"breakout|brick\s*break|arkanoid|paddle.*ball|ball.*paddle|"
                      r"bounce.*ball.*brick|break.*bricks?|pong.*bricks?", "true", 0.95),
 
+    # Simple generators / utilities
+    ("coin_flip",    r"coin\s*flip|flip\s*(a\s*)?coin|heads\s*(or|and)\s*tails|coin\s*toss|toss.*coin", "true", 0.95),
+    ("dice_roller",  r"dice\s*roll|roll(er|ing)?\s*(a\s*)?(die|dice)|die\s*roll|random\s*dice", "true", 0.95),
+    ("typing_test",  r"typing\s*(speed\s*)?(test|game|practice)|speed\s*typ(e|ing)|wpm\s*test|word(s)?\s*per\s*minute", "true", 0.95),
+    ("rps",          r"rock\s*paper\s*scissors|rps\b|roshambo", "true", 0.95),
+
     # Tools
     ("calculator",   r"calculator|calc\b|arithmetic|number\s*crunch|math\s*problems?",          "true",   0.90),
     ("converter",    r"converter|convert\s+unit|unit\s+convert|unit\s*transform|bmi|mortgage|"
@@ -271,7 +277,7 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         tags=["sliding", "puzzle", "tile", "grid", "number", "15-puzzle"],
         required=[],
         boosted=["grid_game", "sliding", "puzzle", "numbered", "grid_size", "tile_content"],
-        anti=["matching", "guessing", "trivia", "calculator", "converter", "data_app"],
+        anti=["matching", "guessing", "trivia", "calculator", "converter", "data_app", "game_2048"],
         base_score=5.0,
     ),
     TemplateEntry(
@@ -289,7 +295,7 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         tags=["memory", "match", "card", "flip", "pairs"],
         required=[],
         boosted=["matching", "grid_game"],
-        anti=["sliding", "guessing", "trivia", "numbered", "data_app"],
+        anti=["sliding", "guessing", "trivia", "numbered", "data_app", "coin_flip", "dice_roller"],
         base_score=5.0,
     ),
     TemplateEntry(
@@ -399,6 +405,43 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         required=["game_2048"],
         boosted=["grid_game", "numbered"],
         anti=["matching", "trivia", "guessing", "data_app"],
+        base_score=12.0,
+    ),
+    # --- Simple Generators / Utilities ---
+    TemplateEntry(
+        id="coin_flip",
+        name="Coin Flipper",
+        tags=["coin", "flip", "heads", "tails", "random"],
+        required=["coin_flip"],
+        boosted=[],
+        anti=["data_app", "grid_game", "puzzle"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
+        id="dice_roller",
+        name="Dice Roller",
+        tags=["dice", "die", "roll", "random", "d6", "d20"],
+        required=["dice_roller"],
+        boosted=[],
+        anti=["data_app", "grid_game", "puzzle"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
+        id="typing_test",
+        name="Typing Speed Test",
+        tags=["typing", "speed", "wpm", "keyboard", "words"],
+        required=["typing_test"],
+        boosted=["reaction"],
+        anti=["data_app", "grid_game", "puzzle"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
+        id="rps",
+        name="Rock Paper Scissors",
+        tags=["rock", "paper", "scissors", "rps", "game"],
+        required=["rps"],
+        boosted=["generic_game"],
+        anti=["data_app", "grid_game", "puzzle"],
         base_score=12.0,
     ),
     # --- Phaser.js Advanced Games ---
