@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>App Forge - AI-Free App Builder</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <div class="logo">🔨 App Forge</div>
+        <div class="tagline">Constraint-driven. AI-free. Working apps.</div>
+      </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="main">
+      <!-- Step 1: Describe -->
+      <div id="step-describe" class="step active">
+        <div class="step-card">
+          <h1>Describe Your App</h1>
+          <p class="step-subtitle">Tell us what you're building. Be specific but natural.</p>
+          
+          <div class="form-group">
+            <textarea 
+              id="description" 
+              placeholder="E.g., A collaborative todo app where teams can assign tasks, set deadlines, and get notifications when tasks change."
+              rows="5"
+              class="textarea"
+            ></textarea>
+          </div>
+
+          <div class="form-group">
+            <button id="btn-next" class="btn primary large">Start Building →</button>
+          </div>
+
+          <div class="example-apps">
+            <p><strong>Examples:</strong></p>
+            <ul>
+              <li>A habit tracker with daily check-ins and progress charts</li>
+              <li>Recipe collection app where I can save recipes and rate them</li>
+              <li>Real-time inventory management for a small store</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Questions -->
+      <div id="step-questions" class="step">
+        <div class="step-card">
+          <h1>Tell Us About Your App</h1>
+          <p class="step-subtitle" id="question-count"></p>
+          
+          <div id="questions-container"></div>
+          
+          <div class="form-group">
+            <button id="btn-back" class="btn">← Back</button>
+            <button id="btn-answer-next" class="btn primary" style="display: none;">Next Question</button>
+            <button id="btn-generate" class="btn primary" style="display: none;">Generate My App →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Review & Export -->
+      <div id="step-review" class="step">
+        <div class="step-card">
+          <h1>Your App is Ready!</h1>
+          
+          <div class="tech-stack">
+            <h3>Recommended Stack</h3>
+            <div class="stack-item">
+              <strong>Backend:</strong> <span id="stack-backend"></span>
+            </div>
+            <div class="stack-item">
+              <strong>Database:</strong> <span id="stack-db"></span>
+            </div>
+            <div class="stack-item">
+              <strong>Frontend:</strong> <span id="stack-frontend"></span>
+            </div>
+            <div class="stack-item">
+              <strong>Auth:</strong> <span id="stack-auth"></span>
+            </div>
+            <div id="stack-notes"></div>
+          </div>
+
+          <div class="preview-section">
+            <h3>Code Preview</h3>
+            <div id="code-preview" class="code-preview"></div>
+          </div>
+
+          <div class="app-name-form">
+            <label>App Name:</label>
+            <input type="text" id="app-name" value="My App" class="input">
+          </div>
+
+          <div class="form-group">
+            <button id="btn-save" class="btn primary large">Save to Desktop</button>
+            <button id="btn-export-github" class="btn secondary large">Export to GitHub</button>
+          </div>
+
+          <div class="success-message" id="success-message" style="display: none;">
+            <h3>✓ Saved Successfully!</h3>
+            <p id="success-path"></p>
+            <p class="success-next">Next: Run <code>pip install -r requirements.txt && python app.py</code></p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
