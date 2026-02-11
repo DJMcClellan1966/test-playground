@@ -54,14 +54,23 @@ FEATURE_RULES: List[Tuple[str, str, object, float]] = [
 
     # Specific games
     ("tictactoe",    r"tic.?tac.?toe|noughts.*crosses|x.?and.?o", "true", 0.95),
-    ("hangman",      r"hangman|word\s*guess",                  "true",   0.95),
+    ("hangman",      r"hangman|word\s*guess|spell\s*(out|a|the)?\s*word|"
+                     r"letter\s*by\s*letter|guess\s*(the\s*)?letters?|"
+                     r"reveal\s*(hidden\s*)?word", "true", 0.95),
     ("snake",        r"snake\s*game",                          "true",   0.90),
     ("wordle",       r"wordle|word\s*puzzle",                  "true",   0.85),
-    ("minesweeper",  r"minesweeper|mine\s*sweep|mines?\s*game|bomb\s*grid|flag\s*mines?", "true", 0.95),
+    ("minesweeper",  r"minesweeper|mine\s*sweep|mines?\s*game|bomb\s*grid|flag\s*mines?|"
+                     r"hidden\s*(bombs?|mines?)|find\s*(the\s*)?(bombs?|mines?)|"
+                     r"bombs?\s*(on|in)\s*(a\s*)?grid", "true", 0.95),
 
     # Tools
     ("calculator",   r"calculator|calc\b|arithmetic",          "true",   0.90),
-    ("converter",    r"converter|convert\s+unit|unit\s+convert|bmi|mortgage", "true", 0.90),
+    ("converter",    r"converter|convert\s+unit|unit\s+convert|bmi|mortgage|"
+                     r"celsius|fahrenheit|temperature|kelvin|"
+                     r"kilometer|mile|inch|centimeter|meter|feet|yard|"
+                     r"pound|kilogram|ounce|gram|"
+                     r"gallon|liter|cup|pint|"
+                     r"currency|dollar|euro|yen", "true", 0.90),
 
     # Content types
     ("tile_content", r"(number|letter|color|image|emoji|picture)\s*(tile|block|piece|square)?", "group:1", 0.80),
@@ -397,28 +406,32 @@ def match_template_hybrid(description: str, semantic_weight: float = 0.5) -> Tup
 def match_template_intent(description: str, 
                           regex_weight: float = 0.3,
                           semantic_weight: float = 0.3,
-                          intent_weight: float = 0.4) -> Tuple[str, Dict[str, Feature], List[Tuple[str, float]]]:
-    """Most advanced matching: combines regex, semantic, and intent graph.
+                          intent_weight: float = 0.3,
+                          glove_weight: float = 0.2) -> Tuple[str, Dict[str, Feature], List[Tuple[str, float]]]:
+    """Most advanced matching: combines regex, semantic, intent graph, and GloVe.
     
     Args:
         description: Natural language app description
         regex_weight: Weight for regex-based feature matching
         semantic_weight: Weight for TF-IDF+BM25+Jaccard
         intent_weight: Weight for Intent Graph (spreading activation)
+        glove_weight: Weight for GloVe word embeddings
     
     Returns:
         (best_template_id, features, all_scores)
     
-    The intent graph adds:
-      - Spreading activation (colored → visual → distractor → reaction_game)
-      - Concept relationships (what implies what)
-      - Multi-hop inference
+    The 4-layer system:
+      1. Regex: Precise keyword/pattern matching
+      2. TF-IDF/BM25: Term frequency and document similarity
+      3. Intent Graph: Multi-hop semantic reasoning
+      4. GloVe: Word embedding similarity (bomb ≈ mine)
     """
     # Normalize weights
-    total = regex_weight + semantic_weight + intent_weight
+    total = regex_weight + semantic_weight + intent_weight + glove_weight
     regex_weight /= total
     semantic_weight /= total
     intent_weight /= total
+    glove_weight /= total
     
     # Get regex-based scores
     features = extract_features(description)
@@ -457,12 +470,27 @@ def match_template_intent(description: str,
         regex_weight += intent_weight / 2
         semantic_weight += intent_weight / 2
     
-    # Combine all three scores
+    # Get GloVe embedding scores
+    glove_scores: Dict[str, float] = {}
+    try:
+        from glove_matcher import glove_match
+        glove_results = glove_match(description, top_k=len(TEMPLATE_REGISTRY))
+        for tid, sim in glove_results:
+            glove_scores[tid] = sim * max_regex
+    except ImportError:
+        glove_weight = 0
+        # Redistribute weight
+        intent_weight += glove_weight / 3
+        semantic_weight += glove_weight / 3
+        regex_weight += glove_weight / 3
+    
+    # Combine all four scores
     combined: List[Tuple[str, float]] = []
     for tmpl in TEMPLATE_REGISTRY:
         r_score = regex_scores.get(tmpl.id, 0)
         s_score = semantic_scores.get(tmpl.id, 0)
         i_score = intent_scores.get(tmpl.id, 0)
+        g_score = glove_scores.get(tmpl.id, 0)
         
         # Skip if regex gave -999 (hard requirement failed)
         if r_score < -100:
@@ -471,7 +499,8 @@ def match_template_intent(description: str,
             final = (
                 regex_weight * r_score +
                 semantic_weight * s_score +
-                intent_weight * i_score
+                intent_weight * i_score +
+                glove_weight * g_score
             )
             combined.append((tmpl.id, round(final, 2)))
     
