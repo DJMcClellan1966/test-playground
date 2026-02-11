@@ -16,6 +16,14 @@ from component_assembler import can_assemble, detect_components
 from build_memory import memory, BuildRecord
 from modular_kernel import builder
 
+# Import classifier (optional ML module)
+try:
+    from classifier import classifier
+    ML_AVAILABLE = True
+except ImportError:
+    classifier = None
+    ML_AVAILABLE = False
+
 app = Flask(__name__, template_folder='../frontend', static_folder='../frontend', static_url_path='')
 CORS(app)
 app.config['SECRET_KEY'] = 'dev-secret'
@@ -483,6 +491,54 @@ def list_components():
         "requires": c.requires,
         "provides": c.provides,
     } for c in COMPONENT_SLOTS.values()])
+
+
+# ============ ML Classifier API ============
+
+@app.route('/api/ml/status')
+def ml_status():
+    """Get ML classifier training status."""
+    if not ML_AVAILABLE or not classifier:
+        return jsonify({
+            "ml_available": False,
+            "error": "scikit-learn not installed or classifier not loaded",
+        })
+    return jsonify(classifier.status())
+
+
+@app.route('/api/ml/train', methods=['POST'])
+def ml_train():
+    """Train all ML classifiers on Good store data."""
+    if not ML_AVAILABLE or not classifier:
+        return jsonify({
+            "success": False,
+            "error": "scikit-learn not installed",
+        }), 400
+    
+    data = request.get_json() or {}
+    force = data.get('force', False)
+    
+    results = classifier.train_all(force=force)
+    return jsonify(results)
+
+
+@app.route('/api/ml/predict', methods=['POST'])
+def ml_predict():
+    """Get ML predictions for a description."""
+    if not ML_AVAILABLE or not classifier:
+        return jsonify({
+            "ml_available": False,
+            "error": "ML not available",
+        })
+    
+    data = request.get_json()
+    description = data.get('description', '').strip()
+    
+    if not description:
+        return jsonify({"error": "No description provided"}), 400
+    
+    predictions = classifier.predict(description)
+    return jsonify(predictions)
 
 
 if __name__ == '__main__':

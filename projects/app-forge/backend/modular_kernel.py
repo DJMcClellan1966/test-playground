@@ -24,6 +24,14 @@ from build_memory import memory, BuildRecord
 from template_registry import extract_features
 from component_assembler import detect_components
 
+# Try to import classifier (optional, graceful fallback)
+try:
+    from classifier import classifier as ml_classifier
+    ML_AVAILABLE = True
+except ImportError:
+    ML_AVAILABLE = False
+    ml_classifier = None
+
 
 # =============================================================================
 # Kernel Definitions
@@ -346,27 +354,51 @@ class ModularBuilder:
     
     def __init__(self):
         self.memory = memory
+        self.use_ml = ML_AVAILABLE
     
     def analyze(self, description: str, answers: Dict[str, bool] = None) -> Dict[str, Any]:
-        """Step 1: Analyze description and extract requirements."""
+        """Step 1: Analyze description and extract requirements.
+        
+        Uses ML classifier if trained, falls back to regex-based detection.
+        """
         answers = answers or {}
         features = extract_features(description)
         desc_lower = description.lower()
         
-        # Infer needs from description
-        needs_realtime = (
-            answers.get("realtime", False) or
-            any(kw in desc_lower for kw in ["realtime", "real-time", "live", "chat", "websocket", "instant"])
-        )
-        needs_auth = (
-            answers.get("needs_auth", False) or
-            any(kw in desc_lower for kw in ["login", "auth", "user", "account", "profile", "password", "sign in", "register"])
-        )
-        needs_data = (
-            answers.get("has_data", False) or
-            "data_app" in features or
-            any(kw in desc_lower for kw in ["database", "store", "save", "crud", "manage", "track", "list", "collection"])
-        )
+        # Try ML-based feature prediction first
+        ml_features = {}
+        ml_confidence = 0.0
+        if self.use_ml and ml_classifier:
+            ml_pred = ml_classifier.feature_clf.predict(description)
+            if ml_pred:
+                ml_features = ml_pred
+                ml_confidence = max(ml_pred.values()) if ml_pred else 0.0
+        
+        # Regex-based detection (fallback or complement)
+        regex_realtime = any(kw in desc_lower for kw in ["realtime", "real-time", "live", "chat", "websocket", "instant"])
+        regex_auth = any(kw in desc_lower for kw in ["login", "auth", "user", "account", "profile", "password", "sign in", "register"])
+        regex_data = "data_app" in features or any(kw in desc_lower for kw in ["database", "store", "save", "crud", "manage", "track", "list", "collection"])
+        regex_search = "search" in desc_lower
+        regex_export = "export" in desc_lower
+        
+        # Combine ML and regex: ML wins if confidence > 0.6, else use OR
+        ml_threshold = 0.6
+        
+        def combine(ml_key: str, regex_val: bool, answer_key: str) -> bool:
+            if answers.get(answer_key):
+                return True
+            ml_prob = ml_features.get(ml_key, 0.0)
+            if ml_prob >= ml_threshold:
+                return True
+            if ml_prob > 0.3 and regex_val:
+                return True  # ML + regex agree
+            return regex_val
+        
+        needs_realtime = combine("needs_realtime", regex_realtime, "realtime")
+        needs_auth = combine("needs_auth", regex_auth, "needs_auth")
+        needs_data = combine("needs_data", regex_data, "has_data")
+        needs_search = combine("needs_search", regex_search, "search")
+        needs_export = combine("needs_export", regex_export, "export")
         
         return {
             "description": description,
@@ -374,12 +406,26 @@ class ModularBuilder:
             "needs_data": needs_data,
             "needs_auth": needs_auth,
             "needs_realtime": needs_realtime,
-            "needs_search": answers.get("search", False) or "search" in desc_lower,
-            "needs_export": answers.get("export", False) or "export" in desc_lower,
+            "needs_search": needs_search,
+            "needs_export": needs_export,
+            "ml_used": bool(ml_features),
+            "ml_confidence": ml_confidence,
         }
     
-    def select_kernel(self, requirements: Dict[str, Any]) -> Kernel:
-        """Step 2: Select the appropriate kernel based on requirements."""
+    def select_kernel(self, requirements: Dict[str, Any], description: str = "") -> Kernel:
+        """Step 2: Select the appropriate kernel based on requirements.
+        
+        Uses ML classifier if trained with high confidence, else rule-based.
+        """
+        # Try ML-based template selection first
+        if self.use_ml and ml_classifier and description:
+            ml_result = ml_classifier.template_clf.predict(description)
+            if ml_result.used_ml and ml_result.confidence >= 0.7:
+                # ML is confident, use its prediction if valid
+                if ml_result.prediction in KERNELS:
+                    return KERNELS[ml_result.prediction]
+        
+        # Rule-based fallback
         if requirements.get("needs_realtime"):
             return KERNELS["flask_realtime"]
         if requirements.get("needs_auth"):
@@ -392,11 +438,18 @@ class ModularBuilder:
         """Step 3: Select components based on description and past successes."""
         components = []
         
-        # Detect components from description
+        # Try ML-based component prediction first
+        if self.use_ml and ml_classifier:
+            ml_components = ml_classifier.component_clf.predict(description, threshold=0.5)
+            for comp_id, prob in ml_components:
+                if comp_id in COMPONENT_SLOTS and comp_id not in components:
+                    components.append(comp_id)
+        
+        # Detect components from description (regex patterns)
         detected = detect_components(description)
         for priority, comp in detected:
             comp_id = comp.get("id")
-            if comp_id and comp_id in COMPONENT_SLOTS:
+            if comp_id and comp_id in COMPONENT_SLOTS and comp_id not in components:
                 components.append(comp_id)
         
         # Add logic components based on requirements
@@ -426,8 +479,8 @@ class ModularBuilder:
         # Step 1: Analyze
         requirements = self.analyze(description, answers)
         
-        # Step 2: Select kernel
-        kernel = self.select_kernel(requirements)
+        # Step 2: Select kernel (pass description for ML-based selection)
+        kernel = self.select_kernel(requirements, description)
         
         # Step 3: Select components
         components = self.select_components(description, requirements)
