@@ -1,12 +1,12 @@
 # App Forge - AI-Free, Constraint-Driven App Builder
 
-Build working Flask apps with natural language + smart questions. No AI hallucination, no visual block editors—just ask what features you need and get a working preview.
+Build working Flask apps with natural language + smart questions. No AI hallucination, no visual block editors—just describe what you want and get a working preview.
 
 ## The Vision
 
 **Your workflow:**
-1. Type: "A todo app where teams collaborate in real-time"
-2. Answer: 5-7 yes/no questions (auth? real-time? mobile?)
+1. Type: "A recipe collection app where I can save recipes with ingredients"
+2. Answer: 2-5 yes/no questions (only what can't be inferred)
 3. Get: Working Flask app with tech stack automatically chosen
 4. Test: Preview runs instantly
 5. Export: Save to desktop or GitHub
@@ -16,7 +16,8 @@ Build working Flask apps with natural language + smart questions. No AI hallucin
 - ✅ Constraint solver picks the right tech (no random choices)
 - ✅ Code is always valid and runnable
 - ✅ You understand every piece
-- ✅ Iterate and rebuild instantly
+- ✅ Learns from your feedback (Good/Bad stores)
+- ✅ Improves with Naive Bayes classification
 
 ## Quick Start
 
@@ -34,17 +35,139 @@ Open **http://127.0.0.1:5000**
 
 ## Architecture
 
-### Backend (`backend/`)
-- **smartq.py** - Question engine (yes/no questionnaire)
-- **solver.py** - Constraint solver (maps answers → tech stack)
-- **codegen.py** - Code generator (Flask boilerplate)
-- **project_manager.py** - Save to disk, git init, push to GitHub
-- **app.py** - Flask API server
+```
+backend/
+├── app.py              # Flask API server (main entry point)
+├── smartq.py           # Question engine with smart inference
+├── solver.py           # Constraint solver (answers → tech stack)
+├── codegen.py          # Code generator (Flask boilerplate)
+├── project_manager.py  # Save to disk, git init, push to GitHub
+├── preview_server.py   # Live preview subprocess management
+├── template_registry.py    # Feature extraction + template matching
+├── component_assembler.py  # Composable UI components (24 types)
+├── modular_kernel.py       # Kernel + Component architecture
+├── build_memory.py         # Good/Bad stores with revision tracking
+├── classifier.py           # Naive Bayes ML for learning
+├── domain_parser.py        # Parse domain models from description
+└── data/
+    ├── build_memory.db     # SQLite: build history
+    └── models/             # Trained classifier models (.pkl)
 
-### Frontend (`frontend/`)
-- **index.html** - 3-step wizard
-- **js/app.js** - State machine + API calls
-- **css/style.css** - Clean UI
+frontend/
+├── index.html          # 3-step wizard
+├── js/app.js           # State machine + API calls
+└── css/style.css       # Clean UI
+```
+
+## Core Components
+
+### 1. Smart Inference (`template_registry.py`)
+Extracts features from natural language descriptions:
+```python
+"a wordle clone" → {word_based: true, game: true, wordle: true}
+"recipe manager with search" → {data_app: true, crud: true, search: true}
+```
+
+### 2. Template Matching (`template_registry.py`)
+Scores templates against extracted features using attention-weighted matching:
+```python
+match_template("password generator")  # → ("generator", 0.95)
+match_template("recipe collection")   # → ("crud_app", 0.87)
+```
+
+### 3. Component Assembly (`component_assembler.py`)
+24 composable UI components for apps not in the template store:
+- **Generators**: password, color palette, dice, coin, quote, lorem, name
+- **Games**: wordle, hangman, tictactoe, memory, sliding puzzle, quiz
+- **UI**: editor, canvas, kanban, chat, flashcard, typing test
+- **Logic**: crud, search, export
+
+### 4. Modular Kernel (`modular_kernel.py`)
+The core algorithm: **Kernel + Components = App**
+
+| Kernel | Description | Provides |
+|--------|-------------|----------|
+| `flask_minimal` | Bare Flask app | routing, templates |
+| `flask_data` | Flask + SQLAlchemy | + database, models |
+| `flask_auth` | Flask + Auth | + login, users, sessions |
+| `flask_realtime` | Flask + SocketIO | + websockets, live updates |
+
+```python
+builder.compose("a realtime chat app")
+# → kernel: flask_realtime, components: ['chat']
+
+builder.compose("a todo list manager")  
+# → kernel: flask_data, components: ['crud']
+```
+
+### 5. Build Memory (`build_memory.py`)
+Persistent storage of all builds with accept/reject tracking:
+
+| Store | Purpose |
+|-------|---------|
+| **Good Store** | Accepted builds with full revision history |
+| **Bad Store** | Rejected/deleted builds with reasons |
+
+```python
+memory.accept_build(build_id)                    # → Good store
+memory.reject_build(build_id, "Code incomplete") # → Bad store
+memory.create_revision(build_id, edits)          # → New version
+memory.get_revision_chain(build_id)              # → Full history
+```
+
+### 6. Naive Bayes Classifier (`classifier.py`)
+Learns from your Good/Bad stores to improve predictions:
+
+| Classifier | Learns |
+|------------|--------|
+| `TemplateClassifier` | Which kernel fits which description |
+| `FeatureClassifier` | Multi-label: needs_auth, needs_data, etc. |
+| `ComponentClassifier` | Which components work well together |
+
+```bash
+# Train on accepted builds
+python classifier.py train
+
+# Predict for new description
+python classifier.py predict "a word guessing game"
+```
+
+## API Reference
+
+### Build Flow
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/start` | POST | Start wizard with description |
+| `/api/answer` | POST | Submit yes/no answer |
+| `/api/generate` | POST | Generate code |
+| `/api/save-and-preview` | POST | Save to disk |
+| `/api/export-github` | POST | Push to GitHub |
+
+### Build Memory
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/builds?status=good\|bad` | GET | List builds by status |
+| `/api/builds/<id>` | GET | Get build details |
+| `/api/builds/<id>/accept` | POST | Move to Good store |
+| `/api/builds/<id>/reject` | POST | Move to Bad store |
+| `/api/builds/<id>/delete` | DELETE | Soft delete with reason |
+| `/api/builds/<id>/revisions` | GET | Get revision history |
+| `/api/builds/stats` | GET | Get build statistics |
+
+### Modular Kernel
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/compose` | POST | Compose app from description |
+| `/api/recommendations` | POST | Get suggestions from history |
+| `/api/kernels` | GET | List available kernels |
+| `/api/components` | GET | List available components |
+
+### ML Classifier
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/ml/status` | GET | Check training status |
+| `/api/ml/train` | POST | Train on Good store |
+| `/api/ml/predict` | POST | Get ML predictions |
 
 ## How It Works
 
@@ -72,28 +195,34 @@ Questions adapt based on previous answers (no useless questions).
 
 ## Tech Stack Selection (Smart)
 
-The constraint solver automatically picks:
+The modular kernel automatically selects based on requirements:
 
-| Need | Choice | Reason |
-|------|--------|--------|
-| No DB needed | — | None |
-| Simple data | SQLite | Local-first, no server |
-| Complex queries | PostgreSQL | Indexes, better performance |
-| Real-time | FastAPI + WebSockets | Async + live updates |
-| Mobile | React + React Native | Code sharing |
-| Auth needed | Session-based | Secure, simple |
+| Description | Kernel | Components |
+|-------------|--------|------------|
+| "a wordle game" | flask_minimal | wordle |
+| "a recipe manager" | flask_data | crud |
+| "a login system" | flask_auth | — |
+| "a chat app" | flask_realtime | chat |
+| "a markdown editor" | flask_minimal | editor |
+| "a kanban board" | flask_data | kanban, crud |
 
-No LLM guessing—pure logic.
+No LLM guessing—pure logic + learned patterns.
 
 ## Generated App Features
 
 Each project includes:
-- ✅ Flask server with basic CRUD
-- ✅ HTML template (editable)
+- ✅ Flask server with routes
+- ✅ HTML template with Tailwind CSS
 - ✅ Database models (if needed)
-- ✅ Authentication routes (if needed)
+- ✅ Authentication (if needed)
+- ✅ UI components (editor, kanban, games, etc.)
 - ✅ `.gitignore` and README
 - ✅ Ready to run immediately
+
+Build tracked in memory for learning:
+- Accept → Good store (used for future training)
+- Reject → Bad store (with reason for analysis)
+- Revise → New version linked to original
 
 ## Full Circle: Save & Export
 
@@ -127,10 +256,17 @@ Done. Your app is live on GitHub.
 
 ## Next Steps (Roadmap)
 
-- [ ] Preview server (auto-start Flask in subprocess)
+- [x] Preview server (auto-start Flask in subprocess)
+- [x] Smart inference from description (skip obvious questions)
+- [x] Template registry with feature extraction
+- [x] Component assembler for novel app types
+- [x] Modular kernel architecture
+- [x] Build memory with Good/Bad stores
+- [x] Naive Bayes classifier for learning
+- [ ] K-means clustering for "similar apps" recommendations
 - [ ] Ollama integration (smart Q generation from description)
-- [ ] More block library (Django, FastAPI templates)
-- [ ] Custom blocks (user-defined patterns)
+- [ ] More kernels (FastAPI, Django)
+- [ ] Custom components (user-defined patterns)
 - [ ] Iterate mode (change answer, regenerate)
 - [ ] Component marketplace (share custom generators)
 
@@ -144,3 +280,4 @@ This builder is **anti-AI** in the right way:
 - No "looks good but broken" code
 - Only composition of proven patterns
 - You own and understand every line
+- **Learning without LLMs** — Naive Bayes on your own data
