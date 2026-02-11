@@ -315,6 +315,9 @@ COMPONENT_SLOTS = {
     "converter": ComponentSlot("converter", "Unit Converter", "ui", requires=["templates"], provides=["calculation"]),
     "timer": ComponentSlot("timer", "Timer/Pomodoro", "ui", requires=["templates"], provides=["timing"]),
     "reaction_game": ComponentSlot("reaction_game", "Reaction Game", "ui", requires=["templates"], provides=["game"]),
+    "simon_game": ComponentSlot("simon_game", "Simon/Grid Click Game", "ui", requires=["templates"], provides=["game"]),
+    "reflex_game": ComponentSlot("reflex_game", "Reflex Game", "ui", requires=["templates"], provides=["game"]),
+    "minesweeper": ComponentSlot("minesweeper", "Minesweeper", "ui", requires=["templates"], provides=["game"]),
     
     # Logic Components
     "crud": ComponentSlot("crud", "CRUD Operations", "logic", requires=["database", "models"], provides=["create", "read", "update", "delete"]),

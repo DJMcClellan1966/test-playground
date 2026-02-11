@@ -666,11 +666,12 @@ COMPONENT_PATTERNS: List[Tuple[str, object, int]] = [
     (r"wordle|word\s*guess|guess\s*the\s*word", lambda s, l: _component_game("wordle", l), 90),
     (r"hangman|hang\s*man", lambda s, l: _component_game("hangman", l), 90),
     (r"tic\s*tac\s*toe|noughts?\s*(and|&)\s*crosses?|x\s*(and|&)\s*o", lambda s, l: _component_game("tictactoe", l), 90),
+    (r"minesweeper|mine\s*sweep|mines?\s*game|bomb\s*grid|flag\s*mines?", lambda s, l: _component_game("minesweeper", l), 90),
     (r"memory\s*(game|card|match)|matching\s*(game|card)|card\s*match", lambda s, l: _component_game("memory_game", l), 88),
     (r"sliding\s*puzzle|tile\s*puzzle|15\s*puzzle|puzzle\s*game", lambda s, l: _component_game("sliding_puzzle", l), 88),
     (r"quiz|trivia|question\s*(game|app)", lambda s, l: _component_game("quiz", l), 85),
     (r"guess\s*(the\s*)?(number|num)|number\s*guess", lambda s, l: _component_game("guess_game", l), 85),
-    (r"reaction\s*(time|game|test)|reflex\s*test", lambda s, l: _component_game("reaction_game", l), 85),
+    (r"reaction\s*(time|game|test)|reflex\s*(test|game)|simon\s*(game|says)?|grid\s*click|click\s*(the\s*)?(green|tile|target)|whack\s*a\s*mole", lambda s, l: _component_game("reaction_game", l), 85),
 
     # UI patterns
     (r"typing\s*(speed|test|practic)|speed\s*typ|wpm\s*test", lambda s, l: _component_typing_test(l), 88),

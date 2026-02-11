@@ -342,7 +342,8 @@ input:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122
     def _standalone_html(self, title, app_type, description):
         # Templates that matched via required features — always trustworthy
         REQUIRED_FEATURE_TEMPLATES = {
-            "tictactoe", "hangman", "wordle", "calculator", "converter", "timer"
+            "tictactoe", "hangman", "wordle", "calculator", "converter", "timer",
+            "reaction_game", "simon_game", "reflex_game", "minesweeper"
         }
 
         # Check the component assembler FIRST for novel apps
@@ -363,7 +364,10 @@ input:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122
             "sliding_puzzle": self._sliding_puzzle_html,
             "hangman": self._hangman_html,
             "wordle": self._wordle_html,
-            "reaction_game": self._generic_game_html,
+            "reaction_game": self._simon_grid_html,
+            "simon_game": self._simon_grid_html,
+            "reflex_game": self._simon_grid_html,
+            "minesweeper": self._minesweeper_html,
             "generic_game": self._generic_game_html,
         }
         gen = generators.get(app_type)
@@ -842,6 +846,194 @@ else if(state==='waiting'){clearTimeout(to);g.className='game-area wait';g.textC
 else if(state==='ready'){var ms=Date.now()-t0;if(ms<best)best=ms;
 document.getElementById('result').textContent=ms+'ms';document.getElementById('best').textContent='Best: '+best+'ms';
 g.className='game-area wait';g.textContent='Click to play again';state='idle';}}"""
+        return self._base_page(title, body, css, js)
+
+    def _simon_grid_html(self, title, desc):
+        """Simon-style grid reaction game with score tracking"""
+        css = """.game-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}
+.score-box{background:#f0f0f0;padding:8px 16px;border-radius:8px;font-weight:600}
+.score-box span{color:#ff7a59;font-size:20px}
+.grid{display:grid;grid-template-columns:repeat(9,1fr);gap:4px;max-width:360px;margin:0 auto 20px}
+.cell{aspect-ratio:1;background:#3498db;border-radius:6px;cursor:pointer;transition:all .15s;border:none}
+.cell:hover{transform:scale(1.05);opacity:0.9}
+.cell.target{background:#2ecc71!important;box-shadow:0 0 12px #2ecc71}
+.cell.distractor{box-shadow:0 0 8px rgba(0,0,0,0.3)}
+.cell.wrong{background:#e74c3c!important;animation:shake .3s}
+.cell.correct{background:#27ae60!important;animation:pulse .2s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+@keyframes pulse{50%{transform:scale(1.15)}}
+.stats{display:flex;gap:20px;justify-content:center;margin:15px 0;font-size:14px;color:#666}
+.game-btn{background:#ff7a59;color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;transition:background .2s}
+.game-btn:hover{background:#e5684a}
+.game-btn:disabled{background:#ccc;cursor:not-allowed}
+.level-indicator{text-align:center;font-size:14px;color:#888;margin-bottom:10px}
+.game-over{text-align:center;padding:20px}
+.game-over h3{color:#e74c3c;margin-bottom:10px}
+.high-score{color:#27ae60;font-weight:600}"""
+        body = """<div class="card">
+    <div class="game-header">
+        <h2>""" + title + """</h2>
+        <div class="score-box">Score: <span id="score">0</span></div>
+    </div>
+    <div class="level-indicator">Level <span id="level">1</span> - Speed: <span id="speed">Normal</span></div>
+    <div id="gameArea">
+        <div class="grid" id="grid"></div>
+        <div class="stats">
+            <span>Hits: <strong id="hits">0</strong></span>
+            <span>Misses: <strong id="misses">0</strong></span>
+            <span>Best: <strong id="best">0</strong></span>
+        </div>
+    </div>
+    <div id="gameOver" class="game-over" style="display:none">
+        <h3>Game Over!</h3>
+        <p>Final Score: <span id="finalScore">0</span></p>
+        <p id="newRecord" class="high-score" style="display:none">🎉 New High Score!</p>
+    </div>
+    <div style="text-align:center;margin-top:15px">
+        <button class="game-btn" id="startBtn" onclick="startGame()">Start Game</button>
+    </div>
+</div>"""
+        js = """var grid,score=0,hits=0,misses=0,level=1,best=parseInt(localStorage.getItem('simonBest')||'0'),
+playing=false,targetCell=null,distractors=[],gameLoop=null,showTime=1500,maxMisses=3;
+var distractorColors=['#e74c3c','#f39c12','#9b59b6','#e91e63','#ff5722'];
+
+function init(){grid=document.getElementById('grid');grid.innerHTML='';
+for(var i=0;i<81;i++){var c=document.createElement('button');c.className='cell';c.dataset.idx=i;
+c.onclick=function(){cellClick(this)};grid.appendChild(c);}
+document.getElementById('best').textContent=best;}
+
+function startGame(){if(playing)return;
+playing=true;score=0;hits=0;misses=0;level=1;showTime=1500;
+document.getElementById('startBtn').textContent='Playing...';
+document.getElementById('startBtn').disabled=true;
+document.getElementById('gameOver').style.display='none';
+document.getElementById('gameArea').style.display='block';
+updateDisplay();nextTarget();}
+
+function clearTiles(){if(targetCell){targetCell.classList.remove('target');targetCell.style.background='';targetCell=null;}
+distractors.forEach(function(d){d.classList.remove('distractor');d.style.background='';});distractors=[];}
+
+function getRandomCells(count,exclude){var cells=grid.querySelectorAll('.cell');var available=[];
+for(var i=0;i<cells.length;i++){if(cells[i]!==exclude)available.push(cells[i]);}
+var result=[];for(var i=0;i<count&&available.length>0;i++){
+var idx=Math.floor(Math.random()*available.length);result.push(available.splice(idx,1)[0]);}
+return result;}
+
+function nextTarget(){if(!playing)return;clearTiles();
+var cells=grid.querySelectorAll('.cell');
+var idx=Math.floor(Math.random()*81);
+targetCell=cells[idx];targetCell.classList.add('target');
+var numDistractors=Math.min(level-1,5);
+if(numDistractors>0){distractors=getRandomCells(numDistractors,targetCell);
+distractors.forEach(function(d,i){d.classList.add('distractor');
+d.style.background=distractorColors[i%distractorColors.length];});}
+gameLoop=setTimeout(function(){if(playing&&targetCell){clearTiles();
+var cells=grid.querySelectorAll('.cell');cells[idx].classList.add('wrong');
+setTimeout(function(){cells[idx].classList.remove('wrong')},200);
+misses++;updateDisplay();if(misses>=maxMisses){endGame();}else{nextTarget();}}},showTime);}
+
+function cellClick(cell){if(!playing)return;
+if(cell===targetCell){clearTimeout(gameLoop);clearTiles();
+cell.classList.add('correct');setTimeout(function(){cell.classList.remove('correct')},150);
+hits++;score+=10*level;
+if(hits%5===0){level++;showTime=Math.max(300,showTime-100);
+document.getElementById('speed').textContent=['Normal','Fast','Faster','Extreme','Insane','ULTRA'][Math.min(level-1,5)];}
+updateDisplay();setTimeout(nextTarget,200);}
+else if(distractors.indexOf(cell)>=0||cell.classList.contains('distractor')){
+cell.classList.add('wrong');setTimeout(function(){cell.classList.remove('wrong')},200);
+misses++;score=Math.max(0,score-10);updateDisplay();if(misses>=maxMisses)endGame();}
+else{cell.classList.add('wrong');setTimeout(function(){cell.classList.remove('wrong')},200);
+misses++;score=Math.max(0,score-5);updateDisplay();if(misses>=maxMisses)endGame();}}
+
+function updateDisplay(){document.getElementById('score').textContent=score;
+document.getElementById('hits').textContent=hits;
+document.getElementById('misses').textContent=misses+'/'+maxMisses;
+document.getElementById('level').textContent=level;}
+
+function endGame(){playing=false;clearTimeout(gameLoop);clearTiles();
+document.getElementById('finalScore').textContent=score;
+if(score>best){best=score;localStorage.setItem('simonBest',best);
+document.getElementById('best').textContent=best;
+document.getElementById('newRecord').style.display='block';}
+else{document.getElementById('newRecord').style.display='none';}
+document.getElementById('gameOver').style.display='block';
+document.getElementById('startBtn').textContent='Play Again';
+document.getElementById('startBtn').disabled=false;}
+
+init();"""
+        return self._base_page(title, body, css, js)
+
+    def _minesweeper_html(self, title, desc):
+        """Classic Minesweeper game with 9x9 grid and 10 mines"""
+        css = """.game-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;padding:0 10px}
+.info-box{background:#f0f0f0;padding:8px 16px;border-radius:8px;font-weight:600;font-size:18px}
+.info-box.mines{color:#e74c3c}.info-box.timer{color:#3498db}
+.grid{display:grid;grid-template-columns:repeat(9,1fr);gap:2px;max-width:324px;margin:0 auto 20px;background:#888;padding:3px;border-radius:6px}
+.cell{width:34px;height:34px;background:#bbb;border:none;font-size:16px;font-weight:700;cursor:pointer;border-radius:3px;transition:all .1s}
+.cell:hover:not(.revealed){background:#ccc}
+.cell.revealed{background:#ddd;cursor:default}
+.cell.mine{background:#e74c3c!important}
+.cell.flag{background:#f1c40f}.cell.flag::after{content:'\1F6A9'}
+.cell.n1{color:#0000ff}.cell.n2{color:#008000}.cell.n3{color:#ff0000}.cell.n4{color:#000080}
+.cell.n5{color:#800000}.cell.n6{color:#008080}.cell.n7{color:#000}.cell.n8{color:#808080}
+.game-over{text-align:center;padding:20px;display:none}
+.game-over h3{margin-bottom:10px}.game-over.win h3{color:#27ae60}.game-over.lose h3{color:#e74c3c}
+.game-btn{background:#ff7a59;color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer}
+.game-btn:hover{background:#e5684a}"""
+        body = """<div class="card">
+    <h2>""" + title + """</h2>
+    <div class="game-header">
+        <div class="info-box mines"><span id="mineCount">10</span></div>
+        <button class="game-btn" onclick="newGame()">New Game</button>
+        <div class="info-box timer"><span id="timer">0</span></div>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="game-over" id="gameOver">
+        <h3 id="endMessage">Game Over</h3>
+        <p>Time: <span id="finalTime">0</span>s</p>
+    </div>
+</div>"""
+        js = """var ROWS=9,COLS=9,MINES=10,grid,revealed,flagged,mines,gameOver,firstClick,timerInterval,seconds;
+function newGame(){grid=document.getElementById('grid');grid.innerHTML='';
+revealed=Array(ROWS).fill().map(()=>Array(COLS).fill(false));
+flagged=Array(ROWS).fill().map(()=>Array(COLS).fill(false));
+mines=[];gameOver=false;firstClick=true;seconds=0;
+clearInterval(timerInterval);document.getElementById('timer').textContent='0';
+document.getElementById('mineCount').textContent=MINES;
+document.getElementById('gameOver').style.display='none';
+document.getElementById('gameOver').className='game-over';
+for(var r=0;r<ROWS;r++)for(var c=0;c<COLS;c++){var cell=document.createElement('button');
+cell.className='cell';cell.dataset.r=r;cell.dataset.c=c;
+cell.onclick=function(){reveal(+this.dataset.r,+this.dataset.c)};
+cell.oncontextmenu=function(e){e.preventDefault();toggleFlag(+this.dataset.r,+this.dataset.c);return false};
+grid.appendChild(cell);}}
+function placeMines(fr,fc){mines=[];while(mines.length<MINES){var r=Math.floor(Math.random()*ROWS),c=Math.floor(Math.random()*COLS);
+if((r===fr&&c===fc)||mines.some(m=>m[0]===r&&m[1]===c))continue;mines.push([r,c]);}}
+function isMine(r,c){return mines.some(m=>m[0]===r&&m[1]===c);}
+function countAdj(r,c){var cnt=0;for(var dr=-1;dr<=1;dr++)for(var dc=-1;dc<=1;dc++){
+var nr=r+dr,nc=c+dc;if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&isMine(nr,nc))cnt++;}return cnt;}
+function getCell(r,c){return grid.children[r*COLS+c];}
+function reveal(r,c){if(gameOver||flagged[r][c]||revealed[r][c])return;
+if(firstClick){firstClick=false;placeMines(r,c);timerInterval=setInterval(function(){seconds++;document.getElementById('timer').textContent=seconds;},1000);}
+revealed[r][c]=true;var cell=getCell(r,c);cell.classList.add('revealed');
+if(isMine(r,c)){cell.classList.add('mine');cell.innerHTML='&#128163;';endGame(false);return;}
+var adj=countAdj(r,c);if(adj>0){cell.textContent=adj;cell.classList.add('n'+adj);}
+else{for(var dr=-1;dr<=1;dr++)for(var dc=-1;dc<=1;dc++){var nr=r+dr,nc=c+dc;
+if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!revealed[nr][nc])reveal(nr,nc);}}
+checkWin();}
+function toggleFlag(r,c){if(gameOver||revealed[r][c])return;
+flagged[r][c]=!flagged[r][c];var cell=getCell(r,c);
+cell.classList.toggle('flag');var cnt=flagged.flat().filter(Boolean).length;
+document.getElementById('mineCount').textContent=MINES-cnt;}
+function checkWin(){var cnt=0;for(var r=0;r<ROWS;r++)for(var c=0;c<COLS;c++)if(revealed[r][c])cnt++;
+if(cnt===ROWS*COLS-MINES)endGame(true);}
+function endGame(won){gameOver=true;clearInterval(timerInterval);
+document.getElementById('finalTime').textContent=seconds;
+document.getElementById('endMessage').textContent=won?'You Win!':'Game Over';
+document.getElementById('gameOver').className='game-over '+(won?'win':'lose');
+document.getElementById('gameOver').style.display='block';
+if(!won)mines.forEach(function(m){var cell=getCell(m[0],m[1]);cell.classList.add('mine');cell.innerHTML='&#128163;';});}
+newGame();"""
         return self._base_page(title, body, css, js)
 
     # --- Generic App (fallback) ---

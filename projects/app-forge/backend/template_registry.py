@@ -48,6 +48,8 @@ FEATURE_RULES: List[Tuple[str, str, object, float]] = [
     ("trivia",       r"quiz|trivia|question\s*(and|&)\s*answer|flashcard", "true", 0.85),
     ("turn_based",   r"turn|player\s*[12]|two\s*player|vs\b", "true",   0.75),
     ("reaction",     r"reaction|reflex|speed\s*test|quick",    "true",   0.85),
+    ("simon",        r"simon|whack.?a.?mole|click\s*(the\s*)?(target|green|tile)|randomly\s*(puts?|shows?|displays?)", "true", 0.95),
+    ("click_target", r"click\s*(it|on|the)|tap\s*(the|on)|hit\s*the", "true", 0.80),
     ("timing",       r"timer|countdown|stopwatch|pomodoro|clock", "true", 0.85),
 
     # Specific games
@@ -55,6 +57,7 @@ FEATURE_RULES: List[Tuple[str, str, object, float]] = [
     ("hangman",      r"hangman|word\s*guess",                  "true",   0.95),
     ("snake",        r"snake\s*game",                          "true",   0.90),
     ("wordle",       r"wordle|word\s*puzzle",                  "true",   0.85),
+    ("minesweeper",  r"minesweeper|mine\s*sweep|mines?\s*game|bomb\s*grid|flag\s*mines?", "true", 0.95),
 
     # Tools
     ("calculator",   r"calculator|calc\b|arithmetic",          "true",   0.90),
@@ -211,12 +214,33 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
     TemplateEntry(
         id="reaction_game",
         name="Reaction Time Game",
-        tags=["reaction", "reflex", "speed", "click"],
+        tags=["reaction", "reflex", "speed", "click", "simon", "whack", "mole", "target", "green"],
         required=[],
-        boosted=["reaction"],
-        anti=["grid_game", "sliding", "puzzle", "matching", "trivia", "guessing",
-              "numbered", "calculator", "converter", "data_app"],
-        base_score=1.0,  # Low: only pick if nothing else matches
+        boosted=["reaction", "simon", "reflex", "click_target"],
+        anti=["sliding", "puzzle", "numbered", "calculator", "converter", "data_app"],
+        base_score=8.0,
+    ),
+    TemplateEntry(
+        id="minesweeper",
+        name="Minesweeper",
+        tags=["minesweeper", "mines", "bomb", "grid", "flag"],
+        required=["minesweeper"],
+        boosted=["grid_game"],
+        anti=["sliding", "matching", "trivia", "guessing", "data_app"],
+        base_score=12.0,
+    ),
+    # --- CRUD / Data Apps ---
+    TemplateEntry(
+        id="crud",
+        name="Data Collection App",
+        tags=["recipe", "task", "todo", "note", "habit", "inventory", "collection", 
+              "tracker", "log", "budget", "expense", "contact", "event", "calendar",
+              "movie", "book", "workout", "grocery", "journal"],
+        required=[],
+        boosted=["data_app"],
+        anti=["grid_game", "sliding", "matching", "guessing", "reaction", "puzzle", 
+              "calculator", "converter", "simon", "minesweeper", "hangman", "wordle"],
+        base_score=6.0,
     ),
     # --- Fallback ---
     TemplateEntry(
@@ -303,4 +327,192 @@ def explain_match(description: str) -> str:
                 break
         lines.append(f"  {s:7.2f}  {name} ({tid}){marker}")
 
+    return "\n".join(lines)
+
+
+# =====================================================================
+# Hybrid Matching (Regex + TF-IDF + BM25 + Jaccard)
+# =====================================================================
+def match_template_hybrid(description: str, semantic_weight: float = 0.5) -> Tuple[str, Dict[str, Feature], List[Tuple[str, float]]]:
+    """Enhanced matching combining regex features with semantic similarity.
+    
+    Args:
+        description: Natural language app description
+        semantic_weight: Weight for TF-IDF+BM25+Jaccard (0.0 = regex only, 1.0 = semantic only)
+    
+    Returns:
+        (best_template_id, features, all_scores)
+    
+    The hybrid score combines:
+      - Regex-based feature matching (structured, precise)
+      - Combined semantic similarity (TF-IDF + BM25 + Jaccard)
+    
+    This catches cases like "different colored tiles" that regex misses,
+    while still respecting hard requirements from regex.
+    """
+    # Get regex-based scores
+    features = extract_features(description)
+    regex_scores: Dict[str, float] = {}
+    for tmpl in TEMPLATE_REGISTRY:
+        regex_scores[tmpl.id] = score_template(tmpl, features)
+    
+    # Get combined semantic scores (TF-IDF + BM25 + Jaccard)
+    semantic_scores: Dict[str, float] = {}
+    try:
+        from tfidf_matcher import combined_match
+        semantic_results = combined_match(description, top_k=len(TEMPLATE_REGISTRY))
+        
+        # Combined scores are normalized 0-1, scale to match regex range (~0-30)
+        max_regex = max(regex_scores.values()) if regex_scores else 1
+        max_regex = max(max_regex, 10)  # Minimum scale factor
+        
+        for tid, sim in semantic_results:
+            semantic_scores[tid] = sim * max_regex
+    except ImportError:
+        # Semantic matcher not available, use regex only
+        semantic_weight = 0.0
+    
+    # Combine scores
+    combined: List[Tuple[str, float]] = []
+    for tmpl in TEMPLATE_REGISTRY:
+        r_score = regex_scores.get(tmpl.id, 0)
+        s_score = semantic_scores.get(tmpl.id, 0)
+        
+        # Skip if regex gave -999 (hard requirement failed)
+        if r_score < -100:
+            combined.append((tmpl.id, r_score))
+        else:
+            final = (1 - semantic_weight) * r_score + semantic_weight * s_score
+            combined.append((tmpl.id, round(final, 2)))
+    
+    combined.sort(key=lambda x: -x[1])
+    best_id = combined[0][0] if combined else "generic_game"
+    
+    return best_id, features, combined
+
+
+# =====================================================================
+# Full Intent Matching (Regex + Semantic + Intent Graph)
+# =====================================================================
+def match_template_intent(description: str, 
+                          regex_weight: float = 0.3,
+                          semantic_weight: float = 0.3,
+                          intent_weight: float = 0.4) -> Tuple[str, Dict[str, Feature], List[Tuple[str, float]]]:
+    """Most advanced matching: combines regex, semantic, and intent graph.
+    
+    Args:
+        description: Natural language app description
+        regex_weight: Weight for regex-based feature matching
+        semantic_weight: Weight for TF-IDF+BM25+Jaccard
+        intent_weight: Weight for Intent Graph (spreading activation)
+    
+    Returns:
+        (best_template_id, features, all_scores)
+    
+    The intent graph adds:
+      - Spreading activation (colored → visual → distractor → reaction_game)
+      - Concept relationships (what implies what)
+      - Multi-hop inference
+    """
+    # Normalize weights
+    total = regex_weight + semantic_weight + intent_weight
+    regex_weight /= total
+    semantic_weight /= total
+    intent_weight /= total
+    
+    # Get regex-based scores
+    features = extract_features(description)
+    regex_scores: Dict[str, float] = {}
+    for tmpl in TEMPLATE_REGISTRY:
+        regex_scores[tmpl.id] = score_template(tmpl, features)
+    
+    # Get scale factor from regex scores
+    max_regex = max(regex_scores.values()) if regex_scores else 1
+    max_regex = max(max_regex, 10)  # Minimum scale factor
+    
+    # Get semantic scores (TF-IDF + BM25 + Jaccard)
+    semantic_scores: Dict[str, float] = {}
+    try:
+        from tfidf_matcher import combined_match
+        semantic_results = combined_match(description, top_k=len(TEMPLATE_REGISTRY))
+        for tid, sim in semantic_results:
+            semantic_scores[tid] = sim * max_regex
+    except ImportError:
+        semantic_weight = 0
+        regex_weight += semantic_weight / 2
+        intent_weight += semantic_weight / 2
+    
+    # Get intent graph scores
+    intent_scores: Dict[str, float] = {}
+    try:
+        from intent_graph import intent_match
+        intent_results = intent_match(description)
+        
+        # Scale intent scores to match regex range
+        max_intent = max(intent_results.values()) if intent_results else 1
+        for tid, score in intent_results.items():
+            intent_scores[tid] = (score / max_intent) * max_regex if max_intent > 0 else 0
+    except ImportError:
+        intent_weight = 0
+        regex_weight += intent_weight / 2
+        semantic_weight += intent_weight / 2
+    
+    # Combine all three scores
+    combined: List[Tuple[str, float]] = []
+    for tmpl in TEMPLATE_REGISTRY:
+        r_score = regex_scores.get(tmpl.id, 0)
+        s_score = semantic_scores.get(tmpl.id, 0)
+        i_score = intent_scores.get(tmpl.id, 0)
+        
+        # Skip if regex gave -999 (hard requirement failed)
+        if r_score < -100:
+            combined.append((tmpl.id, r_score))
+        else:
+            final = (
+                regex_weight * r_score +
+                semantic_weight * s_score +
+                intent_weight * i_score
+            )
+            combined.append((tmpl.id, round(final, 2)))
+    
+    combined.sort(key=lambda x: -x[1])
+    best_id = combined[0][0] if combined else "generic_game"
+    
+    return best_id, features, combined
+
+
+def explain_intent_match(description: str) -> str:
+    """Human-readable explanation of intent-based matching."""
+    best_id, features, scores = match_template_intent(description)
+    
+    lines = [f"Description: \"{description}\"", ""]
+    
+    # Regex features
+    lines.append("Regex Features Extracted:")
+    for f in list(features.values())[:5]:
+        lines.append(f"  {f}")
+    
+    # Intent graph activation
+    try:
+        from intent_graph import intent_explain
+        intent_info = intent_explain(description)
+        lines.append("")
+        lines.append("Intent Graph Activation:")
+        lines.append(f"  Initial: {list(intent_info['initial_activation'].keys())[:5]}")
+        lines.append(f"  Spread:  {list(intent_info['spread_activation'].keys())[:8]}")
+    except ImportError:
+        pass
+    
+    # Final scores
+    lines.append("")
+    lines.append("Combined Template Scores (top 5):")
+    for tid, s in scores[:5]:
+        marker = " ← SELECTED" if tid == best_id else ""
+        name = tid
+        for t in TEMPLATE_REGISTRY:
+            if t.id == tid:
+                name = t.name
+                break
+        lines.append(f"  {s:7.2f}  {name} ({tid}){marker}")
+    
     return "\n".join(lines)

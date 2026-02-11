@@ -158,11 +158,31 @@ def generate_project():
     # Solve for tech stack
     tech_stack = solver.solve(answered, profile.description)
     
+    # Detect template for history
+    best_template, features, _ = match_template(profile.description)
+    
     # Generate code — pass description for domain-aware models
     app_name = request.get_json().get('app_name', 'My App')
     app_py = generator.generate_app_py(app_name, answered, profile.description)
     requirements_txt = generator.generate_requirements_txt(answered)
     index_html = generator.generate_index_html(app_name, answered, profile.description)
+    
+    # Auto-save to build history
+    try:
+        import hashlib
+        code_hash = hashlib.md5(app_py.encode()).hexdigest()[:16]
+        record = BuildRecord(
+            description=profile.description,
+            template_used=best_template,
+            features={k: f.value for k, f in features.items()},
+            answers=answered,
+            generated_code_hash=code_hash,
+            status='pending',
+        )
+        session['current_build_id'] = memory.save(record)
+        session.modified = True
+    except Exception as e:
+        print(f"Failed to save build history: {e}")
     
     # Auto-start live preview server
     result = preview.start(app_py, requirements_txt, index_html)
@@ -170,7 +190,7 @@ def generate_project():
     preview_error = result.get('error', '') if not result.get('success') else ''
     
     return jsonify({
-        "tech_stack": tech_stack.to_dict(),
+        "tech_stack": {**tech_stack.to_dict(), "template": best_template},
         "app_name": app_name,
         "files": {
             "app.py": app_py,
@@ -240,6 +260,14 @@ def save_and_preview():
             requirements_txt=files.get('requirements.txt', ''),
             index_html=files.get('templates/index.html', ''),
         )
+        
+        # Mark build as accepted in history
+        build_id = session.get('current_build_id')
+        if build_id:
+            try:
+                memory.mark_status(build_id, 'accepted')
+            except Exception:
+                pass
         
         return jsonify({
             "success": True,
@@ -539,6 +567,65 @@ def ml_predict():
     
     predictions = classifier.predict(description)
     return jsonify(predictions)
+
+
+# =============================================================================
+# Build History API
+# =============================================================================
+
+@app.route('/api/history', methods=['GET'])
+def get_history():
+    """Get build history."""
+    try:
+        builds = memory.get_recent(limit=50)
+        return jsonify({
+            "builds": [
+                {
+                    "id": b.id,
+                    "description": b.description,
+                    "template_used": b.template_used,
+                    "status": b.status,
+                    "created_at": b.created_at,
+                    "revision": b.revision,
+                }
+                for b in builds
+            ]
+        })
+    except Exception as e:
+        return jsonify({"builds": [], "error": str(e)})
+
+
+@app.route('/api/history/save', methods=['POST'])
+def save_to_history():
+    """Save a build to history."""
+    data = request.get_json()
+    description = data.get('description', '')
+    template = data.get('template', 'unknown')
+    status = data.get('status', 'pending')
+    reason = data.get('reason', '')
+    
+    try:
+        record = BuildRecord(
+            description=description,
+            template_used=template,
+            status=status,
+            rejection_reason=reason,
+            answers=session.get('answered', {}),
+        )
+        build_id = memory.save(record)
+        return jsonify({"success": True, "id": build_id})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/history/<int:build_id>', methods=['DELETE'])
+def delete_from_history(build_id):
+    """Delete a build from history."""
+    try:
+        memory.mark_status(build_id, 'deleted', 'User deleted')
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 
 if __name__ == '__main__':

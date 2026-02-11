@@ -104,6 +104,25 @@ const API = {
       body: JSON.stringify({ reset_from: resetFrom || null })
     });
     return res.json();
+  },
+
+  async saveBuild(description, template, status, reason) {
+    const res = await fetch('/api/history/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description, template, status, reason })
+    });
+    return res.json();
+  },
+
+  async getHistory() {
+    const res = await fetch('/api/history');
+    return res.json();
+  },
+
+  async deleteBuild(id) {
+    const res = await fetch('/api/history/' + id, { method: 'DELETE' });
+    return res.json();
   }
 };
 
@@ -361,6 +380,69 @@ const State = {
         UI.updateQuestionCount(this.questionIndex, this.totalQuestions);
       }
     }
+  },
+
+  showEditPanel() {
+    const panel = document.getElementById('edit-panel');
+    const editDesc = document.getElementById('edit-description');
+    editDesc.value = this.description;
+    panel.style.display = 'block';
+  },
+
+  hideEditPanel() {
+    document.getElementById('edit-panel').style.display = 'none';
+  },
+
+  async applyEdit() {
+    const newDesc = document.getElementById('edit-description').value.trim();
+    if (newDesc.length < 10) {
+      alert('Please provide at least 10 characters');
+      return;
+    }
+
+    // Save as revision in history
+    await API.saveBuild(this.description, this.techStack?.template || 'unknown', 'revised', 
+      'Edited to: ' + newDesc.substring(0, 50));
+
+    // Restart with new description
+    API.stopPreview();
+    this.hideEditPanel();
+    document.getElementById('description').value = newDesc;
+    this.description = newDesc;
+    
+    // Clear current state
+    document.getElementById('success-message').style.display = 'none';
+    document.getElementById('preview-frame').removeAttribute('src');
+    document.getElementById('preview-frame').srcdoc = '';
+    
+    // Rebuild
+    await this.startWizard();
+  },
+
+  async showHistory() {
+    const result = await API.getHistory();
+    const list = document.getElementById('history-list');
+    
+    if (!result.builds || result.builds.length === 0) {
+      list.innerHTML = '<div class="empty-history">No builds yet. Start building apps to see them here.</div>';
+    } else {
+      list.innerHTML = result.builds.map(b => `
+        <div class="history-item" data-id="${b.id}">
+          <div class="history-item-header">
+            <span class="history-item-title">${b.template_used || 'Custom App'}</span>
+            <span class="history-item-date">${new Date(b.created_at).toLocaleDateString()}</span>
+          </div>
+          <div class="history-item-desc">${b.description.substring(0, 100)}${b.description.length > 100 ? '...' : ''}</div>
+          <span class="history-item-status ${b.status}">${b.status}</span>
+          <div class="history-item-actions">
+            <button class="btn" onclick="loadFromHistory(${b.id}, '${b.description.replace(/'/g, "\\'")}')">Load</button>
+            <button class="btn" onclick="deleteFromHistory(${b.id})">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    document.getElementById('history-modal').style.display = 'flex';
   }
 };
 
@@ -401,6 +483,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-back-review').addEventListener('click', () => State.goBack());
   document.getElementById('btn-change-answers').addEventListener('click', () => State.changeAnswers());
   document.getElementById('btn-save').addEventListener('click', () => State.save());
+  
+  // Edit description buttons
+  document.getElementById('btn-edit-description').addEventListener('click', () => State.showEditPanel());
+  document.getElementById('btn-cancel-edit').addEventListener('click', () => State.hideEditPanel());
+  document.getElementById('btn-apply-edit').addEventListener('click', () => State.applyEdit());
+  
+  // History button
+  document.getElementById('btn-history').addEventListener('click', () => State.showHistory());
 
   document.getElementById('btn-export-github').addEventListener('click', async () => {
     if (!State.projectPath) {
@@ -418,3 +508,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// History modal functions
+function closeHistoryModal() {
+  document.getElementById('history-modal').style.display = 'none';
+}
+
+async function loadFromHistory(id, description) {
+  closeHistoryModal();
+  document.getElementById('description').value = description;
+  State.description = description;
+  State.goBack();
+  // Small delay then start wizard
+  setTimeout(() => State.startWizard(), 100);
+}
+
+async function deleteFromHistory(id) {
+  if (!confirm('Delete this build from history?')) return;
+  await API.deleteBuild(id);
+  State.showHistory(); // Refresh list
+}

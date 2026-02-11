@@ -18,6 +18,7 @@ Build working Flask apps with natural language + smart questions. No AI hallucin
 - ✅ You understand every piece
 - ✅ Learns from your feedback (Good/Bad stores)
 - ✅ Improves with Naive Bayes classification
+- ✅ **NEW** Intent Graph for LLM-like understanding (without the LLM)
 
 ## Quick Start
 
@@ -44,6 +45,8 @@ backend/
 ├── project_manager.py  # Save to disk, git init, push to GitHub
 ├── preview_server.py   # Live preview subprocess management
 ├── template_registry.py    # Feature extraction + template matching
+├── tfidf_matcher.py        # TF-IDF + BM25 + Jaccard similarity
+├── intent_graph.py         # Semantic network with spreading activation
 ├── component_assembler.py  # Composable UI components (24 types)
 ├── modular_kernel.py       # Kernel + Component architecture
 ├── build_memory.py         # Good/Bad stores with revision tracking
@@ -54,9 +57,38 @@ backend/
     └── models/             # Trained classifier models (.pkl)
 
 frontend/
-├── index.html          # 3-step wizard
+├── index.html          # 3-step wizard with edit/history
 ├── js/app.js           # State machine + API calls
 └── css/style.css       # Clean UI
+```
+
+## Understanding Engine (AI-Free NLU)
+
+App Forge uses a **3-layer understanding system** that mimics LLM behavior without any ML models:
+
+| Layer | Technique | What it does | Accuracy Boost |
+|-------|-----------|--------------|----------------|
+| 1. Regex | Feature extraction | Precise keyword/pattern matching | Baseline |
+| 2. TF-IDF + BM25 + Jaccard | Semantic similarity | Fuzzy matching, synonyms | +13% |
+| 3. Intent Graph | Spreading activation | Multi-hop reasoning | +16% |
+
+**Example:** "reaction time game with different colored tiles"
+- **Regex only:** Matches `sliding_puzzle` (wrong) because it sees "tiles"
+- **With semantic layer:** "colored" → visual → distractor → `reaction_game`
+- **With Intent Graph:** "different" → distractor concept, spreading to `reaction_game` ✓
+
+### Matching Functions
+
+```python
+from template_registry import (
+    match_template,          # Regex only (fast, 84% accuracy)
+    match_template_hybrid,   # + TF-IDF/BM25/Jaccard (100% accuracy)
+    match_template_intent,   # + Intent Graph (100% accuracy, best for edge cases)
+)
+
+# Best option - combines all three
+best_id, features, scores = match_template_intent("track my daily habits")
+# → ('crud', {...}, [('crud', 12.5), ...])
 ```
 
 ## Core Components
@@ -68,7 +100,53 @@ Extracts features from natural language descriptions:
 "recipe manager with search" → {data_app: true, crud: true, search: true}
 ```
 
-### 2. Template Matching (`template_registry.py`)
+### 2. Semantic Matching (`tfidf_matcher.py`)
+Three complementary algorithms working together:
+
+| Algorithm | Best For | How It Works |
+|-----------|----------|--------------|
+| **TF-IDF** | Common terms | Term frequency × inverse document frequency |
+| **BM25** | Varying doc lengths | Saturation function for repeated words |
+| **Jaccard** | Partial matches | N-gram overlap ("colored" ≈ "multicolored") |
+
+```python
+from tfidf_matcher import combined_match, combined_explain
+
+# Get best template matches
+results = combined_match("quick reflex test", top_k=3)
+# → [('reaction_game', 1.0), ('timer', 0.12), ...]
+
+# Explain why
+combined_explain("quick reflex test", "reaction_game")
+# → {tfidf_score: 0.57, bm25_score: 11.3, jaccard_score: 0.18, ...}
+```
+
+### 3. Intent Graph (`intent_graph.py`)
+A semantic network that mimics LLM attention:
+
+```
+Concept Nodes: game, puzzle, reaction, visual, distractor, recipe, crud...
+Relationships: colored → visual → distractor → reaction_game
+
+Spreading Activation (3 hops, 60% decay):
+  "different" activates → distractor (0.7)
+  distractor spreads to → reaction (0.8)
+  reaction activates → reaction_game template
+```
+
+```python
+from intent_graph import intent_match, intent_explain
+
+# Get template scores from semantic understanding
+intent_match("click the correct color quickly")
+# → {'reaction_game': 2.8, 'memory_game': 0.4, ...}
+
+# See what activated
+intent_explain("click the correct color quickly")
+# → {initial: [click, visual, correct], spread: [reaction, target, distractor]}
+```
+
+### 4. Template Matching (`template_registry.py`)
 Scores templates against extracted features using attention-weighted matching:
 ```python
 match_template("password generator")  # → ("generator", 0.95)

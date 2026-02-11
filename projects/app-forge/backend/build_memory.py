@@ -446,6 +446,30 @@ class BuildMemory:
             stats["avg_revisions"] = round(row[0], 2) if row[0] else 1.0
             
             return stats
+    
+    def get_recent(self, limit: int = 50) -> List[BuildRecord]:
+        """Get recent builds (excluding deleted)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                SELECT * FROM builds WHERE status != 'deleted'
+                ORDER BY created_at DESC LIMIT ?
+            """, (limit,))
+            return [self._row_to_record(row) for row in cursor.fetchall()]
+    
+    def save(self, record: BuildRecord) -> int:
+        """Alias for save_build."""
+        return self.save_build(record)
+    
+    def mark_status(self, build_id: int, status: str, reason: str = "") -> BuildRecord:
+        """Mark a build with a specific status."""
+        record = self.get_build(build_id)
+        if record:
+            record.status = status
+            if reason:
+                record.rejection_reason = reason
+            record.updated_at = datetime.utcnow().isoformat()
+            self.update_build(record)
+        return record
 
 
 # Singleton instance

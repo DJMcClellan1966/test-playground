@@ -113,11 +113,25 @@
             <input type="text" id="app-name" value="My App" class="input">
           </div>
 
+          <!-- Edit Description Panel -->
+          <div id="edit-panel" class="edit-panel" style="display:none;">
+            <label>Edit Description:</label>
+            <textarea id="edit-description" class="textarea" rows="3"></textarea>
+            <div class="edit-buttons">
+              <button id="btn-cancel-edit" class="btn">Cancel</button>
+              <button id="btn-apply-edit" class="btn primary">Rebuild with Changes</button>
+            </div>
+          </div>
+
           <div class="form-group button-row">
             <button id="btn-back-review" class="btn">← Start Over</button>
+            <button id="btn-edit-description" class="btn secondary">✏️ Edit Description</button>
             <button id="btn-change-answers" class="btn secondary">↻ Change Answers</button>
             <button id="btn-save" class="btn primary large">Save to Desktop</button>
             <button id="btn-export-github" class="btn secondary large">Export to GitHub</button>
+          </div>
+          <div class="form-group button-row">
+            <button id="btn-history" class="btn">📋 Build History</button>
           </div>
 
           <div class="success-message" id="success-message" style="display: none;">
@@ -134,6 +148,17 @@
         </div>
       </div>
     </main>
+
+    <!-- History Modal -->
+    <div id="history-modal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Build History</h2>
+          <button class="modal-close" onclick="closeHistoryModal()">&times;</button>
+        </div>
+        <div id="history-list" class="history-list"></div>
+      </div>
+    </div>
   </div>
 
   <script src="/js/app.js"></script>
