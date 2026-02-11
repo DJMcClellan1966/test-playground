@@ -72,3 +72,7 @@ htmlcov/
 
 # Generated knowledge files (optional - uncomment to ignore)
 # projects/socratic-learner/knowledge/
+# SQLite databases and local data
+*.db
+projects/ml-playground/data/
+projects/learning-app/data/
