@@ -12,6 +12,7 @@ from codegen import generator, detect_app_type
 from project_manager import manager
 from preview_server import preview
 from template_registry import match_template, extract_features, explain_match
+from component_assembler import can_assemble, detect_components
 
 app = Flask(__name__, template_folder='../frontend', static_folder='../frontend', static_url_path='')
 CORS(app)
@@ -55,6 +56,19 @@ def start_wizard():
     # Detect what template will be used (for frontend display)
     best_template, features, scores = match_template(description)
     feature_summary = {k: f.value for k, f in features.items()}
+
+    # If data_app features dominate, the actual path is CRUD, not a game
+    if "data_app" in features and scores[0][1] < 5:
+        best_template = "crud"
+
+    # Check if the component assembler can handle this (novel apps)
+    assembled = False
+    assembled_component = None
+    REQUIRED_FEATURE_TEMPLATES = {"tictactoe", "hangman", "wordle", "calculator", "converter", "timer"}
+    comps = detect_components(description)
+    if comps and comps[0][0] >= 80 and best_template not in REQUIRED_FEATURE_TEMPLATES:
+        assembled = True
+        assembled_component = comps[0][1]["id"]
     
     # Create profile
     profile = Profile(description)
@@ -76,8 +90,9 @@ def start_wizard():
             "text": next_q.text,
         } if next_q else None,
         "detected": {
-            "template": best_template,
+            "template": assembled_component if assembled else best_template,
             "features": feature_summary,
+            "assembled": assembled,
         },
     })
 

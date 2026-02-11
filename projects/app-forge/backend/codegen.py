@@ -12,6 +12,7 @@ import re
 from typing import Dict, List
 from domain_parser import DomainModel, parse_description
 from template_registry import match_template, extract_features
+from component_assembler import can_assemble, assemble_html
 
 
 def detect_app_type(description: str) -> str:
@@ -339,6 +340,18 @@ input:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122
 </html>"""
 
     def _standalone_html(self, title, app_type, description):
+        # Templates that matched via required features — always trustworthy
+        REQUIRED_FEATURE_TEMPLATES = {
+            "tictactoe", "hangman", "wordle", "calculator", "converter", "timer"
+        }
+
+        # Check the component assembler FIRST for novel apps
+        # Only override speculative template matches (not required-feature ones)
+        # min_priority=80 avoids weak generic-generator false positives
+        if app_type not in REQUIRED_FEATURE_TEMPLATES:
+            if can_assemble(description, min_priority=80):
+                return assemble_html(title, description)
+
         generators = {
             "guess_game": self._guess_game_html,
             "quiz": self._quiz_html,
@@ -353,8 +366,16 @@ input:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122
             "reaction_game": self._generic_game_html,
             "generic_game": self._generic_game_html,
         }
-        gen = generators.get(app_type, self._generic_app_html)
-        return gen(title, description)
+        gen = generators.get(app_type)
+        if gen:
+            return gen(title, description)
+
+        # Last resort: check assembler with any priority
+        if can_assemble(description):
+            return assemble_html(title, description)
+
+        # Absolute fallback
+        return self._generic_app_html(title, description)
 
     # --- Guess the Number ---
     def _guess_game_html(self, title, desc):

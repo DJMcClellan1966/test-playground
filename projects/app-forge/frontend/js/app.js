@@ -28,6 +28,22 @@ const TEMPLATE_NAMES = {
   reaction_game: "Reaction Time Game",
   generic_game: "Game",
   generic: "Custom App",
+  crud: "Data App (CRUD)",
+  // Component assembler types
+  password_gen: "Password Generator",
+  color_gen: "Color Palette Generator",
+  name_gen: "Name Generator",
+  quote_gen: "Quote Generator",
+  dice_roller: "Dice Roller",
+  coin_flip: "Coin Flipper",
+  lorem_gen: "Lorem Ipsum Generator",
+  generic_gen: "Random Generator",
+  typing_test: "Typing Speed Test",
+  flashcard: "Flashcard Study Tool",
+  kanban: "Kanban Board",
+  chat: "Chat Interface",
+  canvas: "Drawing / Whiteboard",
+  editor: "Text Editor",
 };
 
 const API = {

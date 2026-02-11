@@ -92,6 +92,19 @@ INFERENCE_RULES = [
       "realtime": False, "search": False, "export": False, "mobile": False,
       "performance_critical": False}),
 
+    # --- Component-assembler apps (generators, tools, creative) ---
+    (r"password\s*(gen|creat|mak|random)|color\s*(palette|gen|pick)|palette\s*gen|"
+     r"dice\s*(roll|throw)|roll\s*dice|coin\s*(flip|toss)|flip\s*coin|"
+     r"quote\s*(gen|random|daily)|random\s*quote|lorem\s*ipsum|placeholder\s*text|"
+     r"name\s*gen|random\s*name|typing\s*(speed|test)|speed\s*typ|wpm\s*test|"
+     r"flashcard|study\s*card|kanban|task\s*board|project\s*board|"
+     r"draw(ing)?\s*(app|tool|pad)?|whiteboard|sketch|paint|doodle|"
+     r"(markdown|text|note|code)\s*(editor|writer|pad)|notepad|scratchpad|"
+     r"chat\s*(room|app|interface)|messaging|messenger",
+     {"has_data": False, "complex_queries": False, "needs_auth": False, "multi_user": False,
+      "realtime": False, "search": False, "export": False, "mobile": False,
+      "performance_critical": False}),
+
     # --- Multi-user / auth ---
     (r"team|collaborat|share\s+(with|between)|multi.?user|group|organization|members|workspace",
      {"multi_user": True}),
