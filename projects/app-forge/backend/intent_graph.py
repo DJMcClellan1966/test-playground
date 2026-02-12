@@ -284,6 +284,19 @@ def build_intent_graph() -> IntentGraph:
     g.add_node(ConceptNode("generator", {"generate", "random", "password", "dice"}, "tool",
                            {"generator": 0.8}))
     
+    # =========== API CONCEPTS ===========
+    
+    g.add_node(ConceptNode("api", {"apis", "backend", "service", "webservice"}, "app_type",
+                           {"rest_api": 0.9, "fastapi": 0.8}))
+    g.add_node(ConceptNode("rest_api", {"rest", "restful", "http", "endpoint", "endpoints"}, "tech",
+                           {"rest_api": 1.0, "fastapi": 0.8}))
+    g.add_node(ConceptNode("graphql", {"graphql", "graph"}, "tech",
+                           {"graphql_api": 1.0}))
+    g.add_node(ConceptNode("webhook", {"webhook", "webhooks", "callback"}, "tech",
+                           {"webhook_handler": 0.9}))
+    g.add_node(ConceptNode("jwt", {"jwt", "token", "tokens", "bearer", "oauth"}, "feature",
+                           {"jwt_api": 0.9}))
+    
     # =========== FEATURE CONCEPTS ===========
     
     g.add_node(ConceptNode("difficulty", {"level", "levels", "hard", "easy", "harder", "easier", "challenge"}, "feature",

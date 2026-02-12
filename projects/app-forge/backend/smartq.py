@@ -83,7 +83,8 @@ INFERENCE_RULES = [
       "needs_auth": False, "multi_user": False, "realtime": False, "mobile": False,
       "performance_critical": False}),
     (r"game|puzzle|quiz|trivia|tic.?tac|guess|memory|hangman|wordle|snake|pong|"
-     r"reaction\s*time|reflex\s*test|speed\s*test|sliding|tile\s*game",
+     r"reaction\s*time|reaction\s*test|reflex|speed\s*test|sliding|tile\s*game|"
+     r"dice\s*(roll|game)?|tetris|sudoku|minesweeper|cards?|board\s*game",
      {"has_data": False, "complex_queries": False, "needs_auth": False, "multi_user": False,
       "realtime": False, "search": False, "export": False, "mobile": False,
       "performance_critical": False}),

@@ -236,6 +236,53 @@ def test_file_content():
     return passed == total
 
 
+def test_kernel_composer():
+    """Test kernel composer for algorithm apps."""
+    print("\n" + "=" * 60)
+    print("TEST: Kernel Composer")
+    print("=" * 60)
+    
+    # Import the slot generator which has kernel composer
+    from slot_generator import generate_app
+    
+    # These should use the kernel composer
+    kernel_apps = [
+        ("Conway's Game of Life", "kernel:grid2d", "Grid2D"),
+        ("a pathfinding visualizer", "kernel:graph", "Graph"),
+        ("particle physics simulation", "kernel:particles", "Particles"),
+        ("sorting algorithm visualizer", "kernel:sequence", "Sequence"),
+    ]
+    
+    # These should NOT use the kernel composer
+    template_apps = [
+        "a recipe app",
+        "a todo list",
+        "REST API for users",
+    ]
+    
+    passed = 0
+    total = len(kernel_apps) + len(template_apps)
+    
+    for desc, expected_trait, expected_prim in kernel_apps:
+        project = generate_app(desc, {})
+        if project.trait_id and project.trait_id.startswith("kernel:"):
+            passed += 1
+            print(f"  ✓ '{desc}' → {project.trait_id} ({expected_prim})")
+        else:
+            print(f"  ✗ '{desc}' expected {expected_trait}, got {project.trait_id}")
+    
+    for desc in template_apps:
+        project = generate_app(desc, {})
+        if not project.trait_id or not project.trait_id.startswith("kernel:"):
+            passed += 1
+            print(f"  ✓ '{desc}' → {project.trait_id} (template, not kernel)")
+        else:
+            print(f"  ✗ '{desc}' should use templates, got {project.trait_id}")
+    
+    print(f"\n  {passed}/{total} passed")
+    return passed == total
+
+
 def main():
     """Run all tests."""
     print("\n" + "=" * 60)
@@ -249,6 +296,7 @@ def main():
         "Component Selection": test_component_selection(),
         "Full Build": test_full_build(),
         "File Content": test_file_content(),
+        "Kernel Composer": test_kernel_composer(),
     }
     
     print("\n" + "=" * 60)

@@ -46,6 +46,68 @@ try:
 except ImportError:
     PRIORITY_SYSTEM_AVAILABLE = False
 
+# Import semantic bridge for universal domain understanding
+try:
+    from semantic_bridge import build_semantic_bridge, SemanticMapping
+    SEMANTIC_BRIDGE_AVAILABLE = True
+except ImportError:
+    SEMANTIC_BRIDGE_AVAILABLE = False
+
+# Import intent classifier for understanding user goals
+try:
+    from intent_classifier import classify_intent, Intent, IntentResult
+    INTENT_CLASSIFIER_AVAILABLE = True
+except ImportError:
+    INTENT_CLASSIFIER_AVAILABLE = False
+
+# Import requirement completer for inferring missing requirements
+try:
+    from requirement_completer import complete_requirements, RequirementCompletion
+    REQUIREMENT_COMPLETER_AVAILABLE = True
+except ImportError:
+    REQUIREMENT_COMPLETER_AVAILABLE = False
+
+# Import build memory for learning from past builds
+try:
+    from build_memory import memory, BuildRecord
+    BUILD_MEMORY_AVAILABLE = True
+except ImportError:
+    BUILD_MEMORY_AVAILABLE = False
+
+# Import developer profile for personalized generation
+try:
+    from developer_profile import get_developer_profile, DeveloperProfile
+    DEVELOPER_PROFILE_AVAILABLE = True
+except ImportError:
+    DEVELOPER_PROFILE_AVAILABLE = False
+
+# Import complexity model for architecture recommendations
+try:
+    from complexity_model import analyze as analyze_complexity, ComplexityProfile
+    COMPLEXITY_MODEL_AVAILABLE = True
+except ImportError:
+    COMPLEXITY_MODEL_AVAILABLE = False
+
+# Import kernel composer for algorithm/simulation apps
+try:
+    from kernel_composer import can_compose, compose, generate as generate_kernel, analyze as analyze_kernel
+    KERNEL_COMPOSER_AVAILABLE = True
+except ImportError:
+    KERNEL_COMPOSER_AVAILABLE = False
+
+# Import template algebra for composable micro-templates
+try:
+    from template_algebra import (
+        algebra as template_algebra, 
+        discovery as template_discovery,
+        auto_compose as auto_compose_templates,
+        detect_patterns,
+        ComposedTemplate
+    )
+    TEMPLATE_ALGEBRA_AVAILABLE = True
+except ImportError:
+    TEMPLATE_ALGEBRA_AVAILABLE = False
+
 
 @dataclass
 class GeneratedFile:
@@ -565,7 +627,121 @@ class SlotBasedGenerator:
         """Generate a project from description and answers."""
         answers = answers or {}
         
-        # 0. ANALOGY ENGINE - Process analogies first
+        # 0a. INTENT CLASSIFIER - Understand what user wants to do
+        intent_result = None
+        if INTENT_CLASSIFIER_AVAILABLE:
+            intent_result = classify_intent(description)
+            if intent_result.confidence > 0.5:
+                print(f"🎯 Intent: {intent_result.primary.value.upper()} ({intent_result.confidence:.0%})")
+                if intent_result.object_nouns:
+                    print(f"   Objects: {intent_result.object_nouns}")
+        
+        # 0a2. DEVELOPER PROFILE - Personalize based on your coding patterns
+        dev_profile = None
+        dev_prefs = None
+        if DEVELOPER_PROFILE_AVAILABLE:
+            dev_profile = get_developer_profile()
+            dev_prefs = dev_profile.preferences
+            if dev_prefs.confidence > 0.3:
+                print(f"👤 Developer Profile ({dev_prefs.confidence:.0%} confidence):")
+                print(f"   Preferred: {dev_prefs.preferred_framework} / {dev_prefs.preferred_database}")
+                if dev_prefs.common_technologies:
+                    techs = list(dev_prefs.common_technologies)[:3]
+                    print(f"   Technologies: {', '.join(techs)}")
+        
+        # 0a3. COMPLEXITY MODEL - Understand app architecture needs
+        complexity_result = None
+        if COMPLEXITY_MODEL_AVAILABLE:
+            complexity_result = analyze_complexity(description)
+            tier = complexity_result['profile']['tier'].upper()
+            total = complexity_result['profile']['total']
+            arch_name = complexity_result['architecture']['name']
+            nearest = complexity_result['nearest_canonical']
+            print(f"📊 Complexity: {tier} (score: {total})")
+            print(f"   Architecture: {arch_name}")
+            if complexity_result['architecture']['warnings']:
+                for warn in complexity_result['architecture']['warnings'][:2]:
+                    print(f"   ⚠️  {warn}")
+            if complexity_result['growth_suggestions']:
+                print(f"   💡 Growth: {complexity_result['growth_suggestions'][0]}")
+        
+        # 0a4. KERNEL COMPOSER - Detect algorithm/simulation apps
+        # These are apps like Game of Life, pathfinding, particle sims, etc.
+        # that can be composed from primitives rather than templates
+        if KERNEL_COMPOSER_AVAILABLE:
+            kernel_analysis = analyze_kernel(description)
+            if kernel_analysis['can_compose']:
+                spec = compose(description)
+                if spec:
+                    prim = spec.primitive.value
+                    ctrl = spec.control.value
+                    known = kernel_analysis['known_algorithm']
+                    print(f"🧬 Kernel Composer: {prim.upper()} primitive")
+                    print(f"   Control: {ctrl}, Algorithm: {known or 'novel'}")
+                    
+                    # Generate the kernel code
+                    kernel_code = generate_kernel(description)
+                    if kernel_code:
+                        app_name = self._extract_app_name(description)
+                        return GeneratedProject(
+                            name=app_name,
+                            category='algorithm',
+                            framework='html_canvas',
+                            files=[GeneratedFile('index.html', kernel_code)],
+                            run_command='open index.html  # or use a local server',
+                            install_command=None,
+                            packages=[],
+                            trait_id=f'kernel:{prim}'
+                        )
+        
+        # 0a5. TEMPLATE ALGEBRA - Compose micro-templates for complex apps
+        # This detects universal patterns (container, relationship, state, etc.)
+        # and combines them like an LLM but without hallucination
+        algebra_composed = None
+        if TEMPLATE_ALGEBRA_AVAILABLE:
+            detected_patterns = detect_patterns(description)
+            if detected_patterns and len(detected_patterns) >= 2:
+                entity_name = self._extract_model_name(description)
+                algebra_composed = auto_compose_templates(description, entity_name)
+                if algebra_composed.templates:
+                    print(f"🧮 Template Algebra: {len(algebra_composed.templates)} micro-templates")
+                    print(f"   Patterns: {algebra_composed.templates[:4]}")
+                    print(f"   Fields: {[f['name'] for f in algebra_composed.all_fields[:5]]}")
+                    suggestions = template_algebra.suggest_templates(description, detected_patterns[:3])
+                    if suggestions:
+                        print(f"   💡 Consider adding: {[s[0] for s in suggestions[:2]]}")
+        
+        # 0b. REQUIREMENT COMPLETER - Infer missing requirements
+        completion = None
+        if REQUIREMENT_COMPLETER_AVAILABLE:
+            completion = complete_requirements(description)
+            high_conf_fields = [r for r in completion.inferred if r.confidence >= 0.70]
+            if high_conf_fields:
+                print(f"💡 Inferred requirements ({len(high_conf_fields)} high-confidence):")
+                for req in high_conf_fields[:4]:
+                    print(f"   • {req.name}: {req.field_type} ({req.confidence:.0%})")
+            if completion.features:
+                print(f"   Suggested features: {completion.features}")
+        
+        # 0c. BUILD MEMORY - Learn from past builds
+        memory_suggestions = None
+        patterns_to_avoid = []
+        similar_successes = []
+        if BUILD_MEMORY_AVAILABLE:
+            # Find similar successful builds
+            similar_successes = memory.get_similar_good_builds(description, limit=3)
+            if similar_successes:
+                print(f"📚 Found {len(similar_successes)} similar successful builds:")
+                for build in similar_successes[:2]:
+                    print(f"   • \"{build.description[:50]}...\" ({build.template_used})")
+            
+            # Get patterns that lead to failure
+            patterns_to_avoid = memory.get_patterns_to_avoid(limit=5)
+            if patterns_to_avoid:
+                avoid_msgs = [p['feature'] for p in patterns_to_avoid[:3]]
+                print(f"⚠️  Patterns to avoid: {avoid_msgs}")
+        
+        # 0d. ANALOGY ENGINE - Process analogies first
         analogy_result = None
         if ANALOGY_ENGINE_AVAILABLE:
             analogy_result = process_analogy(description)
@@ -581,7 +757,15 @@ class SlotBasedGenerator:
             trait_match = self.trait_store.match(description)
             trait = trait_match[0] if trait_match else None
         
-        # 1b. SEMANTIC KERNEL FALLBACK - Use if no trait or low confidence
+        # 1b. SEMANTIC BRIDGE - Universal domain understanding
+        semantic_mapping = None
+        if SEMANTIC_BRIDGE_AVAILABLE and (not trait or len(trait_match) == 0) and not analogy_result:
+            semantic_mapping = build_semantic_bridge(description)
+            if semantic_mapping.confidence > 0.4:
+                print(f"🌉 Semantic Bridge: {semantic_mapping.primary_archetype} archetype (confidence: {semantic_mapping.confidence:.2f})")
+                print(f"   Domain fields: {semantic_mapping.suggested_fields[:3]}...")
+        
+        # 1c. SEMANTIC KERNEL FALLBACK - Use if no trait or low confidence
         semantic_understanding = None
         use_semantic = False
         
@@ -598,7 +782,16 @@ class SlotBasedGenerator:
         elif use_semantic and semantic_understanding:
             framework = semantic_understanding.framework
         else:
-            framework = self._select_framework(description, answers, trait)
+            # Try developer profile first for personalization
+            if dev_profile and dev_prefs and dev_prefs.confidence > 0.5:
+                framework_rec, fw_conf = dev_profile.get_framework_for_description(description)
+                if fw_conf >= 0.7:  # High confidence = use profile preference
+                    framework = framework_rec
+                    print(f"   👤 Using preferred framework: {framework}")
+                else:
+                    framework = self._select_framework(description, answers, trait)
+            else:
+                framework = self._select_framework(description, answers, trait)
         
         # 3. Merge answers with trait defaults
         merged_answers = {}
@@ -615,6 +808,43 @@ class SlotBasedGenerator:
             feature_ids = list(semantic_understanding.features)
         else:
             feature_ids = self._select_features(description, merged_answers, trait)
+        
+        # 4a. MEMORY-BASED FEATURE ENHANCEMENT - Learn from similar successes
+        if BUILD_MEMORY_AVAILABLE and similar_successes:
+            # Get valid feature IDs from feature store
+            valid_feature_ids = set(self.feature_store.features.keys()) if hasattr(self.feature_store, 'features') else set()
+            
+            # Extract features from similar successful builds
+            for past_build in similar_successes:
+                # Only learn from builds with the same template (app type)
+                if past_build.template_used == (trait.id if trait else 'generic'):
+                    if past_build.features:
+                        for feature_key, feature_val in past_build.features.items():
+                            # Only add if it's a valid feature and not already present
+                            if feature_val and feature_key not in feature_ids:
+                                if not valid_feature_ids or feature_key in valid_feature_ids:
+                                    rate = memory.get_feature_success_rate(feature_key, str(feature_val))
+                                    if rate > 0.7:  # Higher threshold for suggestions
+                                        feature_ids.append(feature_key)
+                                        print(f"   📚 Added '{feature_key}' from past success ({rate:.0%} rate)")
+        
+        # 4a2. DEVELOPER PROFILE FEATURES - Add features you commonly use
+        if DEVELOPER_PROFILE_AVAILABLE and dev_profile and dev_prefs:
+            for feature in dev_profile.get_suggested_features():
+                should_add, weight = dev_profile.should_include_feature(feature)
+                if should_add and feature not in feature_ids:
+                    # Map profile features to actual feature IDs
+                    feature_mapping = {
+                        'auth': 'auth',
+                        'ml_integration': 'ml',
+                        'ai_features': 'ai',
+                        'realtime': 'websocket',
+                        'search': 'search',
+                    }
+                    mapped = feature_mapping.get(feature, feature)
+                    if mapped in self.feature_store.features:
+                        feature_ids.append(mapped)
+                        print(f"   👤 Added '{mapped}' from developer profile ({weight:.0%} tendency)")
         
         # 4b. PRIORITY SYSTEM - Partition features by importance
         if PRIORITY_SYSTEM_AVAILABLE and feature_ids:
@@ -637,6 +867,24 @@ class SlotBasedGenerator:
                     print(f"   - {v.message}")
             feature_ids = list(fixed_features)
         
+        # 4d. MEMORY-BASED PATTERN AVOIDANCE - Warn about risky combinations
+        if BUILD_MEMORY_AVAILABLE and patterns_to_avoid and feature_ids:
+            risky_features = []
+            for pattern in patterns_to_avoid:
+                # Pattern format: "feature_key=value"
+                parts = pattern['feature'].split('=')
+                if len(parts) == 2:
+                    feat_key = parts[0]
+                    if feat_key in feature_ids:
+                        fail_rate = pattern['failures'] / (pattern['failures'] + pattern['successes'] + 1)
+                        if fail_rate > 0.5:  # More failures than successes
+                            risky_features.append((feat_key, fail_rate))
+            
+            if risky_features:
+                print(f"🔴 Risky features (from past failures):")
+                for feat, rate in risky_features[:3]:
+                    print(f"   • '{feat}' has {rate:.0%} failure rate")
+        
         # 5. Get models
         if analogy_result and analogy_result.models:
             # Use analogy-derived models
@@ -646,6 +894,45 @@ class SlotBasedGenerator:
             models = self._convert_semantic_models(semantic_understanding.models)
         elif trait:
             models = trait.models
+        elif semantic_mapping and semantic_mapping.suggested_fields:
+            # Use semantic bridge to create model from universal archetypes
+            # Merge with requirement completer inferences if available
+            fields_to_use = list(semantic_mapping.suggested_fields[:8])
+            
+            if completion and completion.inferred:
+                # Add high-confidence inferred fields not already present
+                field_names = set(f.lower() for f in fields_to_use)
+                for req in completion.inferred:
+                    if req.confidence >= 0.70 and req.name.lower() not in field_names:
+                        fields_to_use.append(req.name)
+                        field_names.add(req.name.lower())
+            
+            bridge_model = DomainModelSchema(
+                name=semantic_mapping.data_model_name,
+                fields=[
+                    DomainField(name=f, type=self._infer_field_type(f))
+                    for f in fields_to_use[:10]  # Limit to 10 fields
+                ]
+            )
+            models = [bridge_model]
+            print(f"🌉 Semantic bridge created model: {bridge_model.name} with {len(bridge_model.fields)} fields")
+        elif completion and completion.inferred:
+            # Use requirement completer only (no semantic bridge match)
+            high_conf = [r for r in completion.inferred if r.confidence >= 0.60]
+            if high_conf:
+                # Extract model name from description
+                model_name = self._extract_model_name(description)
+                completer_model = DomainModelSchema(
+                    name=model_name,
+                    fields=[
+                        DomainField(name=r.name, type=r.field_type)
+                        for r in high_conf[:8]
+                    ]
+                )
+                models = [completer_model]
+                print(f"💡 Requirement completer created model: {model_name} with {len(completer_model.fields)} fields")
+            else:
+                models = []
         else:
             models = []
         
@@ -771,8 +1058,7 @@ class SlotBasedGenerator:
                     name=field_def.name,
                     type=field_def.field_type,
                     required=field_def.required,
-                    default=None,  # Semantic kernel doesn't provide defaults yet
-                    description=field_def.description
+                    default=None  # Semantic kernel doesn't provide defaults yet
                 ))
             
             result.append(DomainModelSchema(
@@ -797,6 +1083,65 @@ class SlotBasedGenerator:
         if words:
             return "".join(w.capitalize() for w in words)
         return "GeneratedApp"
+    
+    def _extract_model_name(self, description: str) -> str:
+        """Extract a model name from description for data models."""
+        import re
+        
+        text = description.lower()
+        
+        # Look for explicit model indicators
+        patterns = [
+            r'(\w+)\s+(tracker|manager|logger|organizer|planner)',
+            r'(\w+)\s+(collection|list|inventory)',
+            r'track(?:ing)?\s+(\w+)',
+            r'manage(?:ing)?\s+(\w+)',
+            r'(\w+)\s+app',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                # Get the first captured group that's meaningful
+                for group in match.groups():
+                    if group and group not in ['a', 'an', 'the', 'my', 'app', 'tracker']:
+                        return group.capitalize()
+        
+        # Fallback: first significant noun
+        text = re.sub(r'\b(a|an|the|app|application|for|to|with|that|and|or|my)\b', '', text)
+        words = [w.strip() for w in text.split() if w.strip() and len(w) > 2]
+        
+        if words:
+            return words[0].capitalize()
+        return "Item"
+    
+    def _infer_field_type(self, field_name: str) -> str:
+        """Infer field type from name using common patterns."""
+        name = field_name.lower()
+        
+        # Boolean patterns
+        if any(p in name for p in ['is_', 'has_', 'can_', 'active', 'enabled', 'completed', 'done']):
+            return 'boolean'
+        
+        # Date/time patterns
+        if any(p in name for p in ['date', 'time', 'created', 'updated', 'start', 'end', 'timestamp']):
+            return 'datetime'
+        
+        # Numeric patterns
+        if any(p in name for p in ['count', 'amount', 'price', 'cost', 'quantity', 'number', 'total', 
+                                    'rating', 'score', 'duration', 'weight', 'height', 'temperature',
+                                    'age', 'level', 'ph', 'gravity', 'batch']):
+            return 'float'
+        
+        if any(p in name for p in ['id', 'year', 'month', 'day', 'size', 'position']):
+            return 'integer'
+        
+        # Text patterns (notes, descriptions tend to be longer)
+        if any(p in name for p in ['notes', 'description', 'content', 'body', 'text', 'details', 'comments']):
+            return 'text'
+        
+        # Default to string
+        return 'string'
     
     def _generate_files(self, app_name: str, main_code: str, 
                        models: List[DomainModelSchema], 

@@ -274,7 +274,11 @@ FEATURE_RULES: List[Tuple[str, str, object, float]] = [
     ("auth",         r"\bauth\b|login|log.?in|sign.?in|password|user\s*name|account|authentication|"
                      r"register|sign.?up|logged.?in|session", "true", 0.85),
     ("storage",      r"save|persist|store|local.?storage|database|remember|sync|backup|"
-                     r"import|export|load|keep\s*(the\s*)?data", "true", 0.80),
+                     r"import|load|keep\s*(the\s*)?data", "true", 0.80),
+    ("search",       r"search|searchable|find|filter|look\s*up|query|browse", "true", 0.85),
+    ("tags",         r"\btags?\b|label|categoriz|categor(y|ies)|hashtag", "true", 0.85),
+    ("export",       r"export|download|pdf|csv|print|backup", "true", 0.85),
+    ("share",        r"shar(e|ing)|social|post\s*to|publish|collaborat", "true", 0.85),
 
     # Data apps (not games)
     ("data_app",     r"recipe|cooking|cookbook|\bcook\b|todo|task|inventory|product|blog|contact|event|"
