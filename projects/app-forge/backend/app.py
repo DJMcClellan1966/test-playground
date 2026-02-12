@@ -242,8 +242,8 @@ def generate_project():
     if USER_PREFS_ENABLED:
         record_user_pref(best_template, features, profile.description)
     
-    # Auto-start live preview server
-    result = preview.start(app_py, requirements_txt, index_html)
+    # Auto-start live preview server (pass all files for multi-file apps)
+    result = preview.start(files)
     preview_url = result.get('preview_url', '') if result.get('success') else ''
     preview_error = result.get('error', '') if not result.get('success') else ''
     

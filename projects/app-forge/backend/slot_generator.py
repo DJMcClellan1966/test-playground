@@ -20,6 +20,13 @@ from universal_template import (
 from feature_store import feature_store, Feature
 from trait_store import trait_store, AppTrait, DomainModelSchema, DomainField
 
+# Import semantic kernel for AI-free semantic understanding
+try:
+    from semantic_kernel import understand, SemanticUnderstanding
+    SEMANTIC_KERNEL_AVAILABLE = True
+except ImportError:
+    SEMANTIC_KERNEL_AVAILABLE = False
+
 
 @dataclass
 class GeneratedFile:
@@ -543,8 +550,22 @@ class SlotBasedGenerator:
         trait_match = self.trait_store.match(description)
         trait = trait_match[0] if trait_match else None
         
+        # 1b. SEMANTIC KERNEL FALLBACK - Use if no trait or low confidence
+        semantic_understanding = None
+        use_semantic = False
+        
+        if SEMANTIC_KERNEL_AVAILABLE and (not trait or len(trait_match) == 0):
+            semantic_understanding = understand(description, verbose=False)
+            # Use semantic kernel if confidence is reasonable and we have models/features
+            if semantic_understanding.confidence > 0.3 and (semantic_understanding.models or semantic_understanding.features):
+                use_semantic = True
+                print(f"🧠 Using Semantic Kernel (confidence: {semantic_understanding.confidence:.2f})")
+        
         # 2. Determine framework
-        framework = self._select_framework(description, answers, trait)
+        if use_semantic and semantic_understanding:
+            framework = semantic_understanding.framework
+        else:
+            framework = self._select_framework(description, answers, trait)
         
         # 3. Merge answers with trait defaults
         merged_answers = {}
@@ -553,10 +574,20 @@ class SlotBasedGenerator:
         merged_answers.update(answers)
         
         # 4. Select features
-        feature_ids = self._select_features(description, merged_answers, trait)
+        if use_semantic and semantic_understanding:
+            # Use semantic kernel's inferred features
+            feature_ids = list(semantic_understanding.features)
+        else:
+            feature_ids = self._select_features(description, merged_answers, trait)
         
         # 5. Get models
-        models = trait.models if trait else []
+        if use_semantic and semantic_understanding and semantic_understanding.models:
+            # Convert semantic kernel models to DomainModelSchema
+            models = self._convert_semantic_models(semantic_understanding.models)
+        elif trait:
+            models = trait.models
+        else:
+            models = []
         
         # 6. Create renderer and inject features
         renderer = TemplateRenderer(framework)
@@ -667,6 +698,29 @@ class SlotBasedGenerator:
             features.add("scoring")
         
         return list(features)
+    
+    def _convert_semantic_models(self, semantic_models) -> List[DomainModelSchema]:
+        """Convert semantic kernel InferredModel to DomainModelSchema."""
+        result = []
+        
+        for sem_model in semantic_models:
+            # Convert FieldDefinition to DomainField
+            fields = []
+            for field_def in sem_model.fields:
+                fields.append(DomainField(
+                    name=field_def.name,
+                    type=field_def.field_type,
+                    required=field_def.required,
+                    default=None,  # Semantic kernel doesn't provide defaults yet
+                    description=field_def.description
+                ))
+            
+            result.append(DomainModelSchema(
+                name=sem_model.name,
+                fields=fields
+            ))
+        
+        return result
     
     def _extract_app_name(self, description: str) -> str:
         """Extract an app name from description."""

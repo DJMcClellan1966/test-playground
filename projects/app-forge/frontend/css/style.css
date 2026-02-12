@@ -1,7 +1,8 @@
 :root {
   --ink: #1a1b1e;
-  --muted: #5b5f68;
-  --border: #e2e6ee;
+  --muted: #4a4d54;
+  --muted-dark: #3a3d42;
+  --border: #d0d4dc;
   --bg: #f4f1ec;
   --accent: #ff7a59;
   --accent-2: #1c7ed6;
@@ -9,8 +10,9 @@
 }
 
 body.dark-mode {
-  --ink: #e8e8e8;
-  --muted: #a0a0a0;
+  --ink: #f0f0f0;
+  --muted: #b8b8c0;
+  --muted-dark: #c8c8d0;
   --border: #3a3a4a;
   --bg: #1a1a2e;
   --accent: #ff8c6b;

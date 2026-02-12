@@ -20,8 +20,13 @@ class PreviewServer:
         self.process: Optional[subprocess.Popen] = None
         self.preview_dir: Optional[Path] = None
 
-    def _write_files(self, app_py: str, requirements_txt: str, index_html: str) -> Path:
-        """Write generated files to a temp directory."""
+    def _write_files(self, files: dict) -> Path:
+        """Write generated files to a temp directory.
+        
+        Args:
+            files: Dict mapping file paths (e.g., 'app.py', 'models.py', 'templates/index.html')
+                   to file contents.
+        """
         # Use a fixed preview dir so we can clean up easily
         preview_dir = Path(tempfile.gettempdir()) / "appforge_preview"
         if preview_dir.exists():
@@ -31,9 +36,11 @@ class PreviewServer:
         (preview_dir / "templates").mkdir(exist_ok=True)
         (preview_dir / "static").mkdir(exist_ok=True)
 
-        (preview_dir / "app.py").write_text(app_py, encoding="utf-8")
-        (preview_dir / "requirements.txt").write_text(requirements_txt, encoding="utf-8")
-        (preview_dir / "templates" / "index.html").write_text(index_html, encoding="utf-8")
+        # Write all files from the dict
+        for file_path, content in files.items():
+            target = preview_dir / file_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
 
         return preview_dir
 
@@ -41,17 +48,24 @@ class PreviewServer:
         """Replace port 5000 with the preview port so it doesn't clash."""
         return app_py.replace("port=5000", f"port={self.PREVIEW_PORT}")
 
-    def start(self, app_py: str, requirements_txt: str, index_html: str) -> dict:
-        """Write files and start the preview Flask server."""
+    def start(self, files: dict) -> dict:
+        """Write files and start the preview Flask server.
+        
+        Args:
+            files: Dict mapping file paths to contents. Must include 'app.py'.
+        """
         # Kill any existing preview first
         self.stop()
 
-        # Patch the port
-        patched_app = self._patch_port(app_py)
-        # Also disable debug/reloader in preview to avoid issues
-        patched_app = patched_app.replace("debug=True", "debug=False")
+        # Patch the port in app.py
+        patched_files = files.copy()
+        if 'app.py' in patched_files:
+            patched_app = self._patch_port(patched_files['app.py'])
+            # Also disable debug/reloader in preview to avoid issues
+            patched_app = patched_app.replace("debug=True", "debug=False")
+            patched_files['app.py'] = patched_app
 
-        self.preview_dir = self._write_files(patched_app, requirements_txt, index_html)
+        self.preview_dir = self._write_files(patched_files)
 
         try:
             # Use the same Python that's running App Forge
