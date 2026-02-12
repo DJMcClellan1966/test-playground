@@ -1,4 +1,41 @@
 {
-  "builds": [],
-  "updated": "2026-02-11T17:32:01.352525"
+  "builds": [
+    {
+      "template_id": "memory_game",
+      "features": [
+        "grid_size",
+        "grid_game",
+        "reaction",
+        "simon",
+        "click_target",
+        "tile_content",
+        "generic_game"
+      ],
+      "description": "Build A Reaction Game With Multiple Colored Sections 9X9 That Randomly Puts Up A Green Tile And Want The User To Click It, Similar To Simon Game, The Game Tracks Users Score",
+      "timestamp": "2026-02-11T19:21:10.458723"
+    },
+    {
+      "template_id": "sliding_puzzle",
+      "features": [
+        "puzzle",
+        "turn_based",
+        "tile_content",
+        "generic_game"
+      ],
+      "description": "build a game that takes an image and turns it into a puzzle. Then allows the user to put the pieces back together",
+      "timestamp": "2026-02-11T19:22:51.557329"
+    },
+    {
+      "template_id": "sliding_puzzle",
+      "features": [
+        "puzzle",
+        "turn_based",
+        "tile_content",
+        "generic_game"
+      ],
+      "description": "build a game that takes an image and turns it into a puzzle. Then allows the user to put the pieces back together",
+      "timestamp": "2026-02-11T19:24:18.220091"
+    }
+  ],
+  "updated": "2026-02-11T19:24:18.220091"
 }

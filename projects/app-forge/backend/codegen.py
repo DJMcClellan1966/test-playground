@@ -71,34 +71,254 @@ class CodeGenerator:
         return "\n".join(reqs) + "\n"
 
     # ==================================================================
-    # index.html  — routes to standalone or CRUD
+    # Multi-file generation for data apps
     # ==================================================================
-    def generate_index_html(self, app_name: str, answers: Dict[str, bool],
-                            description: str = "") -> str:
-        title = app_name.replace("-", " ").title()
+    
+    def generate_models_py(self, answers: Dict[str, bool], description: str = "") -> str:
+        """Generate models.py with SQLAlchemy models."""
+        needs_auth = answers.get("needs_auth", False)
+        models = parse_description(description) if description else []
+        
+        parts = [
+            "from db import db",
+            "from datetime import datetime",
+            ""
+        ]
+        
+        if needs_auth:
+            parts.append(self._user_model())
+        
+        for m in models:
+            parts.append(self._domain_model(m, needs_auth))
+        
+        return "\n".join(parts)
+    
+    def generate_db_py(self) -> str:
+        """Generate db.py for database initialization."""
+        return """from flask_sqlalchemy import SQLAlchemy
+
+db = SQLAlchemy()
+
+def init_db(app):
+    db.init_app(app)
+    with app.app_context():
+        db.create_all()
+"""
+    
+    def generate_data_app_files(self, app_name: str, answers: Dict[str, bool], description: str = "") -> Dict[str, str]:
+        """Generate all files for a multi-file data app with SQLite."""
         needs_db = answers.get("has_data", False)
-
+        
         if not needs_db:
-            app_type = detect_app_type(description)
-            return self._standalone_html(title, app_type, description)
-
-        return self._crud_html(title, answers, description)
-
-    # ==================================================================
-    # Backend helper methods (unchanged)
-    # ==================================================================
-
-    def _imports(self, db, auth, rt, search, export):
-        lines = [
+            # Single file app
+            return {
+                "app.py": self.generate_app_py(app_name, answers, description),
+                "requirements.txt": self.generate_requirements_txt(answers),
+                "templates/index.html": self.generate_index_html(app_name, answers, description)
+            }
+        
+        # Multi-file data app
+        return {
+            "app.py": self._generate_data_app_py(app_name, answers, description),
+            "models.py": self.generate_models_py(answers, description),
+            "db.py": self.generate_db_py(),
+            "requirements.txt": self.generate_requirements_txt(answers),
+            "templates/index.html": self.generate_index_html(app_name, answers, description),
+            "README.md": self._generate_readme(app_name, description)
+        }
+    
+    def _generate_data_app_py(self, app_name: str, answers: Dict[str, bool], description: str = "") -> str:
+        """Generate app.py that imports from models and db modules."""
+        needs_auth = answers.get("needs_auth", False)
+        needs_search = answers.get("search", False)
+        needs_export = answers.get("export", False)
+        models = parse_description(description) if description else []
+        
+        imports = [
             "from flask import Flask, render_template, request, jsonify, session, redirect, url_for",
             "from flask_cors import CORS",
-            "from datetime import datetime",
+            "from db import db, init_db"
         ]
-        if db:
-            lines.append("from flask_sqlalchemy import SQLAlchemy")
-        if auth:
-            lines.append("from werkzeug.security import generate_password_hash, check_password_hash")
-            lines.append("from functools import wraps")
+        
+        if needs_auth:
+            imports.append("from models import User")
+            imports.append("from werkzeug.security import check_password_hash")
+            imports.append("from functools import wraps")
+        
+        # Import all models
+        model_imports = [m.name for m in models]
+        if model_imports:
+            imports.append(f"from models import {', '.join(model_imports)}")
+        
+        if needs_export:
+            imports.append("import csv")
+            imports.append("import io")
+        
+        parts = ["\n".join(imports)]
+        parts.append(self._app_init(app_name, True, False))
+        parts.append("\n# Initialize database")
+        parts.append("init_db(app)")
+        parts.append(self._base_routes(app_name))
+        
+        if needs_auth:
+            parts.append(self._auth_routes())
+        
+        for m in models:
+            parts.append(self._crud_routes(m, needs_auth, needs_search, needs_export))
+        
+        parts.append("\nif __name__ == '__main__':")
+        parts.append("    app.run(debug=True)")
+        
+        return "\n".join(parts)
+    
+    def _generate_readme(self, app_name: str, description: str) -> str:
+        """Generate README.md for the project."""
+        title = app_name.replace("-", " ").title()
+        return f"""# {title}
+
+{description}
+
+## Setup
+
+1. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+2. Run the app:
+```bash
+python app.py
+```
+
+3. Open your browser to `http://127.0.0.1:5000`
+
+## Features
+
+- SQLite database for data persistence
+- RESTful API endpoints
+- Responsive web interface
+- CRUD operations
+
+## Generated by App Forge
+"""
+    
+    # ==================================================================
+    # Docker & Deployment Configuration
+    # ==================================================================
+    
+    def generate_dockerfile(self, app_name: str) -> str:
+        """Generate Dockerfile for the project."""
+        return """FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY . .
+
+# Create data directory for SQLite
+RUN mkdir -p /app/data
+
+# Expose port
+EXPOSE 5000
+
+# Run the application
+CMD ["python", "app.py"]
+"""
+    
+    def generate_docker_compose(self, app_name: str) -> str:
+        """Generate docker-compose.yml for the project."""
+        service_name = app_name.replace(" ", "-").lower()
+        return f"""version: '3.8'
+
+services:
+  {service_name}:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=0
+    restart: unless-stopped
+"""
+    
+    def generate_vercel_config(self) -> str:
+        """Generate vercel.json for Vercel deployment."""
+        return """{
+  "version": 2,
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "app.py"
+    }
+  ]
+}
+"""
+    
+    def generate_railway_config(self) -> str:
+        """Generate railway.json for Railway deployment."""
+        return """{
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "pip install -r requirements.txt"
+  },
+  "deploy": {
+    "startCommand": "python app.py",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
+"""
+    
+    def generate_render_config(self, app_name: str) -> str:
+        """Generate render.yaml for Render deployment."""
+        service_name = app_name.replace(" ", "-").lower()
+        return f"""services:
+  - type: web
+    name: {service_name}
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: FLASK_ENV
+        value: production
+"""
+    
+    def generate_deployment_files(self, app_name: str) -> Dict[str, str]:
+        """Generate all deployment configuration files."""
+        return {
+            "Dockerfile": self.generate_dockerfile(app_name),
+            "docker-compose.yml": self.generate_docker_compose(app_name),
+            ".dockerignore": """__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+*.db
+*.sqlite
+*.sqlite3
+.env
+.git
+.gitignore
+""",
+            "vercel.json": self.generate_vercel_config(),
+            "railway.json": self.generate_railway_config(),
+            "render.yaml": self.generate_render_config(app_name),
+        }
         if rt:
             lines.append("from flask_socketio import SocketIO, emit")
         if export:
@@ -345,7 +565,8 @@ input:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122
             "tictactoe", "hangman", "wordle", "calculator", "converter", "timer",
             "reaction_game", "simon_game", "reflex_game", "minesweeper",
             "snake", "tetris", "game_2048",
-            "platformer", "shooter", "breakout"
+            "platformer", "shooter", "breakout",
+            "pong", "cookie_clicker", "sudoku", "connect_four", "blackjack", "flappy"
         }
 
         # Check the component assembler FIRST for novel apps
@@ -363,6 +584,7 @@ input:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122
             "calculator": self._calculator_html,
             "converter": self._converter_html,
             "timer": self._timer_html,
+            "jigsaw": self._jigsaw_html,
             "sliding_puzzle": self._sliding_puzzle_html,
             "hangman": self._hangman_html,
             "wordle": self._wordle_html,
@@ -376,6 +598,13 @@ input:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122
             "platformer": self._phaser_platformer_html,
             "shooter": self._phaser_shooter_html,
             "breakout": self._phaser_breakout_html,
+            "pong": self._pong_html,
+            "cookie_clicker": self._cookie_clicker_html,
+            "sudoku": self._sudoku_html,
+            "connect_four": self._connect_four_html,
+            "blackjack": self._blackjack_html,
+            "flappy": self._flappy_html,
+            "algorithm_visualizer": self._algorithm_visualizer_html,
             "generic_game": self._generic_game_html,
         }
         gen = generators.get(app_type)
@@ -653,9 +882,250 @@ function reset(){stop();remain=total;show();}
 show();"""
         return self._base_page(title, body, css, js)
 
+    # --- Jigsaw / Image Puzzle ---
+    def _jigsaw_html(self, title, desc):
+        """Image puzzle: upload an image, split into pieces, drag to reassemble."""
+        features = extract_features(desc)
+        # Default 3x3, can be 2-6
+        size = 3
+        if "grid_size" in features:
+            try:
+                size = int(features["grid_size"].value)
+                size = max(2, min(6, size))
+            except ValueError:
+                size = 3
+
+        css = """*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%;font-family:system-ui,sans-serif;background:#1a1a2e}
+.container{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px;color:#fff}
+h2{margin-bottom:10px}
+.upload-area{width:min(90vw,400px);padding:30px;border:3px dashed #4a4a6a;border-radius:12px;text-align:center;margin:20px 0;cursor:pointer;transition:all .2s}
+.upload-area:hover{border-color:#ff7a59;background:#2a2a4a}
+.upload-area.hidden{display:none}
+#file-input{display:none}
+.game-area{display:none;flex-direction:column;align-items:center;width:100%}
+.game-area.active{display:flex}
+.boards{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;margin:20px 0}
+.board-container{display:flex;flex-direction:column;align-items:center}
+.board-label{font-size:14px;color:#888;margin-bottom:8px}
+.board{display:grid;gap:2px;background:#333;padding:2px;border-radius:8px}
+.piece{background-size:cover;background-position:center;border-radius:4px;cursor:grab;transition:transform .15s,box-shadow .15s}
+.piece:hover{transform:scale(1.05);box-shadow:0 4px 12px rgba(255,122,89,.5)}
+.piece.dragging{opacity:.6;cursor:grabbing}
+.slot{background:#2a2a4a;border:2px dashed #4a4a6a;border-radius:4px}
+.slot.correct{border-color:#2ecc71;background:#1a3a2a}
+.slot.highlight{border-color:#ff7a59;background:#3a2a3a}
+.info{font-size:14px;color:#aaa;margin:10px 0}
+.btn{padding:10px 24px;font-size:16px;border:none;border-radius:8px;cursor:pointer;margin:5px}
+.btn-primary{background:#ff7a59;color:#fff}.btn-primary:hover{background:#ff6b3f}
+.btn-secondary{background:#4a4a6a;color:#fff}.btn-secondary:hover{background:#5a5a7a}
+.win-msg{font-size:24px;color:#2ecc71;margin:15px 0;animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}"""
+
+        body = f"""<div class="container">
+<h2>Image Puzzle</h2>
+<p style="color:#888;margin-bottom:15px">Upload an image to turn it into a {size}x{size} puzzle</p>
+
+<div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
+    <p style="font-size:18px;margin-bottom:10px">Click to upload an image</p>
+    <p style="color:#888">or drag and drop</p>
+    <input type="file" id="file-input" accept="image/*">
+</div>
+
+<div class="game-area" id="game-area">
+    <div class="boards">
+        <div class="board-container">
+            <div class="board-label">Scrambled Pieces</div>
+            <div class="board" id="pieces-board"></div>
+        </div>
+        <div class="board-container">
+            <div class="board-label">Your Puzzle</div>
+            <div class="board" id="puzzle-board"></div>
+        </div>
+    </div>
+    <p class="info">Pieces placed: <strong id="placed">0</strong> / <strong id="total">{size*size}</strong></p>
+    <p class="win-msg" id="win-msg" style="display:none">Puzzle Complete!</p>
+    <div>
+        <button class="btn btn-secondary" onclick="resetPuzzle()">Reset</button>
+        <button class="btn btn-primary" onclick="newImage()">New Image</button>
+    </div>
+</div>
+</div>"""
+
+        js = f"""var SIZE={size};
+var pieces=[],slots=[],imgUrl='',draggedPiece=null,draggedIdx=-1;
+
+document.getElementById('file-input').addEventListener('change',function(e){{
+    if(e.target.files&&e.target.files[0])loadImage(e.target.files[0]);
+}});
+
+var uploadArea=document.getElementById('upload-area');
+uploadArea.addEventListener('dragover',function(e){{e.preventDefault();e.stopPropagation();this.style.borderColor='#ff7a59';}});
+uploadArea.addEventListener('dragleave',function(e){{e.preventDefault();e.stopPropagation();this.style.borderColor='#4a4a6a';}});
+uploadArea.addEventListener('drop',function(e){{
+    e.preventDefault();e.stopPropagation();this.style.borderColor='#4a4a6a';
+    if(e.dataTransfer.files&&e.dataTransfer.files[0])loadImage(e.dataTransfer.files[0]);
+}});
+
+function loadImage(file){{
+    var reader=new FileReader();
+    reader.onload=function(e){{imgUrl=e.target.result;startGame();}};
+    reader.readAsDataURL(file);
+}}
+
+function startGame(){{
+    document.getElementById('upload-area').classList.add('hidden');
+    document.getElementById('game-area').classList.add('active');
+    document.getElementById('win-msg').style.display='none';
+    
+    // Create pieces array with correct positions
+    pieces=[];for(var i=0;i<SIZE*SIZE;i++)pieces.push(i);
+    
+    // Shuffle pieces
+    for(var i=pieces.length-1;i>0;i--){{
+        var j=Math.floor(Math.random()*(i+1));
+        var t=pieces[i];pieces[i]=pieces[j];pieces[j]=t;
+    }}
+    
+    // Reset slots
+    slots=[];for(var i=0;i<SIZE*SIZE;i++)slots.push(-1);
+    
+    render();
+}}
+
+function render(){{
+    var cellSize=Math.min(80,Math.floor((window.innerWidth-100)/SIZE/2.5));
+    var boardSize=cellSize*SIZE+(SIZE-1)*2+4;
+    
+    var piecesBoard=document.getElementById('pieces-board');
+    var puzzleBoard=document.getElementById('puzzle-board');
+    
+    piecesBoard.style.gridTemplateColumns='repeat('+SIZE+','+cellSize+'px)';
+    puzzleBoard.style.gridTemplateColumns='repeat('+SIZE+','+cellSize+'px)';
+    
+    // Render pieces board (scrambled pieces not yet placed)
+    piecesBoard.innerHTML='';
+    pieces.forEach(function(p,i){{
+        var div=document.createElement('div');
+        div.style.width=cellSize+'px';
+        div.style.height=cellSize+'px';
+        if(p===-1){{
+            div.className='slot';
+        }}else{{
+            div.className='piece';
+            var row=Math.floor(p/SIZE),col=p%SIZE;
+            div.style.backgroundImage='url('+imgUrl+')';
+            div.style.backgroundSize=(SIZE*100)+'% '+(SIZE*100)+'%';
+            div.style.backgroundPosition=(col*100/(SIZE-1))+'% '+(row*100/(SIZE-1))+'%';
+            div.draggable=true;
+            div.dataset.idx=i;
+            div.dataset.piece=p;
+            div.ondragstart=function(e){{dragStart(e,i,'pieces');}};
+            div.ondragend=dragEnd;
+        }}
+        piecesBoard.appendChild(div);
+    }});
+    
+    // Render puzzle board (target slots)
+    puzzleBoard.innerHTML='';
+    slots.forEach(function(s,i){{
+        var div=document.createElement('div');
+        div.style.width=cellSize+'px';
+        div.style.height=cellSize+'px';
+        div.dataset.slot=i;
+        if(s===-1){{
+            div.className='slot';
+            div.ondragover=function(e){{e.preventDefault();this.classList.add('highlight');}};
+            div.ondragleave=function(){{this.classList.remove('highlight');}};
+            div.ondrop=function(e){{dropOnSlot(e,i);}};
+        }}else{{
+            div.className='piece';
+            if(s===i)div.classList.add('correct');
+            var row=Math.floor(s/SIZE),col=s%SIZE;
+            div.style.backgroundImage='url('+imgUrl+')';
+            div.style.backgroundSize=(SIZE*100)+'% '+(SIZE*100)+'%';
+            div.style.backgroundPosition=(col*100/(SIZE-1))+'% '+(row*100/(SIZE-1))+'%';
+            div.draggable=true;
+            div.ondragstart=function(e){{dragStart(e,i,'puzzle');}};
+            div.ondragend=dragEnd;
+        }}
+        puzzleBoard.appendChild(div);
+    }});
+    
+    // Update count
+    var placed=slots.filter(function(s){{return s!==-1;}}).length;
+    document.getElementById('placed').textContent=placed;
+    
+    // Check win
+    if(placed===SIZE*SIZE){{
+        var won=true;
+        for(var i=0;i<SIZE*SIZE;i++)if(slots[i]!==i){{won=false;break;}}
+        if(won)document.getElementById('win-msg').style.display='block';
+    }}
+}}
+
+var dragSource='';
+function dragStart(e,idx,source){{
+    draggedIdx=idx;dragSource=source;
+    e.target.classList.add('dragging');
+}}
+function dragEnd(e){{e.target.classList.remove('dragging');draggedIdx=-1;}}
+
+function dropOnSlot(e,slotIdx){{
+    e.preventDefault();
+    e.target.classList.remove('highlight');
+    if(draggedIdx===-1)return;
+    
+    var piece;
+    if(dragSource==='pieces'){{
+        piece=pieces[draggedIdx];
+        pieces[draggedIdx]=-1;
+    }}else{{
+        piece=slots[draggedIdx];
+        slots[draggedIdx]=-1;
+    }}
+    
+    // If slot has a piece, move it back to pieces
+    if(slots[slotIdx]!==-1){{
+        var oldPiece=slots[slotIdx];
+        // Find empty spot in pieces
+        for(var i=0;i<pieces.length;i++){{
+            if(pieces[i]===-1){{pieces[i]=oldPiece;break;}}
+        }}
+    }}
+    
+    slots[slotIdx]=piece;
+    render();
+}}
+
+function resetPuzzle(){{
+    // Move all pieces back
+    pieces=[];for(var i=0;i<SIZE*SIZE;i++)pieces.push(-1);
+    var idx=0;
+    for(var i=0;i<SIZE*SIZE;i++){{
+        if(slots[i]!==-1){{pieces[idx++]=slots[i];}}
+    }}
+    // Re-shuffle
+    for(var i=idx-1;i>0;i--){{
+        var j=Math.floor(Math.random()*(i+1));
+        var t=pieces[i];pieces[i]=pieces[j];pieces[j]=t;
+    }}
+    slots=[];for(var i=0;i<SIZE*SIZE;i++)slots.push(-1);
+    document.getElementById('win-msg').style.display='none';
+    render();
+}}
+
+function newImage(){{
+    document.getElementById('upload-area').classList.remove('hidden');
+    document.getElementById('game-area').classList.remove('active');
+    document.getElementById('file-input').value='';
+}}
+"""
+        return self._base_page(title, body, css, js)
+
     # --- Sliding Tile Puzzle ---
     def _sliding_puzzle_html(self, title, desc):
-        # Extract grid size and layout features
+        # Extract grid size and layout features (inspired by PrettyFoto Puzzles)
         features = extract_features(desc)
         size = 3
         if "grid_size" in features:
@@ -680,6 +1150,8 @@ show();"""
 .tile{{width:{cell_px}px;height:{cell_px}px;display:flex;align-items:center;justify-content:center;font-size:{max(16, 36 - size * 4)}px;font-weight:700;border-radius:8px;cursor:pointer;transition:all .15s;user-select:none}}
 .tile.num{{background:#ff7a59;color:#fff;border:2px solid #e8694a}}.tile.num:hover{{background:#ff6b3f;transform:scale(1.03)}}
 .tile.empty{{background:#f0f0f0;border:2px dashed #ccc;cursor:default}}
+.stats{{font-size:13px;color:#666;margin:8px 0}}.stats span{{margin:0 8px}}
+.difficulty{{font-size:12px;color:#888;margin:4px 0}}
 .moves{{font-size:15px;color:#888;margin:10px 0}}
 .win{{animation:celebrate .6s ease-in-out}}
 @keyframes celebrate{{0%,100%{{transform:scale(1)}}50%{{transform:scale(1.05)}}}}"""
@@ -691,53 +1163,65 @@ show();"""
 .tile{{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:clamp(14px,calc(80vw/{size}/2),{max(20, 40 - size * 4)}px);font-weight:700;border-radius:8px;cursor:pointer;transition:all .15s;user-select:none}}
 .tile.num{{background:#ff7a59;color:#fff;border:2px solid #e8694a}}.tile.num:hover{{background:#ff6b3f;transform:scale(1.03)}}
 .tile.empty{{background:#f0f0f0;border:2px dashed #ccc;cursor:default}}
+.stats{{font-size:13px;color:#666;margin:8px 0}}.stats span{{margin:0 8px}}
+.difficulty{{font-size:12px;color:#888;margin:4px 0}}
 .moves{{font-size:15px;color:#888;margin:10px 0}}
 .win{{animation:celebrate .6s ease-in-out}}
 @keyframes celebrate{{0%,100%{{transform:scale(1)}}50%{{transform:scale(1.05)}}}}"""
 
         body = f"""<div class="card">
     <h2>Sliding Puzzle ({size}×{size})</h2>
+    <p class="stats"><span>Wins: <strong id="wins">0</strong></span><span>Streak: <strong id="streak">0</strong></span></p>
+    <p class="difficulty" id="diffLabel">Difficulty: Easy</p>
     <p class="moves">Moves: <strong id="moves">0</strong></p>
     <div class="board" id="board"></div>
     <button class="btn-primary" onclick="newGame()" style="margin-top:12px">Shuffle</button>
 </div>"""
 
-        js = f"""var SIZE={size},board,moves,won;
-function newGame(){{
-  board=[];for(var i=1;i<SIZE*SIZE;i++)board.push(i);board.push(0);
-  // Fisher-Yates shuffle that produces solvable state
-  do{{for(var i=board.length-1;i>0;i--){{var j=Math.floor(Math.random()*(i+1));var t=board[i];board[i]=board[j];board[j]=t;}}}}while(!isSolvable());
-  moves=0;won=false;document.getElementById('moves').textContent='0';render();
-}}
-function isSolvable(){{
-  var inv=0;var flat=board.filter(function(x){{return x!==0;}});
-  for(var i=0;i<flat.length;i++)for(var j=i+1;j<flat.length;j++)if(flat[i]>flat[j])inv++;
-  if(SIZE%2===1)return inv%2===0;
-  var emptyRow=Math.floor(board.indexOf(0)/SIZE);
-  return(inv+emptyRow)%2===1;
-}}
-function render(){{
-  var b=document.getElementById('board');b.innerHTML='';
-  board.forEach(function(v,i){{
-    var d=document.createElement('div');
-    if(v===0){{d.className='tile empty';}}
-    else{{d.className='tile num';d.textContent=v;d.onclick=function(){{clickTile(i);}};}}
-    b.appendChild(d);
-  }});
-  if(won)b.classList.add('win');else b.classList.remove('win');
-}}
-function clickTile(i){{
-  if(won)return;var ei=board.indexOf(0);
-  var row=Math.floor(i/SIZE),col=i%SIZE,er=Math.floor(ei/SIZE),ec=ei%SIZE;
+        # Enhanced JS with progressive difficulty from PrettyFoto
+        js = f"""var SIZE={size},board,emptyIdx,moves,won,shuffleSeed=Date.now();
+var stats={{won:0,streak:0,bestStreak:0}};
+try{{var s=localStorage.getItem('slidingPuzzleStats');if(s)stats=JSON.parse(s);}}catch(e){{}}
+function saveStats(){{try{{localStorage.setItem('slidingPuzzleStats',JSON.stringify(stats));}}catch(e){{}}}}
+function updateStatsUI(){{document.getElementById('wins').textContent=stats.won;document.getElementById('streak').textContent=stats.streak;
+  var pct=Math.min(stats.won,10)/10;var labels=['Easy','Medium','Challenging','Hard','Expert'];
+  document.getElementById('diffLabel').textContent='Difficulty: '+labels[Math.min(Math.floor(pct*5),4)];}}
+function seededRandom(s){{s=Math.sin(s)*10000;return s-Math.floor(s);}}
+function getNeighbors(idx){{var n=[],row=Math.floor(idx/SIZE),col=idx%SIZE;
+  if(row>0)n.push(idx-SIZE);if(row<SIZE-1)n.push(idx+SIZE);
+  if(col>0)n.push(idx-1);if(col<SIZE-1)n.push(idx+1);return n;}}
+function countInversions(){{var arr=[],blank=SIZE*SIZE-1;
+  for(var i=0;i<SIZE*SIZE;i++)if(board[i]!==blank)arr.push(board[i]);
+  var inv=0;for(var i=0;i<arr.length;i++)for(var j=i+1;j<arr.length;j++)if(arr[i]>arr[j])inv++;return inv;}}
+function isSolvable(){{var inv=countInversions(),emptyRow=Math.floor(emptyIdx/SIZE),fromBottom=SIZE-1-emptyRow;
+  return(inv+fromBottom)%2===0;}}
+function ensureSolvable(){{if(isSolvable())return;var blank=SIZE*SIZE-1,a=-1,b=-1;
+  for(var i=0;i<SIZE*SIZE&&b===-1;i++){{if(board[i]===blank)continue;if(a===-1){{a=i;continue;}}b=i;}}
+  if(a!==-1&&b!==-1){{var t=board[a];board[a]=board[b];board[b]=t;}}}}
+function shuffleTiles(){{var total=SIZE*SIZE;board=[];for(var i=0;i<total;i++)board.push(i);emptyIdx=total-1;
+  var baseMoves=SIZE*SIZE*20,minMoves=5,winsForFull=10;
+  var progress=Math.min(stats.won,winsForFull)/winsForFull;
+  var shuffleMoves=Math.round(minMoves+(baseMoves-minMoves)*progress);
+  for(var i=0;i<shuffleMoves;i++){{var neighbors=getNeighbors(emptyIdx);
+    var ri=Math.floor(seededRandom(shuffleSeed+i)*neighbors.length);var ni=neighbors[ri];
+    board[emptyIdx]=board[ni];board[ni]=total-1;emptyIdx=ni;}}
+  ensureSolvable();}}
+function newGame(){{shuffleSeed=Date.now();shuffleTiles();moves=0;won=false;
+  document.getElementById('moves').textContent='0';render();updateStatsUI();}}
+function render(){{var b=document.getElementById('board');b.innerHTML='';
+  board.forEach(function(v,i){{var d=document.createElement('div');
+    if(v===SIZE*SIZE-1){{d.className='tile empty';}}
+    else{{d.className='tile num';d.textContent=v+1;d.onclick=function(){{clickTile(i);}};}}
+    b.appendChild(d);}});
+  if(won)b.classList.add('win');else b.classList.remove('win');}}
+function clickTile(i){{if(won)return;var row=Math.floor(i/SIZE),col=i%SIZE,er=Math.floor(emptyIdx/SIZE),ec=emptyIdx%SIZE;
   if((Math.abs(row-er)+Math.abs(col-ec))!==1)return;
-  board[ei]=board[i];board[i]=0;moves++;document.getElementById('moves').textContent=moves;
-  if(checkWin()){{won=true;}}render();
-  if(won)setTimeout(function(){{alert('Solved in '+moves+' moves!');}},300);
-}}
-function checkWin(){{
-  for(var i=0;i<SIZE*SIZE-1;i++)if(board[i]!==i+1)return false;return true;
-}}
-newGame();"""
+  board[emptyIdx]=board[i];board[i]=SIZE*SIZE-1;emptyIdx=i;
+  moves++;document.getElementById('moves').textContent=moves;
+  if(checkWin()){{won=true;stats.won++;stats.streak++;if(stats.streak>stats.bestStreak)stats.bestStreak=stats.streak;saveStats();}}
+  render();if(won){{updateStatsUI();setTimeout(function(){{alert('Solved in '+moves+' moves!');}},300);}}}}
+function checkWin(){{for(var i=0;i<SIZE*SIZE-1;i++)if(board[i]!==i)return false;return true;}}
+updateStatsUI();newGame();"""
         return self._base_page(title, body, css, js)
 
     # --- Hangman ---
@@ -853,6 +1337,125 @@ document.addEventListener('keydown',function(e){if(e.key==='Enter')submitGuess()
 else if(e.key==='Backspace')backspace();
 else{var ch=e.key.toUpperCase();if(ch.length===1&&ch>='A'&&ch<='Z')typeLetter(ch);}});
 newGame();"""
+        return self._base_page(title, body, css, js)
+
+    # --- Algorithm Visualizer (from ML-ToolBox patterns) ---
+    def _algorithm_visualizer_html(self, title, desc):
+        css = """*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:auto}
+.card{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:16px 0}
+.controls select,.controls button{padding:8px 16px;border-radius:6px;font-size:14px;border:1px solid #ddd}
+.controls button{background:#ff7a59;color:#fff;border:none;cursor:pointer;font-weight:600}
+.controls button:hover{background:#e8694a}
+.controls button:disabled{background:#ccc;cursor:not-allowed}
+.viz-area{display:flex;align-items:flex-end;justify-content:center;gap:2px;height:300px;padding:20px;background:#f9f9f9;border-radius:12px;margin:16px 0;width:min(90vw,600px)}
+.bar{background:#ff7a59;border-radius:4px 4px 0 0;transition:height .15s,background .15s;min-width:8px;flex:1;max-width:30px}
+.bar.comparing{background:#3498db}
+.bar.swapping{background:#e74c3c}
+.bar.sorted{background:#2ecc71}
+.bar.pivot{background:#9b59b6}
+.info{font-size:14px;color:#666;margin:8px 0}
+.info span{margin:0 12px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:12px}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px}
+.legend-color{width:16px;height:16px;border-radius:3px}"""
+        body = """<div class="card">
+    <h2>Algorithm Visualizer</h2>
+    <p style="color:#888;margin:4px 0">Watch sorting algorithms in action!</p>
+    <div class="controls">
+        <select id="algo">
+            <option value="bubble">Bubble Sort</option>
+            <option value="selection">Selection Sort</option>
+            <option value="insertion">Insertion Sort</option>
+            <option value="quick">Quick Sort</option>
+            <option value="merge">Merge Sort</option>
+        </select>
+        <select id="size">
+            <option value="10">10 bars</option>
+            <option value="20" selected>20 bars</option>
+            <option value="30">30 bars</option>
+            <option value="50">50 bars</option>
+        </select>
+        <select id="speed">
+            <option value="500">Slow</option>
+            <option value="150" selected>Medium</option>
+            <option value="30">Fast</option>
+        </select>
+        <button id="startBtn" onclick="startSort()">Start</button>
+        <button onclick="reset()">Reset</button>
+    </div>
+    <div class="info">
+        <span>Comparisons: <strong id="comps">0</strong></span>
+        <span>Swaps: <strong id="swaps">0</strong></span>
+    </div>
+    <div class="viz-area" id="viz"></div>
+    <div class="legend">
+        <div class="legend-item"><div class="legend-color" style="background:#ff7a59"></div>Unsorted</div>
+        <div class="legend-item"><div class="legend-color" style="background:#3498db"></div>Comparing</div>
+        <div class="legend-item"><div class="legend-color" style="background:#e74c3c"></div>Swapping</div>
+        <div class="legend-item"><div class="legend-color" style="background:#9b59b6"></div>Pivot</div>
+        <div class="legend-item"><div class="legend-color" style="background:#2ecc71"></div>Sorted</div>
+    </div>
+</div>"""
+        js = r"""var arr=[],running=false,delay=150,comps=0,swaps=0;
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function reset(){running=false;comps=0;swaps=0;document.getElementById('comps').textContent='0';
+  document.getElementById('swaps').textContent='0';document.getElementById('startBtn').disabled=false;
+  var n=parseInt(document.getElementById('size').value);arr=[];
+  for(var i=0;i<n;i++)arr.push(Math.floor(Math.random()*250)+10);render();}
+function render(hi1,hi2,pivotIdx,sorted){var v=document.getElementById('viz');v.innerHTML='';
+  arr.forEach(function(h,i){var b=document.createElement('div');b.className='bar';
+    if(sorted&&sorted.includes(i))b.classList.add('sorted');
+    else if(i===pivotIdx)b.classList.add('pivot');
+    else if(i===hi1||i===hi2)b.classList.add(hi1!==undefined&&hi2!==undefined?'swapping':'comparing');
+    b.style.height=h+'px';v.appendChild(b);});}
+async function bubbleSort(){var n=arr.length;
+  for(var i=0;i<n-1&&running;i++){for(var j=0;j<n-i-1&&running;j++){
+    comps++;document.getElementById('comps').textContent=comps;render(j,j+1);await sleep(delay);
+    if(arr[j]>arr[j+1]){var t=arr[j];arr[j]=arr[j+1];arr[j+1]=t;swaps++;
+      document.getElementById('swaps').textContent=swaps;render(j,j+1);await sleep(delay);}}}}
+async function selectionSort(){var n=arr.length;
+  for(var i=0;i<n-1&&running;i++){var minIdx=i;
+    for(var j=i+1;j<n&&running;j++){comps++;document.getElementById('comps').textContent=comps;
+      render(minIdx,j);await sleep(delay);if(arr[j]<arr[minIdx])minIdx=j;}
+    if(minIdx!==i){var t=arr[i];arr[i]=arr[minIdx];arr[minIdx]=t;swaps++;
+      document.getElementById('swaps').textContent=swaps;render(i,minIdx);await sleep(delay);}}}
+async function insertionSort(){var n=arr.length;
+  for(var i=1;i<n&&running;i++){var key=arr[i],j=i-1;
+    while(j>=0&&arr[j]>key&&running){comps++;document.getElementById('comps').textContent=comps;
+      render(j,j+1);await sleep(delay);arr[j+1]=arr[j];swaps++;
+      document.getElementById('swaps').textContent=swaps;j--;}
+    arr[j+1]=key;render();await sleep(delay);}}
+async function quickSort(lo,hi){if(lo>=hi||!running)return;
+  var pivot=arr[hi],i=lo-1;
+  for(var j=lo;j<hi&&running;j++){comps++;document.getElementById('comps').textContent=comps;
+    render(j,hi,hi);await sleep(delay);
+    if(arr[j]<pivot){i++;var t=arr[i];arr[i]=arr[j];arr[j]=t;swaps++;
+      document.getElementById('swaps').textContent=swaps;render(i,j,hi);await sleep(delay);}}
+  var t=arr[i+1];arr[i+1]=arr[hi];arr[hi]=t;swaps++;
+  document.getElementById('swaps').textContent=swaps;render(i+1,hi);await sleep(delay);
+  await quickSort(lo,i);await quickSort(i+2,hi);}
+async function mergeSort(l,r){if(l>=r||!running)return;var m=Math.floor((l+r)/2);
+  await mergeSort(l,m);await mergeSort(m+1,r);
+  var left=arr.slice(l,m+1),right=arr.slice(m+1,r+1),i=0,j=0,k=l;
+  while(i<left.length&&j<right.length&&running){comps++;
+    document.getElementById('comps').textContent=comps;render(k);await sleep(delay);
+    if(left[i]<=right[j])arr[k++]=left[i++];else arr[k++]=right[j++];
+    swaps++;document.getElementById('swaps').textContent=swaps;}
+  while(i<left.length&&running){arr[k++]=left[i++];render(k);await sleep(delay);}
+  while(j<right.length&&running){arr[k++]=right[j++];render(k);await sleep(delay);}}
+async function startSort(){if(running)return;running=true;comps=0;swaps=0;
+  document.getElementById('comps').textContent='0';document.getElementById('swaps').textContent='0';
+  document.getElementById('startBtn').disabled=true;delay=parseInt(document.getElementById('speed').value);
+  var algo=document.getElementById('algo').value;
+  if(algo==='bubble')await bubbleSort();
+  else if(algo==='selection')await selectionSort();
+  else if(algo==='insertion')await insertionSort();
+  else if(algo==='quick')await quickSort(0,arr.length-1);
+  else if(algo==='merge')await mergeSort(0,arr.length-1);
+  if(running){var sorted=arr.map(function(_,i){return i;});render(null,null,null,sorted);}
+  running=false;document.getElementById('startBtn').disabled=false;}
+reset();"""
         return self._base_page(title, body, css, js)
 
     # --- Generic Game (reaction time) ---
@@ -1603,6 +2206,458 @@ function update(){{
     }}
 }}
 new Phaser.Game(config);
+</script></body></html>'''
+
+    # --- Pong Game ---
+    def _pong_html(self, title, desc):
+        return f'''<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#111;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif}}
+canvas{{border:2px solid #fff}}
+.score{{color:#fff;font-size:24px;text-align:center;margin-bottom:10px}}
+.controls{{color:#888;font-size:12px;text-align:center;margin-top:10px}}
+</style></head><body>
+<div>
+<div class="score">Player: <span id="p1">0</span> | Computer: <span id="p2">0</span></div>
+<canvas id="c" width="600" height="400"></canvas>
+<div class="controls">Use W/S or Arrow Keys to move your paddle</div>
+</div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
+const W=600,H=400,paddleH=80,paddleW=10,ballSize=10;
+let p1Y=H/2-paddleH/2,p2Y=H/2-paddleH/2,ballX=W/2,ballY=H/2,ballVX=4,ballVY=3;
+let p1Score=0,p2Score=0,keys={{}};
+document.addEventListener('keydown',e=>keys[e.key]=true);
+document.addEventListener('keyup',e=>keys[e.key]=false);
+function update(){{
+    if(keys['w']||keys['W']||keys['ArrowUp'])p1Y=Math.max(0,p1Y-6);
+    if(keys['s']||keys['S']||keys['ArrowDown'])p1Y=Math.min(H-paddleH,p1Y+6);
+    // Simple AI
+    if(p2Y+paddleH/2<ballY)p2Y=Math.min(H-paddleH,p2Y+4);
+    if(p2Y+paddleH/2>ballY)p2Y=Math.max(0,p2Y-4);
+    ballX+=ballVX;ballY+=ballVY;
+    if(ballY<=0||ballY>=H-ballSize)ballVY=-ballVY;
+    // Left paddle
+    if(ballX<=paddleW+10&&ballY+ballSize>=p1Y&&ballY<=p1Y+paddleH){{ballVX=-ballVX;ballX=paddleW+11;}}
+    // Right paddle
+    if(ballX>=W-paddleW-10-ballSize&&ballY+ballSize>=p2Y&&ballY<=p2Y+paddleH){{ballVX=-ballVX;ballX=W-paddleW-11-ballSize;}}
+    // Scoring
+    if(ballX<0){{p2Score++;document.getElementById('p2').textContent=p2Score;reset();}}
+    if(ballX>W){{p1Score++;document.getElementById('p1').textContent=p1Score;reset();}}
+}}
+function reset(){{ballX=W/2;ballY=H/2;ballVX=4*(Math.random()>0.5?1:-1);ballVY=3*(Math.random()>0.5?1:-1);}}
+function draw(){{
+    ctx.fillStyle='#111';ctx.fillRect(0,0,W,H);
+    ctx.setLineDash([5,5]);ctx.strokeStyle='#444';ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#fff';
+    ctx.fillRect(10,p1Y,paddleW,paddleH);
+    ctx.fillRect(W-paddleW-10,p2Y,paddleW,paddleH);
+    ctx.fillRect(ballX,ballY,ballSize,ballSize);
+}}
+function loop(){{update();draw();requestAnimationFrame(loop);}}
+loop();
+</script></body></html>'''
+
+    # --- Cookie Clicker / Idle Game ---
+    def _cookie_clicker_html(self, title, desc):
+        return f'''<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:linear-gradient(135deg,#1a1a2e,#16213e);min-height:100vh;font-family:'Segoe UI',sans-serif;color:#fff;display:flex;justify-content:center;padding:20px}}
+.container{{max-width:800px;width:100%}}
+h1{{text-align:center;margin-bottom:20px;font-size:28px}}
+.main{{display:grid;grid-template-columns:1fr 1fr;gap:20px}}
+.cookie-area{{text-align:center}}
+.cookie{{width:200px;height:200px;border-radius:50%;background:linear-gradient(135deg,#c4a35a,#8b6914);border:none;cursor:pointer;font-size:60px;transition:transform 0.1s;box-shadow:0 10px 30px rgba(0,0,0,0.4)}}
+.cookie:hover{{transform:scale(1.05)}}
+.cookie:active{{transform:scale(0.95)}}
+.count{{font-size:32px;margin:20px 0}}
+.per-sec{{color:#888;font-size:14px}}
+.shop{{background:rgba(255,255,255,0.1);border-radius:12px;padding:20px}}
+.shop h2{{margin-bottom:15px;font-size:18px}}
+.upgrade{{background:rgba(255,255,255,0.1);padding:12px;border-radius:8px;margin-bottom:10px;cursor:pointer;transition:background 0.2s}}
+.upgrade:hover{{background:rgba(255,255,255,0.2)}}
+.upgrade.locked{{opacity:0.5;cursor:not-allowed}}
+.upgrade-name{{font-weight:bold}}
+.upgrade-info{{font-size:12px;color:#aaa;margin-top:4px}}
+</style></head><body>
+<div class="container">
+<h1>🍪 {title}</h1>
+<div class="main">
+<div class="cookie-area">
+<div class="count"><span id="count">0</span> cookies</div>
+<button class="cookie" onclick="click1()">🍪</button>
+<div class="per-sec"><span id="cps">0</span> per second</div>
+</div>
+<div class="shop">
+<h2>Upgrades</h2>
+<div class="upgrade" onclick="buy(0)"><span class="upgrade-name">Cursor</span> - $<span id="p0">15</span><div class="upgrade-info">+0.1/sec (owned: <span id="o0">0</span>)</div></div>
+<div class="upgrade" onclick="buy(1)"><span class="upgrade-name">Grandma</span> - $<span id="p1">100</span><div class="upgrade-info">+1/sec (owned: <span id="o1">0</span>)</div></div>
+<div class="upgrade" onclick="buy(2)"><span class="upgrade-name">Farm</span> - $<span id="p2">500</span><div class="upgrade-info">+8/sec (owned: <span id="o2">0</span>)</div></div>
+<div class="upgrade" onclick="buy(3)"><span class="upgrade-name">Factory</span> - $<span id="p3">3000</span><div class="upgrade-info">+47/sec (owned: <span id="o3">0</span>)</div></div>
+</div>
+</div>
+</div>
+<script>
+let cookies=0,cps=0;
+const upgrades=[
+    {{name:'Cursor',base:15,cps:0.1,owned:0}},
+    {{name:'Grandma',base:100,cps:1,owned:0}},
+    {{name:'Farm',base:500,cps:8,owned:0}},
+    {{name:'Factory',base:3000,cps:47,owned:0}}
+];
+function getPrice(i){{return Math.floor(upgrades[i].base*Math.pow(1.15,upgrades[i].owned));}}
+function click1(){{cookies++;update();}}
+function buy(i){{
+    const price=getPrice(i);
+    if(cookies>=price){{
+        cookies-=price;upgrades[i].owned++;
+        cps=upgrades.reduce((s,u)=>s+u.cps*u.owned,0);
+        update();
+    }}
+}}
+function update(){{
+    document.getElementById('count').textContent=Math.floor(cookies);
+    document.getElementById('cps').textContent=cps.toFixed(1);
+    upgrades.forEach((u,i)=>{{
+        document.getElementById('p'+i).textContent=getPrice(i);
+        document.getElementById('o'+i).textContent=u.owned;
+    }});
+}}
+setInterval(()=>{{cookies+=cps/10;update();}},100);
+update();
+</script></body></html>'''
+
+    # --- Sudoku ---
+    def _sudoku_html(self, title, desc):
+        return f'''<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#f0f0f0;min-height:100vh;font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;padding:20px}}
+.container{{background:#fff;padding:30px;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,0.1)}}
+h1{{text-align:center;margin-bottom:20px;color:#333}}
+.grid{{display:grid;grid-template-columns:repeat(9,40px);gap:1px;background:#333;padding:2px;border-radius:4px}}
+.cell{{width:40px;height:40px;border:none;text-align:center;font-size:18px;font-weight:bold;background:#fff}}
+.cell:focus{{background:#e3f2fd;outline:none}}
+.cell.fixed{{background:#f5f5f5;color:#333}}
+.cell.error{{background:#ffebee;color:#c62828}}
+.cell:nth-child(3n){{border-right:2px solid #333}}
+.cell:nth-child(n+19):nth-child(-n+27),.cell:nth-child(n+46):nth-child(-n+54){{border-bottom:2px solid #333}}
+.row-break{{display:none}}
+.btns{{margin-top:20px;text-align:center}}
+.btns button{{padding:10px 20px;margin:5px;border:none;border-radius:8px;cursor:pointer;font-size:14px}}
+.btns button:first-child{{background:#4caf50;color:#fff}}
+.btns button:last-child{{background:#f44336;color:#fff}}
+#msg{{text-align:center;margin-top:10px;font-weight:bold}}
+</style></head><body>
+<div class="container">
+<h1>{title}</h1>
+<div class="grid" id="grid"></div>
+<div class="btns">
+<button onclick="check()">Check Solution</button>
+<button onclick="newGame()">New Game</button>
+</div>
+<div id="msg"></div>
+</div>
+<script>
+const puzzles=[
+'530070000600195000098000060800060003400803001700020006060000280000419005000080079',
+'003020600900305001001806400008102900700000008006708200002609500800203009005010300',
+'200080300060070084030500209000105408000000000402706000301007040720040060004010003'
+];
+let puzzle='',solution='';
+function shuffle(a){{for(let i=a.length-1;i>0;i--){{const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}return a;}}
+function newGame(){{
+    const idx=Math.floor(Math.random()*puzzles.length);
+    puzzle=puzzles[idx];
+    const grid=document.getElementById('grid');
+    grid.innerHTML='';
+    for(let i=0;i<81;i++){{
+        const cell=document.createElement('input');
+        cell.className='cell'+(puzzle[i]!=='0'?' fixed':'');
+        cell.maxLength=1;
+        cell.value=puzzle[i]==='0'?'':puzzle[i];
+        if(puzzle[i]!=='0')cell.readOnly=true;
+        cell.oninput=()=>{{cell.value=cell.value.replace(/[^1-9]/g,'');}};
+        grid.appendChild(cell);
+    }}
+    document.getElementById('msg').textContent='';
+}}
+function check(){{
+    const cells=[...document.querySelectorAll('.cell')];
+    let valid=true;
+    cells.forEach(c=>c.classList.remove('error'));
+    // Check rows
+    for(let r=0;r<9;r++){{
+        const row=cells.slice(r*9,r*9+9).map(c=>c.value);
+        if(new Set(row.filter(v=>v)).size!==row.filter(v=>v).length){{
+            cells.slice(r*9,r*9+9).forEach(c=>c.classList.add('error'));valid=false;
+        }}
+    }}
+    // Check columns
+    for(let c=0;c<9;c++){{
+        const col=[];for(let r=0;r<9;r++)col.push(cells[r*9+c].value);
+        if(new Set(col.filter(v=>v)).size!==col.filter(v=>v).length){{
+            for(let r=0;r<9;r++)cells[r*9+c].classList.add('error');valid=false;
+        }}
+    }}
+    // Check complete
+    const complete=cells.every(c=>c.value);
+    document.getElementById('msg').textContent=valid&&complete?'🎉 Solved!':(valid?'Keep going...':'Errors found');
+    document.getElementById('msg').style.color=valid&&complete?'#4caf50':(valid?'#ff9800':'#f44336');
+}}
+newGame();
+</script></body></html>'''
+
+    # --- Connect Four ---
+    def _connect_four_html(self, title, desc):
+        return f'''<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:linear-gradient(135deg,#1a237e,#0d47a1);min-height:100vh;font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center}}
+.container{{text-align:center}}
+h1{{color:#fff;margin-bottom:20px}}
+.board{{background:#1565c0;padding:10px;border-radius:12px;display:inline-block;box-shadow:0 10px 40px rgba(0,0,0,0.3)}}
+.row{{display:flex}}
+.cell{{width:50px;height:50px;background:#0d47a1;border-radius:50%;margin:3px;cursor:pointer;transition:all 0.3s}}
+.cell:hover{{background:#1976d2}}
+.cell.red{{background:#f44336}}
+.cell.yellow{{background:#ffeb3b}}
+#status{{color:#fff;margin-top:20px;font-size:18px}}
+button{{margin-top:15px;padding:10px 30px;border:none;border-radius:8px;background:#fff;color:#1565c0;font-size:16px;cursor:pointer}}
+</style></head><body>
+<div class="container">
+<h1>{title}</h1>
+<div class="board" id="board"></div>
+<div id="status">🔴 Red's turn</div>
+<button onclick="reset()">New Game</button>
+</div>
+<script>
+const ROWS=6,COLS=7;
+let board,turn,gameOver;
+function init(){{
+    board=Array(ROWS).fill(null).map(()=>Array(COLS).fill(0));
+    turn=1;gameOver=false;
+    render();
+    document.getElementById('status').textContent="🔴 Red's turn";
+}}
+function render(){{
+    const el=document.getElementById('board');
+    el.innerHTML='';
+    for(let r=0;r<ROWS;r++){{
+        const row=document.createElement('div');
+        row.className='row';
+        for(let c=0;c<COLS;c++){{
+            const cell=document.createElement('div');
+            cell.className='cell'+(board[r][c]===1?' red':'')+(board[r][c]===2?' yellow':'');
+            cell.onclick=()=>drop(c);
+            row.appendChild(cell);
+        }}
+        el.appendChild(row);
+    }}
+}}
+function drop(col){{
+    if(gameOver)return;
+    for(let r=ROWS-1;r>=0;r--){{
+        if(board[r][col]===0){{
+            board[r][col]=turn;
+            if(checkWin(r,col)){{
+                gameOver=true;
+                document.getElementById('status').textContent=(turn===1?'🔴 Red':'🟡 Yellow')+' wins!';
+            }}else{{
+                turn=turn===1?2:1;
+                document.getElementById('status').textContent=(turn===1?'🔴 Red':'🟡 Yellow')+"'s turn";
+            }}
+            render();return;
+        }}
+    }}
+}}
+function checkWin(r,c){{
+    const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+    for(let[dr,dc]of dirs){{
+        let count=1;
+        for(let i=1;i<4;i++)if(board[r+dr*i]?.[c+dc*i]===turn)count++;else break;
+        for(let i=1;i<4;i++)if(board[r-dr*i]?.[c-dc*i]===turn)count++;else break;
+        if(count>=4)return true;
+    }}
+    return false;
+}}
+function reset(){{init();}}
+init();
+</script></body></html>'''
+
+    # --- Blackjack ---
+    def _blackjack_html(self, title, desc):
+        return f'''<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:linear-gradient(135deg,#1b5e20,#2e7d32);min-height:100vh;font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center}}
+.table{{background:#2e7d32;padding:40px;border-radius:20px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);min-width:400px;border:8px solid #1b5e20}}
+h1{{color:#fff;margin-bottom:20px}}
+.hand{{display:flex;justify-content:center;gap:10px;min-height:120px;margin:15px 0}}
+.card{{width:70px;height:100px;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:bold;box-shadow:0 4px 8px rgba(0,0,0,0.2)}}
+.card.red{{color:#c62828}}
+.card.hidden{{background:linear-gradient(135deg,#1565c0,#0d47a1);color:transparent}}
+.label{{color:#a5d6a7;font-size:14px;margin-bottom:5px}}
+.score{{color:#fff;font-size:18px;margin:10px 0}}
+.btns{{margin-top:20px}}
+.btns button{{padding:12px 24px;margin:5px;border:none;border-radius:8px;font-size:16px;cursor:pointer}}
+#hit{{background:#ffeb3b;color:#333}}
+#stand{{background:#f44336;color:#fff}}
+#deal{{background:#2196f3;color:#fff}}
+#msg{{color:#fff;font-size:20px;margin-top:15px;font-weight:bold}}
+</style></head><body>
+<div class="table">
+<h1>{title}</h1>
+<div class="label">Dealer</div>
+<div class="hand" id="dealer"></div>
+<div class="score">Dealer: <span id="ds">0</span></div>
+<div class="label">Your Hand</div>
+<div class="hand" id="player"></div>
+<div class="score">You: <span id="ps">0</span></div>
+<div class="btns">
+<button id="hit" onclick="hit()">Hit</button>
+<button id="stand" onclick="stand()">Stand</button>
+<button id="deal" onclick="deal()">Deal</button>
+</div>
+<div id="msg"></div>
+</div>
+<script>
+const suits=['♠','♥','♦','♣'],ranks=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+let deck,pHand,dHand,gameOver;
+function createDeck(){{deck=[];for(let s of suits)for(let r of ranks)deck.push({{rank:r,suit:s}});shuffle();}}
+function shuffle(){{for(let i=deck.length-1;i>0;i--){{const j=Math.floor(Math.random()*(i+1));[deck[i],deck[j]]=[deck[j],deck[i]];}};}}
+function cardVal(card){{if(['J','Q','K'].includes(card.rank))return 10;if(card.rank==='A')return 11;return parseInt(card.rank);}}
+function handVal(hand){{let v=hand.reduce((s,c)=>s+cardVal(c),0),aces=hand.filter(c=>c.rank==='A').length;while(v>21&&aces>0){{v-=10;aces--;}}return v;}}
+function renderCard(c,hidden=false){{
+    const isRed=['♥','♦'].includes(c.suit);
+    return `<div class="card${{isRed?' red':''}}${{hidden?' hidden':''}}">${{hidden?'':c.rank+c.suit}}</div>`;
+}}
+function render(showDealer=false){{
+    document.getElementById('player').innerHTML=pHand.map(c=>renderCard(c)).join('');
+    document.getElementById('dealer').innerHTML=dHand.map((c,i)=>renderCard(c,!showDealer&&i===1)).join('');
+    document.getElementById('ps').textContent=handVal(pHand);
+    document.getElementById('ds').textContent=showDealer?handVal(dHand):'?';
+}}
+function deal(){{
+    createDeck();pHand=[deck.pop(),deck.pop()];dHand=[deck.pop(),deck.pop()];gameOver=false;
+    document.getElementById('msg').textContent='';
+    document.getElementById('hit').disabled=false;document.getElementById('stand').disabled=false;
+    render();
+    if(handVal(pHand)===21)endGame('Blackjack! You win!');
+}}
+function hit(){{
+    if(gameOver)return;
+    pHand.push(deck.pop());render();
+    if(handVal(pHand)>21)endGame('Bust! Dealer wins.');
+}}
+function stand(){{
+    if(gameOver)return;
+    while(handVal(dHand)<17)dHand.push(deck.pop());
+    render(true);
+    const pv=handVal(pHand),dv=handVal(dHand);
+    if(dv>21)endGame('Dealer busts! You win!');
+    else if(pv>dv)endGame('You win!');
+    else if(dv>pv)endGame('Dealer wins.');
+    else endGame('Push - tie game.');
+}}
+function endGame(msg){{
+    gameOver=true;render(true);
+    document.getElementById('msg').textContent=msg;
+    document.getElementById('hit').disabled=true;document.getElementById('stand').disabled=true;
+}}
+deal();
+</script></body></html>'''
+
+    # --- Flappy Bird ---
+    def _flappy_html(self, title, desc):
+        return f'''<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#70c5ce;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif}}
+canvas{{border:2px solid #333}}
+#ui{{position:absolute;top:20px;color:#fff;font-size:28px;text-shadow:2px 2px 2px #333}}
+</style></head><body>
+<div id="ui">Score: <span id="score">0</span></div>
+<canvas id="c" width="400" height="600"></canvas>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
+const W=400,H=600,GRAVITY=0.5,JUMP=-8,PIPE_WIDTH=60,GAP=150;
+let bird={{x:80,y:H/2,vy:0,size:25}},pipes=[],score=0,gameOver=false,started=false;
+function addPipe(){{
+    const minY=100,maxY=H-GAP-100;
+    const gapY=minY+Math.random()*(maxY-minY);
+    pipes.push({{x:W,gapY:gapY,passed:false}});
+}}
+function reset(){{
+    bird.y=H/2;bird.vy=0;pipes=[];score=0;gameOver=false;started=false;
+    document.getElementById('score').textContent=0;
+}}
+function jump(){{
+    if(gameOver){{reset();return;}}
+    if(!started){{started=true;addPipe();}}
+    bird.vy=JUMP;
+}}
+document.addEventListener('keydown',e=>{{if(e.code==='Space')jump();}});
+canvas.addEventListener('click',jump);
+canvas.addEventListener('touchstart',e=>{{e.preventDefault();jump();}});
+function update(){{
+    if(!started||gameOver)return;
+    bird.vy+=GRAVITY;bird.y+=bird.vy;
+    // Pipes
+    for(let p of pipes){{
+        p.x-=3;
+        if(!p.passed&&p.x+PIPE_WIDTH<bird.x){{p.passed=true;score++;document.getElementById('score').textContent=score;}}
+    }}
+    pipes=pipes.filter(p=>p.x>-PIPE_WIDTH);
+    if(pipes.length===0||pipes[pipes.length-1].x<W-200)addPipe();
+    // Collision
+    if(bird.y<0||bird.y+bird.size>H)gameOver=true;
+    for(let p of pipes){{
+        if(bird.x+bird.size>p.x&&bird.x<p.x+PIPE_WIDTH){{
+            if(bird.y<p.gapY||bird.y+bird.size>p.gapY+GAP)gameOver=true;
+        }}
+    }}
+}}
+function draw(){{
+    ctx.fillStyle='#70c5ce';ctx.fillRect(0,0,W,H);
+    // Ground
+    ctx.fillStyle='#ded895';ctx.fillRect(0,H-40,W,40);
+    ctx.fillStyle='#7cba5f';ctx.fillRect(0,H-50,W,10);
+    // Pipes
+    ctx.fillStyle='#73bf2e';
+    for(let p of pipes){{
+        ctx.fillRect(p.x,0,PIPE_WIDTH,p.gapY);
+        ctx.fillRect(p.x,p.gapY+GAP,PIPE_WIDTH,H-p.gapY-GAP);
+        ctx.fillStyle='#5a9c24';
+        ctx.fillRect(p.x-5,p.gapY-20,PIPE_WIDTH+10,20);
+        ctx.fillRect(p.x-5,p.gapY+GAP,PIPE_WIDTH+10,20);
+        ctx.fillStyle='#73bf2e';
+    }}
+    // Bird
+    ctx.fillStyle='#f7dc6f';ctx.beginPath();ctx.arc(bird.x+bird.size/2,bird.y+bird.size/2,bird.size/2,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(bird.x+bird.size/2+5,bird.y+bird.size/2-3,6,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#333';ctx.beginPath();ctx.arc(bird.x+bird.size/2+7,bird.y+bird.size/2-3,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#e74c3c';ctx.beginPath();ctx.moveTo(bird.x+bird.size,bird.y+bird.size/2);ctx.lineTo(bird.x+bird.size+10,bird.y+bird.size/2-3);ctx.lineTo(bird.x+bird.size+10,bird.y+bird.size/2+5);ctx.fill();
+    // Messages
+    if(!started){{ctx.fillStyle='#fff';ctx.font='24px sans-serif';ctx.textAlign='center';ctx.fillText('Tap or Space to Start',W/2,H/2);}}
+    if(gameOver){{ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,W,H);ctx.fillStyle='#fff';ctx.font='36px sans-serif';ctx.textAlign='center';ctx.fillText('Game Over!',W/2,H/2-20);ctx.font='18px sans-serif';ctx.fillText('Tap to restart',W/2,H/2+20);}}
+}}
+function loop(){{update();draw();requestAnimationFrame(loop);}}
+loop();
 </script></body></html>'''
 
     # --- Generic App (fallback) ---

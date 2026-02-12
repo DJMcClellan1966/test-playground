@@ -8,6 +8,26 @@
   --success: #2ecc71;
 }
 
+body.dark-mode {
+  --ink: #e8e8e8;
+  --muted: #a0a0a0;
+  --border: #3a3a4a;
+  --bg: #1a1a2e;
+  --accent: #ff8c6b;
+  --accent-2: #4a9eff;
+  --success: #3edb81;
+}
+
+body.dark-mode .step-card {
+  background: #252540;
+}
+
+body.dark-mode .textarea,
+body.dark-mode .input {
+  background: #1a1a2e;
+  color: var(--ink);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -32,6 +52,47 @@ body {
   padding: 24px 20px;
   text-align: center;
   box-shadow: 0 4px 12px rgba(255, 122, 89, 0.2);
+  position: relative;
+}
+
+.header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.dark-mode-toggle {
+  position: absolute;
+  top: 0;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
+}
+
+.dark-mode-toggle:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.dark-mode .dark-mode-toggle .icon-light {
+  display: none;
+}
+
+.dark-mode-toggle .icon-dark {
+  display: none;
+}
+
+.dark-mode .dark-mode-toggle .icon-dark {
+  display: inline;
 }
 
 .logo {

@@ -13,6 +13,10 @@
       <div class="header-content">
         <div class="logo">🔨 App Forge</div>
         <div class="tagline">Constraint-driven. AI-free. Working apps.</div>
+        <button id="dark-mode-toggle" class="dark-mode-toggle" title="Toggle dark mode">
+          <span class="icon-light">☀️</span>
+          <span class="icon-dark">🌙</span>
+        </button>
       </div>
     </header>
 
@@ -129,6 +133,11 @@
             <button id="btn-back-review" class="btn">← Start Over</button>
             <button id="btn-edit-description" class="btn secondary">✏️ Edit Description</button>
             <button id="btn-change-answers" class="btn secondary">↻ Change Answers</button>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; margin-left: auto;">
+              <input type="checkbox" id="include-deployment" style="width: auto;">
+              <span>Include Docker/Deploy configs</span>
+            </label>
+            <button id="btn-download" class="btn primary large">📥 Download ZIP</button>
             <button id="btn-save" class="btn primary large">Save to Desktop</button>
             <button id="btn-export-github" class="btn secondary large">Export to GitHub</button>
           </div>

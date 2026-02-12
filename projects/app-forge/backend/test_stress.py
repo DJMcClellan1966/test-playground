@@ -24,6 +24,12 @@ variety = [
     'quiz trivia app',
     'reaction time tester',
     'typing speed test',
+    'pong game',
+    'cookie clicker idle game',
+    'sudoku puzzle',
+    'connect four',
+    'blackjack card game',
+    'flappy bird',
 ]
 
 # Targeted accuracy tests (expected template)
@@ -34,6 +40,12 @@ targeted = [
     ('2048 puzzle', 'game_2048'),
     ('typing speed test', 'typing_test'),
     ('typing test', 'typing_test'),
+    ('pong game', 'pong'),
+    ('cookie clicker', 'cookie_clicker'),
+    ('sudoku', 'sudoku'),
+    ('connect four', 'connect_four'),
+    ('blackjack', 'blackjack'),
+    ('flappy bird', 'flappy'),
 ]
 
 complex_games = [

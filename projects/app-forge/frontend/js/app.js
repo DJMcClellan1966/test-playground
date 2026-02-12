@@ -37,6 +37,13 @@ const TEMPLATE_NAMES = {
   platformer: "Platformer Game",
   shooter: "Space Shooter",
   breakout: "Breakout / Brick Breaker",
+  // Classic games
+  pong: "Pong",
+  cookie_clicker: "Cookie Clicker / Idle Game",
+  sudoku: "Sudoku",
+  connect_four: "Connect Four",
+  blackjack: "Blackjack",
+  flappy: "Flappy Bird",
   // Component assembler types
   password_gen: "Password Generator",
   color_gen: "Color Palette Generator",
@@ -52,6 +59,7 @@ const TEMPLATE_NAMES = {
   chat: "Chat Interface",
   canvas: "Drawing / Whiteboard",
   editor: "Text Editor",
+  rps: "Rock Paper Scissors",
 };
 
 const API = {
@@ -354,6 +362,18 @@ const State = {
     }
   },
 
+  async download() {
+    if (!this.techStack || !this.techStack.build_id) {
+      alert('No build to download. Please generate an app first.');
+      return;
+    }
+    
+    const buildId = this.techStack.build_id;
+    const includeDeployment = document.getElementById('include-deployment').checked;
+    const url = `/api/download/${buildId}${includeDeployment ? '?deployment=true' : ''}`;
+    window.location.href = url;
+  },
+
   goBack() {
     API.stopPreview();
     this.step = 'describe';
@@ -486,11 +506,27 @@ function switchFile(filename) {
 
 // Init
 document.addEventListener('DOMContentLoaded', () => {
+  // Dark mode initialization
+  const darkModeToggle = document.getElementById('dark-mode-toggle');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const savedTheme = localStorage.getItem('theme');
+  
+  if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+    document.body.classList.add('dark-mode');
+  }
+  
+  darkModeToggle.addEventListener('click', () => {
+    document.body.classList.toggle('dark-mode');
+    const isDark = document.body.classList.contains('dark-mode');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  });
+  
   document.getElementById('btn-next').addEventListener('click', () => State.startWizard());
   document.getElementById('btn-back').addEventListener('click', () => State.goBack());
   document.getElementById('btn-back-review').addEventListener('click', () => State.goBack());
   document.getElementById('btn-change-answers').addEventListener('click', () => State.changeAnswers());
   document.getElementById('btn-save').addEventListener('click', () => State.save());
+  document.getElementById('btn-download').addEventListener('click', () => State.download());
   
   // Edit description buttons
   document.getElementById('btn-edit-description').addEventListener('click', () => State.showEditPanel());

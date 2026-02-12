@@ -12,9 +12,21 @@ from codegen import generator, detect_app_type
 from project_manager import manager
 from preview_server import preview
 from template_registry import match_template, extract_features, explain_match
+
+# Try to use neural-enhanced matching (hybrid router)
+try:
+    from template_registry import match_template_neural
+    # Use neural matcher as default if available
+    smart_match_template = match_template_neural
+    NEURAL_MATCHING = True
+except ImportError:
+    # Fall back to traditional matching
+    smart_match_template = match_template
+    NEURAL_MATCHING = False
 from component_assembler import can_assemble, detect_components
 from build_memory import memory, BuildRecord
 from modular_kernel import builder
+from regex_generator import RegexPatternGenerator
 
 # User preference learning (AI-free)
 try:
@@ -36,6 +48,9 @@ except ImportError:
 app = Flask(__name__, template_folder='../frontend', static_folder='../frontend', static_url_path='')
 CORS(app)
 app.config['SECRET_KEY'] = 'dev-secret'
+
+# Initialize pattern generator for learning loop
+pattern_generator = RegexPatternGenerator()
 
 # =============================================================================
 # Session Management  
@@ -72,8 +87,8 @@ def start_wizard():
     # Auto-infer answers from description
     inferred = infer_from_description(description)
     
-    # Detect what template will be used (for frontend display)
-    best_template, features, scores = match_template(description)
+    # Detect what template will be used (neural-enhanced matching)
+    best_template, features, scores = smart_match_template(description)
     feature_summary = {k: f.value for k, f in features.items()}
 
     # If data_app features dominate, the actual path is CRUD, not a game
@@ -167,14 +182,28 @@ def generate_project():
     # Solve for tech stack
     tech_stack = solver.solve(answered, profile.description)
     
-    # Detect template for history
-    best_template, features, _ = match_template(profile.description)
+    # Detect template for history (neural-enhanced)
+    best_template, features, _ = smart_match_template(profile.description)
     
     # Generate code — pass description for domain-aware models
     app_name = request.get_json().get('app_name', 'My App')
-    app_py = generator.generate_app_py(app_name, answered, profile.description)
-    requirements_txt = generator.generate_requirements_txt(answered)
-    index_html = generator.generate_index_html(app_name, answered, profile.description)
+    
+    # Check if this is a data app requiring multi-file generation
+    needs_db = answered.get('has_data', False)
+    if needs_db:
+        files = generator.generate_data_app_files(app_name, answered, profile.description)
+        app_py = files.get('app.py', '')
+        requirements_txt = files.get('requirements.txt', '')
+        index_html = files.get('templates/index.html', '')
+    else:
+        app_py = generator.generate_app_py(app_name, answered, profile.description)
+        requirements_txt = generator.generate_requirements_txt(answered)
+        index_html = generator.generate_index_html(app_name, answered, profile.description)
+        files = {
+            "app.py": app_py,
+            "requirements.txt": requirements_txt,
+            "templates/index.html": index_html,
+        }
     
     # Auto-save to build history
     try:
@@ -203,13 +232,13 @@ def generate_project():
     preview_error = result.get('error', '') if not result.get('success') else ''
     
     return jsonify({
-        "tech_stack": {**tech_stack.to_dict(), "template": best_template},
-        "app_name": app_name,
-        "files": {
-            "app.py": app_py,
-            "requirements.txt": requirements_txt,
-            "templates/index.html": index_html,
+        "tech_stack": {
+            **tech_stack.to_dict(), 
+            "template": best_template,
+            "build_id": session.get('current_build_id')
         },
+        "app_name": app_name,
+        "files": files,
         "preview_url": preview_url,
         "preview_error": preview_error,
     })
@@ -306,6 +335,94 @@ def export_github():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/download/<build_id>', methods=['GET'])
+def download_build(build_id):
+    """Download a build as a zip file."""
+    import zipfile
+    import io
+    from flask import send_file
+    
+    include_deployment = request.args.get('deployment', 'false').lower() == 'true'
+    
+    try:
+        # Get build from memory
+        build = memory.get_build(build_id)
+        if not build:
+            return jsonify({"error": "Build not found"}), 404
+        
+        # Regenerate files from build
+        profile_data = session.get('profile')
+        answered = session.get('answered', {})
+        
+        if profile_data and answered:
+            profile = Profile.from_dict(profile_data)
+            app_name = build.title or 'My App'
+            needs_db = answered.get('has_data', False)
+            
+            if needs_db:
+                files = generator.generate_data_app_files(app_name, answered, profile.description)
+            else:
+                files = {
+                    "app.py": generator.generate_app_py(app_name, answered, profile.description),
+                    "requirements.txt": generator.generate_requirements_txt(answered),
+                    "templates/index.html": generator.generate_index_html(app_name, answered, profile.description)
+                }
+            
+            # Add deployment files if requested
+            if include_deployment:
+                deployment_files = generator.generate_deployment_files(app_name)
+                files.update(deployment_files)
+        else:
+            # Fallback: just HTML file from build
+            files = {"index.html": build.code}
+        
+        # Create zip in memory
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Add all generated files
+            for filepath, content in files.items():
+                zip_file.writestr(filepath, content)
+            
+            # Add README if not already present
+            if 'README.md' not in files:
+                readme = f"""# {build.title}
+
+{build.description}
+
+## Generated by App Forge
+Template: {build.template}
+Created: {build.timestamp}
+
+## How to Use
+1. Install dependencies: `pip install -r requirements.txt`
+2. Run the app: `python app.py`
+3. Open your browser to http://127.0.0.1:5000
+
+## Deployment
+This package includes deployment configurations for:
+- Docker (Dockerfile, docker-compose.yml)
+- Vercel (vercel.json)
+- Railway (railway.json)
+- Render (render.yaml)
+"""
+                zip_file.writestr('README.md', readme)
+        
+        # Prepare download
+        zip_buffer.seek(0)
+        filename = f"{build.title.replace(' ', '-').lower()}.zip"
+        
+        return send_file(
+            zip_buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/zip'
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/preview/stop', methods=['POST'])
 def stop_preview():
     """Stop the live preview server."""
@@ -333,13 +450,14 @@ def explain_template():
     if not description:
         return jsonify({"error": "No description"}), 400
 
-    best_id, features, scores = match_template(description)
+    best_id, features, scores = smart_match_template(description)
     return jsonify({
         "template": best_id,
         "features": {k: {"value": f.value, "confidence": f.confidence}
                      for k, f in features.items()},
         "scores": [{"id": tid, "score": s} for tid, s in scores[:5]],
         "explanation": explain_match(description),
+        "neural_matching": NEURAL_MATCHING,
     })
 
 
@@ -403,6 +521,13 @@ def accept_build(build_id):
     build = memory.accept_build(build_id)
     if not build:
         return jsonify({"error": "Build not found"}), 404
+    
+    # Learning loop: teach the pattern generator about this successful build
+    try:
+        pattern_generator.learn_from_prompt(build.description, build.template_used)
+    except Exception as e:
+        print(f"Warning: Failed to learn from build {build_id}: {e}")
+    
     return jsonify({
         "success": True,
         "message": "Build accepted and moved to Good store",
@@ -668,6 +793,235 @@ def clear_user_stats():
     prefs = get_prefs()
     prefs.clear()
     return jsonify({"success": True, "message": "User preferences cleared"})
+
+
+# =============================================================================
+# AI-Assist API (NRI - Numerical Resonance Intelligence)
+# =============================================================================
+
+@app.route('/api/ai-assist/status')
+def ai_assist_status():
+    """Check if AI-assist (NRI) is available."""
+    try:
+        from ai_assist import describe_capabilities
+        return jsonify(describe_capabilities())
+    except ImportError:
+        return jsonify({
+            "enabled": False,
+            "error": "AI-assist module not available"
+        })
+
+
+@app.route('/api/ai-assist/suggest', methods=['POST'])
+def ai_assist_suggest():
+    """Get AI-assisted template suggestions using NRI."""
+    try:
+        from ai_assist import ai_assist_suggestions
+    except ImportError:
+        return jsonify({
+            "suggestions": [],
+            "error": "AI-assist module not available"
+        })
+    
+    data = request.get_json()
+    description = data.get('description', '').strip()
+    top_k = data.get('top_k', 3)
+    
+    if not description:
+        return jsonify({"error": "No description provided"}), 400
+    
+    suggestions = ai_assist_suggestions(description, top_k=top_k)
+    return jsonify({
+        "description": description,
+        "suggestions": suggestions,
+        "method": "NRI (Numerical Resonance Intelligence)"
+    })
+
+
+@app.route('/api/ai-assist/similarity', methods=['POST'])
+def ai_assist_similarity():
+    """Compute NRI similarity between two texts."""
+    try:
+        from ai_assist import get_nri
+        nri = get_nri()
+    except ImportError:
+        return jsonify({
+            "error": "AI-assist module not available"
+        }), 400
+    
+    data = request.get_json()
+    text1 = data.get('text1', '').strip()
+    text2 = data.get('text2', '').strip()
+    
+    if not text1 or not text2:
+        return jsonify({"error": "Both text1 and text2 are required"}), 400
+    
+    primes1 = nri.encode_to_primes(text1.lower())
+    primes2 = nri.encode_to_primes(text2.lower())
+    resonance = nri.compute_resonance(primes1, primes2)
+    
+    return jsonify({
+        "text1": text1,
+        "text2": text2,
+        "similarity": round(resonance, 4),
+        "similarity_percent": f"{resonance:.1%}",
+        "method": "NRI harmonic resonance"
+    })
+
+
+# =============================================================================
+# Pattern Generator API
+# =============================================================================
+
+@app.route('/api/patterns/status')
+def patterns_status():
+    """Get pattern generator status."""
+    try:
+        from regex_generator import RegexPatternGenerator
+        generator = RegexPatternGenerator()
+        all_patterns = generator.generate_all_patterns()
+        return jsonify({
+            "enabled": True,
+            "templates_analyzed": len(all_patterns),
+            "total_patterns": sum(len(p) for p in all_patterns.values()),
+            "learned_templates": len(generator.learned_patterns),
+            "synonyms_available": True
+        })
+    except ImportError:
+        return jsonify({"enabled": False, "error": "Pattern generator not available"})
+
+
+@app.route('/api/patterns/for-template/<template_id>')
+def patterns_for_template(template_id):
+    """Get generated patterns for a specific template."""
+    try:
+        from regex_generator import RegexPatternGenerator
+        from template_registry import TEMPLATE_REGISTRY
+        
+        generator = RegexPatternGenerator()
+        
+        # Find template
+        template = None
+        for t in TEMPLATE_REGISTRY:
+            if t.id == template_id:
+                template = t
+                break
+        
+        if not template:
+            return jsonify({"error": f"Template '{template_id}' not found"}), 404
+        
+        patterns = generator.generate_patterns_from_template(
+            template.id, template.name, template.tags
+        )
+        
+        return jsonify({
+            "template_id": template_id,
+            "template_name": template.name,
+            "patterns": [
+                {"pattern": p.pattern, "source": p.source, "confidence": p.confidence}
+                for p in sorted(patterns, key=lambda x: -x.confidence)
+            ]
+        })
+    except ImportError as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/patterns/suggest', methods=['POST'])
+def patterns_suggest():
+    """Suggest patterns to match a prompt to a template."""
+    try:
+        from regex_generator import RegexPatternGenerator
+    except ImportError:
+        return jsonify({"error": "Pattern generator not available"}), 500
+    
+    data = request.get_json()
+    prompt = data.get('prompt', '').strip()
+    template_id = data.get('template_id', '')
+    
+    if not prompt:
+        return jsonify({"error": "Prompt is required"}), 400
+    
+    generator = RegexPatternGenerator()
+    suggestions = generator.suggest_patterns_for_prompt(prompt, template_id)
+    
+    return jsonify({
+        "prompt": prompt,
+        "target_template": template_id or "(any)",
+        "suggested_patterns": suggestions
+    })
+
+
+@app.route('/api/patterns/detect-gaps', methods=['POST'])
+def patterns_detect_gaps():
+    """Detect routing gaps for a list of test prompts."""
+    try:
+        from regex_generator import RegexPatternGenerator
+    except ImportError:
+        return jsonify({"error": "Pattern generator not available"}), 500
+    
+    data = request.get_json()
+    prompts = data.get('prompts', [])
+    
+    if not prompts:
+        return jsonify({"error": "Provide a list of prompts to test"}), 400
+    
+    generator = RegexPatternGenerator()
+    gaps = generator.detect_gaps(prompts)
+    
+    return jsonify({
+        "tested": len(prompts),
+        "gaps_found": len(gaps),
+        "gaps": [
+            {
+                "prompt": g.prompt,
+                "fell_to": g.fell_to,
+                "matched_template": g.matched_template,
+                "suggested_patterns": g.suggested_patterns
+            }
+            for g in gaps
+        ]
+    })
+
+
+@app.route('/api/patterns/learn', methods=['POST'])
+def patterns_learn():
+    """Learn a successful prompt → template mapping."""
+    try:
+        from regex_generator import RegexPatternGenerator
+    except ImportError:
+        return jsonify({"error": "Pattern generator not available"}), 500
+    
+    data = request.get_json()
+    prompt = data.get('prompt', '').strip()
+    template_id = data.get('template_id', '').strip()
+    
+    if not prompt or not template_id:
+        return jsonify({"error": "Both prompt and template_id are required"}), 400
+    
+    generator = RegexPatternGenerator()
+    generator.learn_from_prompt(prompt, template_id)
+    
+    return jsonify({
+        "success": True,
+        "learned": {"prompt": prompt, "template_id": template_id}
+    })
+
+
+@app.route('/api/patterns/export')
+def patterns_export():
+    """Export auto-generated SEMANTIC_ROUTES code."""
+    try:
+        from regex_generator import RegexPatternGenerator
+    except ImportError:
+        return jsonify({"error": "Pattern generator not available"}), 500
+    
+    generator = RegexPatternGenerator()
+    code = generator.to_semantic_routes_format()
+    
+    return jsonify({
+        "format": "python",
+        "code": code
+    })
 
 
 if __name__ == '__main__':

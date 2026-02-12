@@ -142,7 +142,7 @@ FEATURE_RULES: List[Tuple[str, str, object, float]] = [
     ("numbered",     r"number|numbered|digit|\bN\b",          "true",    0.75),
 
     # Game mechanics
-    ("sliding",      r"slid(e|ing)|shift|swap\s*(tile|piece|block)",  "true", 0.90),
+    ("sliding",      r"slid(e|ing)|shift|swap\s*(tile|piece|block)|15\s*puzzle|tile\s*puzzle|number\s*puzzle|move\s*(the\s*)?tiles?",  "true", 0.90),
     ("puzzle",       r"puzzle|solving|solve|brain\s*tease",    "true",   0.80),
     ("matching",     r"match(ing)?|pair|flip|memory",          "true",   0.80),
     ("guessing",     r"guess(ing)?|random\s*number",           "true",   0.85),
@@ -177,7 +177,23 @@ FEATURE_RULES: List[Tuple[str, str, object, float]] = [
     ("breakout",     r"breakout|brick\s*break|arkanoid|paddle.*ball|ball.*paddle|"
                      r"bounce.*ball.*brick|break.*bricks?|pong.*bricks?", "true", 0.95),
 
+    # Additional classic games
+    ("pong",         r"\bpong\b|paddle\s*game|two\s*paddle|ping\s*pong|table\s*tennis\s*game", "true", 0.95),
+    ("cookie_clicker", r"cookie\s*click|clicker\s*(game|with)|idle\s*(game|clicker)|incremental|tap.*earn|click.*earn|"
+                     r"auto.?click|upgrades?\s*and\s*click", "true", 0.95),
+    ("sudoku",       r"sudoku|9\s*x\s*9.*puzzle|number\s*grid\s*puzzle|logic\s*puzzle\s*9", "true", 0.95),
+    ("connect_four", r"connect\s*(4|four)|four\s*in\s*a?\s*row|drop\s*disc|vertical\s*checkers", "true", 0.95),
+    ("blackjack",    r"blackjack|black\s*jack|21\s*card|twenty.?one|hit\s*(or|and)\s*stand|card\s*game\s*21", "true", 0.95),
+    ("flappy",       r"flappy|tap\s*to\s*fly|flying\s*bird|tap.*fly.*bird|pipe\s*dodge|avoid.*pipes?", "true", 0.95),
+    ("jigsaw",       r"jigsaw|image\s*puzzle|picture\s*puzzle|photo\s*puzzle|"
+                     r"(split|cut|divide).*(image|picture|photo).*pieces?|"
+                     r"pieces?\s*(back\s*)?(together|reassemble)|"
+                     r"(reassemble|rearrange).*(image|picture|photo|pieces?)|"
+                     r"upload.*(image|picture|photo).*(puzzle|pieces?)|"
+                     r"(image|picture|photo).*(into|to)\s*(a\s*)?puzzle", "true", 0.95),
+
     # Simple generators / utilities
+    ("algorithm_vis", r"algorithm\s*visual|sorting\s*visual|sort.*animation|visualiz.*sort|binary\s*search.*visual|algorithm.*step|step.*through.*algorithm", "true", 0.95),
     ("coin_flip",    r"coin\s*flip|flip\s*(a\s*)?coin|heads\s*(or|and)\s*tails|coin\s*toss|toss.*coin", "true", 0.95),
     ("dice_roller",  r"dice\s*roll|roll(er|ing)?\s*(a\s*)?(die|dice)|die\s*roll|random\s*dice", "true", 0.95),
     ("typing_test",  r"typing\s*(speed\s*)?(test|game|practice)|speed\s*typ(e|ing)|wpm\s*test|word(s)?\s*per\s*minute", "true", 0.95),
@@ -213,7 +229,7 @@ FEATURE_RULES: List[Tuple[str, str, object, float]] = [
                      r"import|export|load|keep\s*(the\s*)?data", "true", 0.80),
 
     # Data apps (not games)
-    ("data_app",     r"recipe|cook|todo|task|inventory|product|blog|contact|event|"
+    ("data_app",     r"recipe|cooking|cookbook|\bcook\b|todo|task|inventory|product|blog|contact|event|"
                      r"calendar|note|movie|habit|collection|tracker|bookmark|catalog|"
                      r"library|portfolio|budget|expense|journal|diary|grocery|workout|log\b",
                      "true", 0.80),
@@ -272,13 +288,22 @@ class TemplateEntry:
 TEMPLATE_REGISTRY: List[TemplateEntry] = [
     # --- Specific games (high base_score = more specific) ---
     TemplateEntry(
+        id="jigsaw",
+        name="Image Puzzle / Jigsaw",
+        tags=["jigsaw", "puzzle", "image", "picture", "photo", "drag", "reassemble"],
+        required=["jigsaw"],  # Require specific jigsaw-related keywords
+        boosted=["jigsaw", "puzzle", "drag"],
+        anti=["sliding", "numbered", "calculator", "converter", "data_app", "text_based"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
         id="sliding_puzzle",
         name="Sliding Tile Puzzle",
         tags=["sliding", "puzzle", "tile", "grid", "number", "15-puzzle"],
-        required=[],
+        required=["sliding"],  # Must have 'sliding', '15 puzzle', 'tile puzzle', etc.
         boosted=["grid_game", "sliding", "puzzle", "numbered", "grid_size", "tile_content"],
-        anti=["matching", "guessing", "trivia", "calculator", "converter", "data_app", "game_2048"],
-        base_score=5.0,
+        anti=["matching", "guessing", "trivia", "calculator", "converter", "data_app", "game_2048", "jigsaw"],
+        base_score=8.0,
     ),
     TemplateEntry(
         id="tictactoe",
@@ -293,7 +318,7 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         id="memory_game",
         name="Memory Match",
         tags=["memory", "match", "card", "flip", "pairs"],
-        required=[],
+        required=["matching"],  # Must mention match/memory/flip/pairs
         boosted=["matching", "grid_game"],
         anti=["sliding", "guessing", "trivia", "numbered", "data_app", "coin_flip", "dice_roller"],
         base_score=5.0,
@@ -302,7 +327,7 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         id="guess_game",
         name="Guess the Number",
         tags=["guess", "number", "random", "higher-lower"],
-        required=[],
+        required=["guessing"],  # Must mention guess/random
         boosted=["guessing", "numbered"],
         anti=["grid_game", "sliding", "matching", "trivia", "data_app"],
         base_score=4.0,
@@ -311,7 +336,7 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         id="quiz",
         name="Quiz / Trivia",
         tags=["quiz", "trivia", "flashcard", "question"],
-        required=[],
+        required=["trivia"],  # Must mention quiz/trivia/question
         boosted=["trivia", "word_based"],
         anti=["grid_game", "sliding", "guessing", "calculator", "data_app"],
         base_score=5.0,
@@ -366,7 +391,7 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         id="reaction_game",
         name="Reaction Time Game",
         tags=["reaction", "reflex", "speed", "click", "simon", "whack", "mole", "target", "green"],
-        required=[],
+        required=["reaction"],  # Must mention reaction/reflex/speed/simon
         boosted=["reaction", "simon", "reflex", "click_target"],
         anti=["sliding", "puzzle", "numbered", "calculator", "converter", "data_app", "timing"],
         base_score=5.0,  # Lowered - should only win with boosted features
@@ -472,6 +497,61 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         anti=["data_app", "calculator", "converter", "timing", "trivia", "puzzle"],
         base_score=12.0,
     ),
+    # --- Additional Classic Games ---
+    TemplateEntry(
+        id="pong",
+        name="Pong",
+        tags=["pong", "paddle", "ping pong", "table tennis", "two player"],
+        required=["pong"],
+        boosted=["generic_game"],
+        anti=["data_app", "breakout"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
+        id="cookie_clicker",
+        name="Cookie Clicker / Idle Game",
+        tags=["clicker", "idle", "incremental", "tap", "upgrade", "cookie"],
+        required=["cookie_clicker"],
+        boosted=["generic_game"],
+        anti=["data_app", "puzzle"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
+        id="sudoku",
+        name="Sudoku",
+        tags=["sudoku", "9x9", "logic", "number puzzle"],
+        required=["sudoku"],
+        boosted=["puzzle", "grid_game"],
+        anti=["data_app", "matching"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
+        id="connect_four",
+        name="Connect Four",
+        tags=["connect four", "four in a row", "disc", "vertical"],
+        required=["connect_four"],
+        boosted=["grid_game", "turn_based"],
+        anti=["data_app"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
+        id="blackjack",
+        name="Blackjack",
+        tags=["blackjack", "21", "cards", "hit", "stand", "casino"],
+        required=["blackjack"],
+        boosted=["generic_game"],
+        anti=["data_app", "puzzle"],
+        base_score=12.0,
+    ),
+    TemplateEntry(
+        id="flappy",
+        name="Flappy Bird",
+        tags=["flappy", "bird", "fly", "pipes", "tap"],
+        required=["flappy"],
+        boosted=["generic_game"],
+        anti=["data_app", "puzzle"],
+        base_score=12.0,
+    ),
     # --- CRUD / Data Apps ---
     TemplateEntry(
         id="crud",
@@ -479,11 +559,21 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         tags=["recipe", "task", "todo", "note", "habit", "inventory", "collection", 
               "tracker", "log", "budget", "expense", "contact", "event", "calendar",
               "movie", "book", "workout", "grocery", "journal"],
-        required=[],
+        required=["data_app"],  # Must mention data-related keywords
         boosted=["data_app"],
         anti=["grid_game", "sliding", "matching", "guessing", "reaction", "puzzle", 
               "calculator", "converter", "simon", "minesweeper", "hangman", "wordle", "timing"],  # Added timing
         base_score=6.0,
+    ),
+    # --- Educational / Visualization ---
+    TemplateEntry(
+        id="algorithm_visualizer",
+        name="Algorithm Visualizer",
+        tags=["algorithm", "visualizer", "sorting", "searching", "animation", "step", "learn"],
+        required=["algorithm_vis"],
+        boosted=["algorithm_vis"],
+        anti=["data_app", "calculator", "puzzle", "game"],
+        base_score=12.0,
     ),
     # --- Fallback ---
     TemplateEntry(
@@ -801,3 +891,68 @@ def explain_intent_match(description: str) -> str:
         lines.append(f"  {s:7.2f}  {name} ({tid}){marker}")
     
     return "\n".join(lines)
+
+
+# =====================================================================
+# Neural-Hybrid Matching (Fast Semantic + GloVe Neural + Traditional)
+# =====================================================================
+
+# Try to import hybrid router
+try:
+    from .hybrid_router import route, RouteResult
+    HYBRID_ROUTER_AVAILABLE = True
+except ImportError:
+    try:
+        from hybrid_router import route, RouteResult
+        HYBRID_ROUTER_AVAILABLE = True
+    except ImportError:
+        HYBRID_ROUTER_AVAILABLE = False
+
+
+def match_template_neural(description: str, use_prefs: bool = True, 
+                          neural_threshold: float = 0.7) -> Tuple[str, Dict[str, Feature], List[Tuple[str, float]]]:
+    """
+    Neural-enhanced matching: uses fast hybrid router first, falls back to full scoring.
+    
+    Pipeline:
+    1. Hybrid Router (semantic rules + GloVe neural) - fast, high confidence
+    2. If low confidence → full traditional scoring
+    3. Combine with user preferences
+    
+    Args:
+        description: Natural language app description
+        use_prefs: Apply user preference boosts
+        neural_threshold: Minimum confidence from hybrid router to trust (0.0-1.0)
+    
+    Returns:
+        (best_template_id, features, all_scores)
+    """
+    features = extract_features(description)
+    
+    # Stage 1: Try hybrid router (fast path)
+    if HYBRID_ROUTER_AVAILABLE:
+        result = route(description)
+        
+        # If high confidence from semantic/neural, use it directly
+        if result.confidence >= neural_threshold:
+            # Build scores list with hybrid result on top
+            scores: List[Tuple[str, float]] = []
+            for tmpl in TEMPLATE_REGISTRY:
+                if tmpl.id == result.template_id:
+                    # Hybrid match gets high score
+                    s = 30.0 * result.confidence
+                else:
+                    # Score others normally for transparency
+                    s = score_template(tmpl, features)
+                
+                # Apply user preferences
+                if use_prefs and USER_PREFS_ENABLED:
+                    s += get_template_boost(tmpl.id)
+                
+                scores.append((tmpl.id, round(s, 2)))
+            
+            scores.sort(key=lambda x: -x[1])
+            return result.template_id, features, scores
+    
+    # Stage 2: Fall back to traditional matching
+    return match_template(description, use_prefs=use_prefs)

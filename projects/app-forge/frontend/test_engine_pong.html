@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong - Engine Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #1a1a2e;
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        h1 {
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+        #scoreDisplay {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #2196F3;
+        }
+        #gameContainer {
+            position: relative;
+            background: #16213e;
+            border-radius: 10px;
+            padding: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        canvas {
+            display: block;
+            background: #0f0f23;
+            border-radius: 5px;
+        }
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            padding: 10px;
+        }
+        .grid-cell {
+            aspect-ratio: 1;
+            background: #2d3436;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .grid-cell:hover { background: #636e72; }
+        .card-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            max-width: 500px;
+        }
+        .card {
+            width: 60px;
+            height: 90px;
+            background: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #333;
+        }
+        #gameOver {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+        }
+        #gameOver h2 { color: #4CAF50; margin-bottom: 10px; }
+        #gameOver p { margin-bottom: 20px; }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1em;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        button:hover { filter: brightness(1.1); }
+        .controls {
+            margin-top: 15px;
+            color: #888;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pong - Engine Test</h1>
+    <div id="scoreDisplay">Score: <span id="score">0</span></div>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+        <div id="gameOver">
+            <h2>Game Over!</h2>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <button onclick="restart()">Play Again</button>
+        </div>
+    </div>
+    <div class="controls">Arrow keys to move | Space to action</div>
+    <button onclick="restart()">Restart</button>
+    
+    <script>
+        // ===== ENGINE SETUP =====
+        
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const CELL = 20;
+const COLS = Math.floor(canvas.width / CELL);
+const ROWS = Math.floor(canvas.height / CELL);
+        
+        // ===== GAME STATE =====
+        let paddleH = 80;
+let paddleW = 10;
+let ballSize = 10;
+let playerY = 160;
+let aiY = 160;
+let ballX = 300;
+let ballY = 200;
+let ballDx = 4;
+let ballDy = 3;
+let playerScore = 0;
+let aiScore = 0;
+        let score = 0;
+        let gameOver = false;
+        
+        // ===== HELPER FUNCTIONS =====
+        
+        
+        function showGameOver() {
+            gameOver = true;
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameOver').style.display = 'flex';
+        }
+        
+        function updateScore(points) {
+            score += points;
+            document.getElementById('score').textContent = score;
+        }
+        
+        function setScore(val) {
+            score = val;
+            document.getElementById('score').textContent = score;
+        }
+        
+        // ===== GAME LOGIC =====
+        function init() {
+            score = 0;
+            gameOver = false;
+            document.getElementById('score').textContent = '0';
+            document.getElementById('gameOver').style.display = 'none';
+            
+playerY = canvas.height/2 - paddleH/2;
+aiY = canvas.height/2 - paddleH/2;
+ballX = canvas.width/2;
+ballY = canvas.height/2;
+ballDx = (Math.random() > 0.5 ? 1 : -1) * 4;
+ballDy = (Math.random() - 0.5) * 6;
+playerScore = 0; aiScore = 0;
+
+        }
+        
+        function update() {
+            if (gameOver) return;
+            
+// Move ball
+ballX += ballDx;
+ballY += ballDy;
+
+// Top/bottom bounce
+if (ballY <= 0 || ballY >= canvas.height - ballSize) ballDy = -ballDy;
+
+// Paddle collision
+if (ballX <= paddleW + 10 && ballY >= playerY && ballY <= playerY + paddleH) {
+    ballDx = Math.abs(ballDx) * 1.05;
+    ballDy += (ballY - (playerY + paddleH/2)) * 0.1;
+}
+if (ballX >= canvas.width - paddleW - 10 - ballSize && ballY >= aiY && ballY <= aiY + paddleH) {
+    ballDx = -Math.abs(ballDx) * 1.05;
+}
+
+// Score
+if (ballX < 0) {
+    aiScore++;
+    ballX = canvas.width/2; ballY = canvas.height/2;
+    ballDx = 4; ballDy = (Math.random() - 0.5) * 6;
+}
+if (ballX > canvas.width) {
+    playerScore++;
+    updateScore(1);
+    ballX = canvas.width/2; ballY = canvas.height/2;
+    ballDx = -4; ballDy = (Math.random() - 0.5) * 6;
+}
+
+// AI movement
+const aiCenter = aiY + paddleH/2;
+if (aiCenter < ballY - 20) aiY += 3;
+if (aiCenter > ballY + 20) aiY -= 3;
+aiY = Math.max(0, Math.min(canvas.height - paddleH, aiY));
+
+if (playerScore >= 5 || aiScore >= 5) showGameOver();
+
+        }
+        
+        function render() {
+            
+ctx.fillStyle = '#0f0f23';
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+// Center line
+ctx.setLineDash([10, 10]);
+ctx.strokeStyle = '#333';
+ctx.beginPath();
+ctx.moveTo(canvas.width/2, 0);
+ctx.lineTo(canvas.width/2, canvas.height);
+ctx.stroke();
+ctx.setLineDash([]);
+
+// Paddles
+ctx.fillStyle = '#4CAF50';
+ctx.fillRect(10, playerY, paddleW, paddleH);
+ctx.fillStyle = '#f44336';
+ctx.fillRect(canvas.width - paddleW - 10, aiY, paddleW, paddleH);
+
+// Ball
+ctx.fillStyle = '#fff';
+ctx.beginPath();
+ctx.arc(ballX, ballY, ballSize/2, 0, Math.PI * 2);
+ctx.fill();
+
+// Scores
+ctx.font = '30px Arial';
+ctx.fillText(playerScore, canvas.width/4, 50);
+ctx.fillText(aiScore, 3*canvas.width/4, 50);
+
+        }
+        
+        function restart() {
+            init();
+            render();
+        }
+        
+        // ===== INPUT HANDLING =====
+        
+document.addEventListener('keydown', e => {
+    if (gameOver) return;
+    
+if (e.key === 'ArrowUp' || e.key === 'w') { playerY -= 20; e.preventDefault(); }
+if (e.key === 'ArrowDown' || e.key === 's') { playerY += 20; e.preventDefault(); }
+playerY = Math.max(0, Math.min(canvas.height - paddleH, playerY));
+
+});
+        
+        // ===== GAME LOOP =====
+        
+let lastTime = 0;
+function gameLoop(timestamp) {
+    if (timestamp - lastTime > 16) {  // ~60fps
+        update();
+        render();
+        lastTime = timestamp;
+    }
+    if (!gameOver) requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+        
+        // Start the game
+        init();
+        render();
+    </script>
+</body>
+</html>

@@ -18,7 +18,12 @@ Build working Flask apps with natural language + smart questions. No AI hallucin
 - ✅ You understand every piece
 - ✅ Learns from your feedback (Good/Bad stores)
 - ✅ Improves with Naive Bayes classification
-- ✅ **NEW** Intent Graph for LLM-like understanding (without the LLM)
+- ✅ Intent Graph for LLM-like understanding (without the LLM)
+- ✅ **NEW** Multi-file architecture with models.py + db.py separation
+- ✅ **NEW** 28 game templates (Tetris, Breakout, Minesweeper, Wordle, Sudoku, Connect Four, etc.)
+- ✅ **NEW** Download as ZIP with deployment configs (Docker, Vercel, Railway, Render)
+- ✅ **NEW** Dark mode UI with localStorage persistence
+- ✅ **NEW** Learning loop with regex pattern generator
 
 ## Quick Start
 
@@ -41,7 +46,7 @@ backend/
 ├── app.py              # Flask API server (main entry point)
 ├── smartq.py           # Question engine with smart inference
 ├── solver.py           # Constraint solver (answers → tech stack)
-├── codegen.py          # Code generator (Flask boilerplate)
+├── codegen.py          # Code generator (Flask boilerplate + multi-file apps)
 ├── project_manager.py  # Save to disk, git init, push to GitHub
 ├── preview_server.py   # Live preview subprocess management
 ├── template_registry.py    # Feature extraction + template matching
@@ -52,6 +57,8 @@ backend/
 ├── build_memory.py         # Good/Bad stores with revision tracking
 ├── classifier.py           # Naive Bayes ML for learning
 ├── domain_parser.py        # Parse domain models from description
+├── game_engine.py          # 28 game templates with component configs
+├── regex_generator.py      # Learning system for prompt→template patterns
 └── data/
     ├── build_memory.db     # SQLite: build history
     └── models/             # Trained classifier models (.pkl)
@@ -59,7 +66,7 @@ backend/
 frontend/
 ├── index.html          # 3-step wizard with edit/history
 ├── js/app.js           # State machine + API calls
-└── css/style.css       # Clean UI
+└── css/style.css       # Clean UI with dark mode support
 ```
 
 ## Understanding Engine (AI-Free NLU)
@@ -156,17 +163,22 @@ match_template("password generator")  # → ("generator", 0.95)
 match_template("recipe collection")   # → ("crud_app", 0.87)
 ```
 
-### 3. Component Assembly (`component_assembler.py`)
+### 3. Game Engine (`game_engine.py`)
+28 pre-configured game templates with modular components:
+- **Classic Games**: wordle, hangman, tic-tac-toe, memory, sliding puzzle, quiz, connect four, blackjack
+- **Arcade Games**: snake, tetris, 2048, breakout, minesweeper, cookie clicker
+- **Mini Games**: dice roller, coin flip, rock-paper-scissors, reaction time test, typing test
+- **Utilities**: calculator, timer, unit converter, guess the number
+- **Experimental**: jigsaw puzzle, sudoku, algorithm visualizer
+
+### 4. Component Assembly (`component_assembler.py`)
 30+ composable UI components for apps not in the template store:
 - **Generators**: password, color palette, dice, coin, quote, lorem, name
-- **Classic Games**: wordle, hangman, tictactoe, memory, sliding puzzle, quiz
-- **Arcade Games**: snake, tetris, 2048 (vanilla JS canvas-based)
-- **Phaser.js Games**: platformer, space shooter, breakout (physics-based)
 - **UI**: editor, canvas, kanban, chat, flashcard, typing test
 - **Productivity**: pomodoro timer, habit tracker, expense tracker
 - **Logic**: crud, search, export
 
-### 4. Modular Kernel (`modular_kernel.py`)
+### 5. Modular Kernel (`modular_kernel.py`)
 The core algorithm: **Kernel + Components = App**
 
 | Kernel | Description | Provides |
@@ -184,7 +196,7 @@ builder.compose("a todo list manager")
 # → kernel: flask_data, components: ['crud']
 ```
 
-### 5. Build Memory (`build_memory.py`)
+### 6. Build Memory (`build_memory.py`)
 Persistent storage of all builds with accept/reject tracking:
 
 | Store | Purpose |
@@ -199,7 +211,7 @@ memory.create_revision(build_id, edits)          # → New version
 memory.get_revision_chain(build_id)              # → Full history
 ```
 
-### 6. Naive Bayes Classifier (`classifier.py`)
+### 7. Naive Bayes Classifier (`classifier.py`)
 Learns from your Good/Bad stores to improve predictions:
 
 | Classifier | Learns |
@@ -300,11 +312,13 @@ No LLM guessing—pure logic + learned patterns.
 Each project includes:
 - ✅ Flask server with routes
 - ✅ HTML template with Tailwind CSS
-- ✅ Database models (if needed)
+- ✅ Database models (if needed) — **multi-file architecture** with separate `models.py` and `db.py`
 - ✅ Authentication (if needed)
 - ✅ UI components (editor, kanban, games, etc.)
 - ✅ `.gitignore` and README
+- ✅ **Deployment configs** (Docker, Vercel, Railway, Render) — optional
 - ✅ Ready to run immediately
+- ✅ **Download as ZIP** with all files bundled
 
 Build tracked in memory for learning:
 - Accept → Good store (used for future training)
@@ -317,12 +331,19 @@ Build tracked in memory for learning:
 ```
 ~/AppForge/my-app/
 ├── app.py
+├── models.py         # (for data apps)
+├── db.py             # (for data apps)
 ├── requirements.txt
 ├── templates/
 │   └── index.html
 ├── static/
 ├── .gitignore
-├── .appforge.json  (metadata)
+├── .appforge.json    # metadata
+├── Dockerfile        # (optional)
+├── docker-compose.yml # (optional)
+├── vercel.json       # (optional)
+├── railway.json      # (optional)
+├── render.yaml       # (optional)
 └── README.md
 ```
 
@@ -354,6 +375,12 @@ Done. Your app is live on GitHub.
 - [x] User preference learning from build history
 - [x] Arcade games: Snake, Tetris, 2048 (vanilla JS)
 - [x] Phaser.js games: Platformer, Space Shooter, Breakout
+- [x] **Game engine expansion** (28 templates: Tetris, Breakout, Minesweeper, Wordle, Sudoku, Connect Four, etc.)
+- [x] **Multi-file generation** (models.py + db.py separation for data apps)
+- [x] **Download as ZIP** with build_id tracking
+- [x] **Docker + deployment configs** (Dockerfile, docker-compose, Vercel, Railway, Render)
+- [x] **Dark mode UI** with localStorage persistence
+- [x] **Learning loop** with regex pattern generator
 - [ ] K-means clustering for "similar apps" recommendations
 - [ ] Ollama integration (smart Q generation from description)
 - [ ] More kernels (FastAPI, Django)
