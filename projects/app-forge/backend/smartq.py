@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import dataclass
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 
 @dataclass
@@ -216,3 +216,83 @@ class Profile:
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'Profile':
         return Profile(data["description"], data.get("answers", {}))
+
+
+# ==========================================================================
+# Contextual Question Generation (AI-Free, Learning-Based)
+# ==========================================================================
+
+def generate_contextual_questions(description: str, template_id: str, base_answered: Dict[str, bool]) -> List[Question]:
+    """
+    Generate contextual follow-up questions using intent graph + learned patterns.
+    
+    This function augments the base QUESTIONS with contextual questions specific
+    to the user's description and matched template.
+    
+    Args:
+        description: User's app description
+        template_id: Matched template ID (e.g., 'recipe_app', 'crud')
+        base_answered: Base answers already inferred
+        
+    Returns:
+        List of additional contextual Question objects
+    """
+    try:
+        from intent_graph import intent_match
+        from question_generator import ContextualQuestionGenerator
+        
+        # Get activated concepts from semantic graph
+        activated_concepts = intent_match(description)
+        
+        # Generate contextual questions
+        generator = ContextualQuestionGenerator()
+        contextual_qs = generator.generate(description, template_id, activated_concepts)
+        
+        # Convert to Question objects
+        questions = []
+        for cq in contextual_qs[:5]:  # Limit to top 5 contextual questions
+            # Skip if already covered by base questions or inferred
+            if cq['id'] not in [q.id for q in QUESTIONS] and cq['id'] not in base_answered:
+                questions.append(Question(
+                    id=cq['id'],
+                    text=cq['text'],
+                    category='contextual',
+                    follow_up=True
+                ))
+        
+        return questions
+    except ImportError:
+        # Fallback if modules not available
+        return []
+
+
+def get_all_questions_with_context(description: str, template_id: str, answered: Dict[str, bool]) -> List[Question]:
+    """
+    Get all questions (base + contextual) that should be asked.
+    
+    Args:
+        description: User's app description
+        template_id: Matched template ID
+        answered: Already answered questions
+        
+    Returns:
+        Combined list of base + contextual questions
+    """
+    # Start with base questions
+    all_questions = list(QUESTIONS)
+    
+    # Add contextual questions
+    contextual = generate_contextual_questions(description, template_id, answered)
+    all_questions.extend(contextual)
+    
+    # Filter out already answered
+    relevant = []
+    for q in all_questions:
+        if q.id in answered:
+            continue
+        if q.depends_on and answered.get(q.depends_on, None) is False:
+            continue
+        relevant.append(q)
+    
+    return relevant
+

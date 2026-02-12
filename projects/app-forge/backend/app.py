@@ -109,10 +109,17 @@ def start_wizard():
     session['profile'] = profile.to_dict()
     session['answered'] = inferred.copy()
     session['inferred_count'] = len(inferred)
+    session['template_id'] = assembled_component if assembled else best_template
     session.modified = True
     
-    # Get remaining questions after inference
-    remaining = get_relevant_questions(inferred)
+    # Get remaining questions after inference (including contextual)
+    try:
+        from smartq import get_all_questions_with_context
+        remaining = get_all_questions_with_context(description, session['template_id'], inferred)
+    except ImportError:
+        # Fallback to base questions
+        remaining = get_relevant_questions(inferred)
+    
     next_q = remaining[0] if remaining else None
     
     return jsonify({
@@ -143,8 +150,18 @@ def answer_question():
     session['answered'] = answered
     session.modified = True
     
-    # Check if done
-    if is_complete(answered):
+    # Check if done (using contextual questions if available)
+    profile = session.get('profile', {})
+    description = profile.get('description', '')
+    template_id = session.get('template_id', 'generic')
+    
+    try:
+        from smartq import get_all_questions_with_context
+        remaining = get_all_questions_with_context(description, template_id, answered)
+    except ImportError:
+        remaining = get_relevant_questions(answered)
+    
+    if len(remaining) == 0:
         return jsonify({
             "complete": True,
             "answered": answered,
@@ -152,8 +169,7 @@ def answer_question():
         })
     
     # Get next question
-    next_q = get_next_question(answered)
-    remaining = get_relevant_questions(answered)
+    next_q = remaining[0] if remaining else None
     inferred_count = session.get('inferred_count', 0)
     user_answered = len(answered) - inferred_count
     
