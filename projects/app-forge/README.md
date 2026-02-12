@@ -24,6 +24,9 @@ Build working Flask apps with natural language + smart questions. No AI hallucin
 - ✅ **NEW** Download as ZIP with deployment configs (Docker, Vercel, Railway, Render)
 - ✅ **NEW** Dark mode UI with localStorage persistence
 - ✅ **NEW** Learning loop with regex pattern generator
+- ✅ **NEW** 3-Layer Universal Template Architecture (Template → Features → Traits)
+- ✅ **NEW** Slot-based code injection for 5 frameworks (Flask, FastAPI, Click, HTML Canvas, scikit-learn)
+- ✅ **NEW** Trait Store that learns from successful builds
 
 ## Quick Start
 
@@ -59,6 +62,10 @@ backend/
 ├── domain_parser.py        # Parse domain models from description
 ├── game_engine.py          # 28 game templates with component configs
 ├── regex_generator.py      # Learning system for prompt→template patterns
+├── universal_template.py   # Slot-based templates for 5 frameworks
+├── feature_store.py        # 12+ composable features with dependencies
+├── trait_store.py          # App-specific patterns that learn
+├── slot_generator.py       # Main generator: Template + Features + Traits
 └── data/
     ├── build_memory.db     # SQLite: build history
     └── models/             # Trained classifier models (.pkl)
@@ -196,7 +203,52 @@ builder.compose("a todo list manager")
 # → kernel: flask_data, components: ['crud']
 ```
 
-### 6. Build Memory (`build_memory.py`)
+### 6. Universal Template Architecture (`slot_generator.py`)
+
+A **3-layer composable system** that generates apps for any framework:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                  UNIVERSAL TEMPLATE                      │
+│  Slot-based code injection (IMPORTS, CONFIG, MODELS,    │
+│  INIT, ROUTES, HELPERS, ERROR_HANDLING, CLEANUP, MAIN)  │
+└─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│                   FEATURE STORE                          │
+│  12+ composable features: database, crud, auth, search, │
+│  export, realtime, responsive_ui, game_loop, scoring... │
+└─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│              TRAIT STORE (Learning)                      │
+│  8 seed traits (recipe_app, todo_app, game_generic...)  │
+│  + learns new traits from successful builds             │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Frameworks supported:** Flask, FastAPI, Click CLI, HTML Canvas (games), scikit-learn (ML pipelines)
+
+```python
+from slot_generator import generate_app
+
+# Generate from description
+project = generate_app("a recipe collection app", {"search": True})
+# → RecipeCollection: Flask + SQLAlchemy + CRUD + Search
+# → Files: app.py, requirements.txt, templates/index.html
+
+project = generate_app("a snake game")
+# → SnakeGame: HTML Canvas + game_loop + input_handler + scoring
+# → Files: index.html
+
+project = generate_app("REST API for users", {"needs_auth": True})
+# → RestApiUser: FastAPI + auth + JWT + SQLAlchemy
+# → Files: main.py, requirements.txt
+```
+
+### 7. Build Memory (`build_memory.py`)
 Persistent storage of all builds with accept/reject tracking:
 
 | Store | Purpose |
@@ -381,6 +433,9 @@ Done. Your app is live on GitHub.
 - [x] **Docker + deployment configs** (Dockerfile, docker-compose, Vercel, Railway, Render)
 - [x] **Dark mode UI** with localStorage persistence
 - [x] **Learning loop** with regex pattern generator
+- [x] **Universal Template Architecture** (slot-based code injection for 5 frameworks)
+- [x] **Feature Store** (12+ composable features with dependency resolution)
+- [x] **Trait Store** (8 seed traits + learns from successful builds)
 - [ ] K-means clustering for "similar apps" recommendations
 - [ ] Ollama integration (smart Q generation from description)
 - [ ] More kernels (FastAPI, Django)
