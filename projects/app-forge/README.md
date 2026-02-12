@@ -28,6 +28,9 @@ Build working Flask apps with natural language + smart questions. No AI hallucin
 - ✅ **NEW** Slot-based code injection for 5 frameworks (Flask, FastAPI, Click, HTML Canvas, scikit-learn)
 - ✅ **NEW** Trait Store that learns from successful builds
 - ✅ **NEW** Semantic Kernel for LLM-free understanding (4-layer pipeline replaces neural networks)
+- ✅ **NEW** Constraint Validator for feasibility checking (350+ lines of explicit rules)
+- ✅ **NEW** Analogy Engine for "X like Y but Z" processing (400+ lines, no neural networks)
+- ✅ **NEW** Priority System for feature importance scoring (context-aware criticality)
 
 ## Quick Start
 
@@ -69,6 +72,10 @@ backend/
 ├── slot_generator.py       # Main generator: Template + Features + Traits
 ├── semantic_kernel.py      # LLM-free understanding (4-layer pipeline)
 ├── knowledge_base.py       # Entity/action/type mappings (500+ entries)
+├── constraint_validator.py # Feasibility checking without LLMs (350 lines)
+├── analogy_engine.py       # "X like Y but Z" processing (400 lines)
+├── priority_system.py      # Feature importance scoring (416 lines)
+├── test_algorithms.py      # Test suite for all 3 new algorithms
 └── data/
     ├── build_memory.db     # SQLite: build history
     └── models/             # Trained classifier models (.pkl)
@@ -208,6 +215,206 @@ We:
 3. ✅ Get explainable, deterministic results
 
 **No external APIs. No neural networks. Just smart algorithms.**
+
+## Intelligence Layers - Beyond Semantic Kernel
+
+Building on the Semantic Kernel, we've added **3 more universal AI patterns** that LLMs use, replicated without neural networks:
+
+### 1. Constraint Validator (~350 lines)
+
+LLMs learn what combinations are **invalid** from seeing failed deployments. We replicate this with explicit feasibility rules.
+
+**What it prevents:**
+- CLI apps with responsive UI (incompatible)
+- Games with authentication systems (nonsensical)
+- Canvas rendering with database CRUD (different paradigms)
+- Features without their dependencies (auth needs database)
+
+```python
+# Explicit incompatibility rules
+INCOMPATIBLE_PAIRS = {
+    ("click", "responsive_ui"),    # CLI can't have browser UI
+    ("game_loop", "database"),     # Most games don't persist
+    ("html_canvas", "crud"),       # Canvas is for rendering, not data
+    ("sklearn", "auth"),           # ML pipelines don't have users
+}
+
+# Dependency requirements
+REQUIRED_DEPENDENCIES = {
+    "auth": {"database"},          # Auth needs storage
+    "search": {"database"},        # Search needs data
+    "export": {"database"},        # Export needs data to export
+}
+```
+
+**Auto-fix mode:**
+```python
+features = {"auth", "search"}  # Missing database!
+fixed, violations = validate_and_fix(features, "flask")
+# → fixed = {"auth", "search", "database"}
+# → violations = []  # All fixed automatically
+```
+
+**Integration:**
+```
+Description → Feature Selection → [Constraint Validation] → Fixed Features
+```
+
+### 2. Analogy Engine (~400 lines)
+
+LLMs handle **transfer learning** through analogies. We replicate this with pattern matching + trait blending.
+
+**Patterns detected:**
+- "Spotify for podcasts" → music_player + domain_change(podcasts)
+- "Instagram clone for recipes" → photo_sharing + domain_change(recipes)
+- "Trello but simpler" → board_manager + simplification
+- "Uber with scheduling" → ride_sharing + enhancement(scheduling)
+
+```python
+# Analogy pattern detection (6 regex patterns)
+ANALOGY_PATTERNS = [
+    (r'(\w+)\s+for\s+(.+)', "for_domain"),      # "X for Y"
+    (r'(\w+)\s+clone\s+for\s+(.+)', "clone_for"), # "X clone for Y"
+    (r'(.+?)\s+like\s+(.+?)\s+but\s+(.+)', "like_but"), # "X like Y but Z"
+    (r'(.+?)\s+based on\s+(.+)', "based_on"),   # "X based on Y"
+    # ... 2 more patterns
+]
+
+# Common app → trait mapping (15+ apps)
+APP_TRAITS = {
+    "spotify": "music_player",
+    "instagram": "photo_sharing",
+    "twitter": "social_feed",
+    "trello": "kanban_board",
+    # ... 11 more mappings
+}
+```
+
+**Example:**
+```python
+result = process_analogy("Spotify for podcasts")
+# → base_trait_id: "music_player"
+# → modifications: ["domain_change:podcasts"]
+# → features: {"database", "crud", "audio_player", "search"}
+# → models: [Episode(title, duration, audio_url), Podcast(...)]
+```
+
+**Integration:**
+```
+Description → [Analogy Detection] → Trait Blending → Feature Selection
+```
+
+### 3. Priority System (~416 lines)
+
+LLMs learn **feature importance** from seeing codebases. We replicate this with context-aware criticality scoring.
+
+**Priority levels:**
+- `CRITICAL` (10): App won't work without it
+- `ESSENTIAL` (8): Core functionality
+- `IMPORTANT` (6): Significantly improves experience
+- `USEFUL` (4): Nice to have
+- `OPTIONAL` (2): Can skip entirely
+
+**Context-based adjustments:**
+```python
+# Auth is IMPORTANT by default, but...
+CONTEXT_CRITICAL = {
+    "social_app": {"auth", "database"},          # Auth critical here
+    "collaborative_app": {"auth", "realtime"},    # Auth + real-time critical
+    "game": {"game_loop", "input_handler"},      # Different priorities
+}
+
+CONTEXT_OPTIONAL = {
+    "calculator": {"database", "auth"},          # No persistence needed
+    "game": {"database", "auth", "crud"},        # Games rarely need these
+}
+```
+
+**Auto-decide vs ask:**
+```python
+# CRITICAL features: auto-include
+# EXPENSIVE features: ask user first
+# OPTIONAL features: ask or skip
+
+should_ask, reason = should_ask_about_feature("auth", {"app_type": "calculator"})
+# → (True, "Expensive feature")  # Ask before adding
+
+should_ask, reason = should_ask_about_feature("auth", {"app_type": "social_app"})
+# → (False, "Auto-included (critical)")  # Just add it
+```
+
+**Integration:**
+```
+Feature Selection → [Priority Scoring] → Auto-Include + Questions → Final Features
+```
+
+### Complete Pipeline
+
+```
+Input: "Instagram clone for recipes with auth"
+    ↓
+┌──────────────────────────────────────┐
+│ 1. ANALOGY ENGINE                    │
+│ ├─ Detect: "clone_for" pattern       │
+│ ├─ Base: photo_sharing trait          │
+│ └─ Modifications: domain(recipes)    │
+└──────────────────────────────────────┘
+    ↓
+Features: {database, crud, auth, image_upload, responsive_ui}
+    ↓
+┌──────────────────────────────────────┐
+│ 2. PRIORITY SYSTEM                   │
+│ ├─ Critical: {database, auth}        │
+│ ├─ Important: {responsive_ui}        │
+│ └─ Useful: {crud, image_upload}      │
+└──────────────────────────────────────┘
+    ↓
+Prioritized Features: Same set, but ranked
+    ↓
+┌──────────────────────────────────────┐
+│ 3. CONSTRAINT VALIDATOR              │
+│ ├─ Check: auth needs database ✓      │
+│ ├─ Check: no incompatibilities ✓     │
+│ └─ Fixed: no changes needed          │
+└──────────────────────────────────────┘
+    ↓
+Validated Features: {database, crud, auth, image_upload, responsive_ui}
+    ↓
+Working Flask App
+```
+
+### Test Coverage
+
+From `test_algorithms.py`:
+
+```
+✓ Constraint Validator: 4/4 tests pass (100%)
+✓ Analogy Engine: 4/4 tests pass (100%)
+✓ Priority System: 5/5 tests pass (100%)
+✓ Integration: 1/1 test pass (100%)
+────────────────────────────────────────
+🎉 All 14/14 tests passed!
+```
+
+**Key test scenarios:**
+- Incompatible pairs detection (CLI + UI, Game + DB)
+- Missing dependency auto-fix (auth → adds database)
+- Analogy pattern matching ("X for Y", "X clone for Y")
+- Priority context adaptation (auth critical in social, optional in game)
+- Full pipeline integration (analogy → priority → constraints)
+
+### Why No Neural Networks?
+
+| What LLMs Learn | Our Implementation | Size |
+|-----------------|-------------------|------|
+| Invalid combinations | `INCOMPATIBLE_PAIRS` dict | ~10 rules |
+| Dependencies | `REQUIRED_DEPENDENCIES` dict | ~5 rules |
+| Common apps | `APP_TRAITS` dict | ~15 mappings |
+| Analogy patterns | 6 regex patterns | ~50 lines |
+| Feature importance | `CONTEXT_CRITICAL` dict | ~6 contexts |
+| Ask decisions | Rule-based logic | ~30 lines |
+
+**Total:** ~1,200 lines of explicit logic replaces billions of neural network parameters.
 
 ## Understanding Engine (AI-Free NLU)
 

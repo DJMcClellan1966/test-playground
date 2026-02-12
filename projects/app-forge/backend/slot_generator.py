@@ -27,6 +27,25 @@ try:
 except ImportError:
     SEMANTIC_KERNEL_AVAILABLE = False
 
+# Import new intelligence algorithms
+try:
+    from analogy_engine import process_analogy
+    ANALOGY_ENGINE_AVAILABLE = True
+except ImportError:
+    ANALOGY_ENGINE_AVAILABLE = False
+
+try:
+    from constraint_validator import validate_and_fix
+    CONSTRAINT_VALIDATOR_AVAILABLE = True
+except ImportError:
+    CONSTRAINT_VALIDATOR_AVAILABLE = False
+
+try:
+    from priority_system import partition_features, generate_priority_questions
+    PRIORITY_SYSTEM_AVAILABLE = True
+except ImportError:
+    PRIORITY_SYSTEM_AVAILABLE = False
+
 
 @dataclass
 class GeneratedFile:
@@ -546,15 +565,27 @@ class SlotBasedGenerator:
         """Generate a project from description and answers."""
         answers = answers or {}
         
+        # 0. ANALOGY ENGINE - Process analogies first
+        analogy_result = None
+        if ANALOGY_ENGINE_AVAILABLE:
+            analogy_result = process_analogy(description)
+            if analogy_result:
+                print(f"🔄 Detected analogy: {analogy_result.base_trait_id} + {analogy_result.modifications}")
+        
         # 1. Match to trait
-        trait_match = self.trait_store.match(description)
-        trait = trait_match[0] if trait_match else None
+        if analogy_result:
+            # Use analogy-derived trait/features
+            trait = None  # Could create trait from analogy_result
+            trait_match = []
+        else:
+            trait_match = self.trait_store.match(description)
+            trait = trait_match[0] if trait_match else None
         
         # 1b. SEMANTIC KERNEL FALLBACK - Use if no trait or low confidence
         semantic_understanding = None
         use_semantic = False
         
-        if SEMANTIC_KERNEL_AVAILABLE and (not trait or len(trait_match) == 0):
+        if SEMANTIC_KERNEL_AVAILABLE and (not trait or len(trait_match) == 0) and not analogy_result:
             semantic_understanding = understand(description, verbose=False)
             # Use semantic kernel if confidence is reasonable and we have models/features
             if semantic_understanding.confidence > 0.3 and (semantic_understanding.models or semantic_understanding.features):
@@ -562,7 +593,9 @@ class SlotBasedGenerator:
                 print(f"🧠 Using Semantic Kernel (confidence: {semantic_understanding.confidence:.2f})")
         
         # 2. Determine framework
-        if use_semantic and semantic_understanding:
+        if analogy_result:
+            framework = analogy_result.framework
+        elif use_semantic and semantic_understanding:
             framework = semantic_understanding.framework
         else:
             framework = self._select_framework(description, answers, trait)
@@ -574,14 +607,41 @@ class SlotBasedGenerator:
         merged_answers.update(answers)
         
         # 4. Select features
-        if use_semantic and semantic_understanding:
+        if analogy_result:
+            # Use analogy-derived features
+            feature_ids = list(analogy_result.features)
+        elif use_semantic and semantic_understanding:
             # Use semantic kernel's inferred features
             feature_ids = list(semantic_understanding.features)
         else:
             feature_ids = self._select_features(description, merged_answers, trait)
         
+        # 4b. PRIORITY SYSTEM - Partition features by importance
+        if PRIORITY_SYSTEM_AVAILABLE and feature_ids:
+            context = {
+                "app_type": description,
+                "existing_features": set(feature_ids)
+            }
+            partitions = partition_features(set(feature_ids), context)
+            print(f"🎯 Feature priorities:")
+            print(f"   Critical: {partitions['critical']}")
+            print(f"   Important: {partitions['important']}")
+            # Could use this to ask user about optional features
+        
+        # 4c. CONSTRAINT VALIDATOR - Check and fix feature combinations
+        if CONSTRAINT_VALIDATOR_AVAILABLE and feature_ids:
+            fixed_features, violations = validate_and_fix(set(feature_ids), framework)
+            if violations:
+                print(f"⚠️  Constraint violations detected (auto-fixed):")
+                for v in violations:
+                    print(f"   - {v.message}")
+            feature_ids = list(fixed_features)
+        
         # 5. Get models
-        if use_semantic and semantic_understanding and semantic_understanding.models:
+        if analogy_result and analogy_result.models:
+            # Use analogy-derived models
+            models = analogy_result.models
+        elif use_semantic and semantic_understanding and semantic_understanding.models:
             # Convert semantic kernel models to DomainModelSchema
             models = self._convert_semantic_models(semantic_understanding.models)
         elif trait:
