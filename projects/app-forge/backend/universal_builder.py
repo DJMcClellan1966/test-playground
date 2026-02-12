@@ -541,8 +541,19 @@ universal_builder = UniversalBuilder()
 # Convenience functions
 # =====================================================================
 
+def _ensure_registered():
+    """Import registries to trigger auto-registration."""
+    try:
+        import framework_registry  # Registers generators
+        import component_library   # Registers components
+        import category_registry   # Registers categories
+    except ImportError:
+        pass  # Standalone mode - manual registration needed
+
+
 def build_app(description: str, answers: Optional[Dict[str, Any]] = None) -> Project:
     """Build an app from a description."""
+    _ensure_registered()
     return universal_builder.build(description, answers)
 
 
