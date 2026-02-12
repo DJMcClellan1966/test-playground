@@ -247,6 +247,57 @@ FEATURE_RULES: List[Tuple[str, str, object, float]] = [
     ("typing_test",  r"typing\s*(speed\s*)?(test|game|practice)|speed\s*typ(e|ing)|wpm\s*test|word(s)?\s*per\s*minute", "true", 0.95),
     ("rps",          r"rock\s*paper\s*scissors|rps\b|roshambo", "true", 0.95),
 
+    # NEW: Dashboard and analytics
+    ("dashboard",    r"dashboard|analytics|metrics|kpi|charts?|graphs?|statistics|visualiz|report|monitor", "true", 0.90),
+    
+    # NEW: Weather
+    ("weather",      r"weather|forecast|temperature|climate|rain|humidity|meteorolog", "true", 0.95),
+    
+    # NEW: Chat/messaging
+    ("chat",         r"\bchat\b|messag|conversation|talk|instant\s*messag|dm\b|slack|discord", "true", 0.90),
+    
+    # NEW: File management
+    ("file_manager", r"file\s*(manager|browser|upload|download)|folder|drive|storage\s*(app|manager)", "true", 0.90),
+    
+    # NEW: Kanban
+    ("kanban",       r"kanban|trello|board.*columns?|cards?.*drag|project.*board|agile.*board", "true", 0.95),
+    
+    # NEW: Pomodoro
+    ("pomodoro",     r"pomodoro|focus\s*timer|work.*break|25\s*min|productivity\s*timer", "true", 0.95),
+    
+    # NEW: Markdown editor
+    ("markdown_editor", r"markdown|md\s*editor|write.*preview|document\s*editor|wysiwyg|rich\s*text", "true", 0.90),
+    
+    # NEW: Drawing
+    ("drawing",      r"draw(ing)?|paint|canvas|sketch|doodle|whiteboard|art\s*app|pixel\s*art", "true", 0.90),
+    
+    # NEW: Music player
+    ("music_player", r"music\s*player|audio|playlist|mp3|song|album|spotify|soundcloud", "true", 0.95),
+    
+    # NEW: Image gallery
+    ("gallery",      r"gallery|photos?|images?|album|lightbox|slideshow|portfolio", "true", 0.85),
+    
+    # NEW: URL shortener
+    ("url_shortener", r"url\s*shorten|link\s*shorten|bitly|short\s*link|redirect\s*service", "true", 0.95),
+    
+    # NEW: QR code
+    ("qr_code",      r"qr\s*code|qrcode|barcode|scan\s*code|generate.*qr", "true", 0.95),
+    
+    # NEW: Countdown
+    ("countdown",    r"countdown|event\s*timer|days?\s*until|remaining\s*time|launch\s*timer", "true", 0.90),
+    
+    # NEW: Invoice
+    ("invoice",      r"invoice|billing|receipt|payment|pdf.*invoice|business.*invoice", "true", 0.90),
+    
+    # NEW: Poll/Survey
+    ("poll",         r"poll|survey|vote|voting|questionnaire|form|feedback|opinion", "true", 0.85),
+    
+    # NEW: Habit
+    ("habit",        r"habit|streak|daily\s*track|routine|goal\s*track|30\s*day", "true", 0.90),
+    
+    # NEW: Video player
+    ("video_player", r"video\s*player|youtube|stream|watch.*video|movie\s*player", "true", 0.95),
+
     # Tools
     ("calculator",   r"calculator|calc\b|arithmetic|number\s*crunch|math\s*problems?",          "true",   0.90),
     ("converter",    r"converter|convert\s+unit|unit\s+convert|unit\s*transform|bmi|mortgage|"
@@ -627,6 +678,186 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
         required=["algorithm_vis"],
         boosted=["algorithm_vis"],
         anti=["data_app", "calculator", "puzzle", "game"],
+        base_score=12.0,
+    ),
+    # --- NEW: Dashboard / Analytics ---
+    TemplateEntry(
+        id="dashboard",
+        name="Dashboard / Analytics",
+        tags=["dashboard", "analytics", "metrics", "charts", "graphs", "statistics", "kpi", "report"],
+        required=["dashboard"],
+        boosted=["data_app", "storage"],
+        anti=["generic_game", "puzzle", "reaction"],
+        base_score=10.0,
+    ),
+    # --- NEW: Weather App ---
+    TemplateEntry(
+        id="weather",
+        name="Weather App",
+        tags=["weather", "forecast", "temperature", "climate", "rain", "humidity"],
+        required=["weather"],
+        boosted=["data_app"],
+        anti=["generic_game", "puzzle"],
+        base_score=12.0,
+    ),
+    # --- NEW: Chat / Messaging ---
+    TemplateEntry(
+        id="chat_app",
+        name="Chat / Messaging",
+        tags=["chat", "message", "messaging", "conversation", "talk", "dm", "instant"],
+        required=["chat"],
+        boosted=["auth", "storage"],
+        anti=["generic_game", "puzzle", "calculator"],
+        base_score=10.0,
+    ),
+    # --- NEW: File Manager ---
+    TemplateEntry(
+        id="file_manager",
+        name="File Manager",
+        tags=["file", "files", "folder", "upload", "download", "browser", "storage", "drive"],
+        required=["file_manager"],
+        boosted=["storage", "auth"],
+        anti=["generic_game", "puzzle"],
+        base_score=10.0,
+    ),
+    # --- NEW: Kanban Board ---
+    TemplateEntry(
+        id="kanban",
+        name="Kanban Board",
+        tags=["kanban", "board", "trello", "cards", "columns", "drag", "project"],
+        required=["kanban"],
+        boosted=["data_app", "auth"],
+        anti=["generic_game", "puzzle", "calculator"],
+        base_score=10.0,
+    ),
+    # --- NEW: Pomodoro Timer ---
+    TemplateEntry(
+        id="pomodoro",
+        name="Pomodoro Timer",
+        tags=["pomodoro", "focus", "productivity", "work", "break", "session"],
+        required=["pomodoro"],
+        boosted=["timing"],
+        anti=["generic_game", "puzzle", "data_app"],
+        base_score=12.0,
+    ),
+    # --- NEW: Markdown Editor ---
+    TemplateEntry(
+        id="markdown_editor",
+        name="Markdown Editor",
+        tags=["markdown", "md", "editor", "preview", "write", "document", "notes"],
+        required=["markdown_editor"],
+        boosted=["storage"],
+        anti=["generic_game", "puzzle", "calculator"],
+        base_score=10.0,
+    ),
+    # --- NEW: Drawing Canvas ---
+    TemplateEntry(
+        id="drawing_canvas",
+        name="Drawing Canvas",
+        tags=["draw", "drawing", "paint", "canvas", "sketch", "doodle", "art", "whiteboard"],
+        required=["drawing"],
+        boosted=["generic_game"],
+        anti=["data_app", "calculator", "puzzle"],
+        base_score=10.0,
+    ),
+    # --- NEW: Music Player ---
+    TemplateEntry(
+        id="music_player",
+        name="Music Player",
+        tags=["music", "player", "audio", "playlist", "mp3", "song", "album"],
+        required=["music_player"],
+        boosted=["storage"],
+        anti=["generic_game", "puzzle"],
+        base_score=12.0,
+    ),
+    # --- NEW: Image Gallery ---
+    TemplateEntry(
+        id="image_gallery",
+        name="Image Gallery",
+        tags=["gallery", "photos", "images", "album", "lightbox", "slideshow"],
+        required=["gallery"],
+        boosted=["storage", "tags"],
+        anti=["generic_game", "puzzle", "calculator"],
+        base_score=10.0,
+    ),
+    # --- NEW: URL Shortener ---
+    TemplateEntry(
+        id="url_shortener",
+        name="URL Shortener",
+        tags=["shortener", "url", "link", "shorten", "redirect", "bitly"],
+        required=["url_shortener"],
+        boosted=["storage"],
+        anti=["generic_game", "puzzle"],
+        base_score=12.0,
+    ),
+    # --- NEW: QR Code Generator ---
+    TemplateEntry(
+        id="qr_generator",
+        name="QR Code Generator",
+        tags=["qr", "qrcode", "barcode", "scan", "generate"],
+        required=["qr_code"],
+        boosted=[],
+        anti=["generic_game", "puzzle", "data_app"],
+        base_score=12.0,
+    ),
+    # --- NEW: Countdown Timer ---
+    TemplateEntry(
+        id="countdown",
+        name="Countdown Timer",
+        tags=["countdown", "event", "timer", "until", "days", "remaining"],
+        required=["countdown"],
+        boosted=["timing"],
+        anti=["generic_game", "puzzle"],
+        base_score=10.0,
+    ),
+    # --- NEW: Invoice Generator ---
+    TemplateEntry(
+        id="invoice_generator",
+        name="Invoice Generator",
+        tags=["invoice", "billing", "receipt", "payment", "pdf", "business"],
+        required=["invoice"],
+        boosted=["data_app", "export"],
+        anti=["generic_game", "puzzle"],
+        base_score=10.0,
+    ),
+    # --- NEW: Flashcard Study ---
+    TemplateEntry(
+        id="flashcards",
+        name="Flashcard Study App",
+        tags=["flashcard", "study", "learn", "memorize", "spaced", "repetition", "anki"],
+        required=["trivia"],
+        boosted=["data_app", "storage"],
+        anti=["generic_game", "puzzle", "calculator"],
+        base_score=8.0,
+    ),
+    # --- NEW: Poll / Survey ---
+    TemplateEntry(
+        id="poll_survey",
+        name="Poll / Survey App",
+        tags=["poll", "survey", "vote", "voting", "questionnaire", "form", "feedback"],
+        required=["poll"],
+        boosted=["data_app", "auth"],
+        anti=["generic_game", "puzzle"],
+        base_score=10.0,
+    ),
+    # --- NEW: Habit Tracker ---
+    TemplateEntry(
+        id="habit_tracker",
+        name="Habit Tracker",
+        tags=["habit", "streak", "daily", "track", "routine", "goals"],
+        required=["habit"],
+        boosted=["data_app", "storage"],
+        anti=["generic_game", "puzzle"],
+        base_score=10.0,
+    ),
+    # --- NEW: Video Player ---
+    TemplateEntry(
+        id="video_player",
+        name="Video Player",
+        tags=["video", "player", "youtube", "stream", "watch", "movie"],
+        required=["video_player"],
+        boosted=["storage"],
+        anti=["generic_game", "puzzle"],
         base_score=12.0,
     ),
     # --- Fallback ---

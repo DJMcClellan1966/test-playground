@@ -267,6 +267,311 @@ if __name__ == '__main__':
     socketio.run(app, debug=True, port=5000)
 """,
     ),
+    
+    # NEW: FastAPI kernel for API-first apps
+    "fastapi": Kernel(
+        id="fastapi",
+        name="FastAPI",
+        description="Modern async API framework with automatic OpenAPI docs",
+        requires=["api"],
+        provides=["routing", "api", "validation", "openapi"],
+        imports="""from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
+import uvicorn
+""",
+        init="""
+app = FastAPI(title="Generated API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+""",
+        base_routes="""
+@app.get("/")
+async def root():
+    return {"message": "API is running", "docs": "/docs"}
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+""",
+        main_block="""
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+""",
+    ),
+    
+    # NEW: FastAPI with SQLAlchemy
+    "fastapi_data": Kernel(
+        id="fastapi_data",
+        name="FastAPI + SQLAlchemy",
+        description="FastAPI with database persistence",
+        requires=["api", "data"],
+        provides=["routing", "api", "validation", "openapi", "database", "models"],
+        imports="""from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Float
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
+import uvicorn
+""",
+        init="""
+app = FastAPI(title="Generated API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+SQLALCHEMY_DATABASE_URL = "sqlite:///./app.db"
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+""",
+        base_routes="""
+@app.get("/")
+async def root():
+    return {"message": "API is running", "docs": "/docs"}
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "database": "sqlite", "timestamp": datetime.utcnow().isoformat()}
+
+@app.on_event("startup")
+async def startup():
+    Base.metadata.create_all(bind=engine)
+""",
+        main_block="""
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+""",
+    ),
+    
+    # NEW: CLI kernel with Click
+    "cli_click": Kernel(
+        id="cli_click",
+        name="CLI with Click",
+        description="Command-line interface application",
+        requires=["cli"],
+        provides=["cli", "commands", "arguments"],
+        imports="""import click
+import json
+import sys
+from pathlib import Path
+from datetime import datetime
+""",
+        init="""
+@click.group()
+@click.version_option(version='1.0.0')
+def cli():
+    \"\"\"Generated CLI application.\"\"\"
+    pass
+""",
+        base_routes="""
+@cli.command()
+def info():
+    \"\"\"Show application information.\"\"\"
+    click.echo("CLI Application v1.0.0")
+    click.echo(f"Generated at: {datetime.now().isoformat()}")
+
+@cli.command()
+@click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
+def status(verbose):
+    \"\"\"Check application status.\"\"\"
+    click.echo(click.style('Status: OK', fg='green'))
+    if verbose:
+        click.echo(f"Python: {sys.version}")
+""",
+        main_block="""
+if __name__ == '__main__':
+    cli()
+""",
+    ),
+    
+    # NEW: HTML Canvas kernel for games
+    "html_canvas": Kernel(
+        id="html_canvas",
+        name="HTML5 Canvas",
+        description="Browser-based canvas game/visualization",
+        requires=["canvas"],
+        provides=["canvas", "rendering", "animation"],
+        imports="""<!-- HTML5 Canvas Game -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas App</title>
+    <style>
+        body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #1a1a2e; }
+        canvas { border: 2px solid #16213e; background: #0f3460; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+""",
+        init="""
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let gameState = { running: true };
+""",
+        base_routes="""
+function gameLoop() {
+    if (!gameState.running) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    update();
+    render();
+    requestAnimationFrame(gameLoop);
+}
+
+function update() {
+    // Game logic here
+}
+
+function render() {
+    // Drawing here
+}
+""",
+        main_block="""
+// Start the game
+gameLoop();
+</script>
+</body>
+</html>
+""",
+    ),
+    
+    # NEW: Phaser.js kernel for advanced games
+    "phaser": Kernel(
+        id="phaser",
+        name="Phaser.js Game",
+        description="Advanced 2D game framework with physics",
+        requires=["game", "physics"],
+        provides=["canvas", "physics", "sprites", "animation", "audio"],
+        imports="""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phaser Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+    <style>
+        body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #1a1a2e; }
+    </style>
+</head>
+<body>
+""",
+        init="""
+<script>
+const config = {
+    type: Phaser.AUTO,
+    width: 800,
+    height: 600,
+    physics: {
+        default: 'arcade',
+        arcade: { gravity: { y: 300 }, debug: false }
+    },
+    scene: { preload, create, update }
+};
+
+const game = new Phaser.Game(config);
+let player, cursors;
+""",
+        base_routes="""
+function preload() {
+    // Load assets
+}
+
+function create() {
+    // Setup game objects
+    cursors = this.input.keyboard.createCursorKeys();
+}
+
+function update() {
+    // Game loop logic
+}
+""",
+        main_block="""
+</script>
+</body>
+</html>
+""",
+    ),
+    
+    # NEW: Flask with ML/sklearn
+    "flask_ml": Kernel(
+        id="flask_ml",
+        name="Flask + ML",
+        description="Flask with machine learning model serving",
+        requires=["ml"],
+        provides=["routing", "templates", "ml", "prediction"],
+        imports="""from flask import Flask, render_template, request, jsonify
+from flask_cors import CORS
+import numpy as np
+from datetime import datetime
+import pickle
+import os
+""",
+        init="""
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'dev-secret-key'
+CORS(app)
+
+# Load model if exists
+model = None
+MODEL_PATH = 'model.pkl'
+if os.path.exists(MODEL_PATH):
+    with open(MODEL_PATH, 'rb') as f:
+        model = pickle.load(f)
+""",
+        base_routes="""
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/api/health')
+def health():
+    return jsonify({
+        "status": "ok", 
+        "model_loaded": model is not None,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+
+@app.route('/api/predict', methods=['POST'])
+def predict():
+    if model is None:
+        return jsonify({"error": "No model loaded"}), 400
+    data = request.get_json()
+    features = np.array(data.get('features', [])).reshape(1, -1)
+    prediction = model.predict(features)
+    return jsonify({"prediction": prediction.tolist()})
+""",
+        main_block="""
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
+""",
+    ),
 }
 
 

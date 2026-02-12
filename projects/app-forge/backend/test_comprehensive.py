@@ -165,11 +165,15 @@ def test_synthesis() -> Tuple[int, int, List[str]]:
     for desc, expected_patterns in novel_cases:
         result = synthesize(desc)
         synthesized = result.get('synthesized_templates', [])
+        existing = result.get('existing_templates', [])
         
-        # Check if any expected pattern is found
+        # Check if any expected pattern is found in either synthesized OR existing templates
         found = any(
             any(pat in synth for pat in expected_patterns)
             for synth in synthesized
+        ) or any(
+            any(pat in ex for pat in expected_patterns)
+            for ex in existing
         )
         
         if found or synthesized:

@@ -377,6 +377,101 @@ register_template(MicroTemplate(
     keywords=["share", "shares", "sharing", "public", "private", "visibility", "access", "network"],
 ))
 
+# --- NEW: SPECIALIZED patterns ---
+
+register_template(MicroTemplate(
+    id="has_price",
+    name="Has Price",
+    pattern=UniversalPattern.CONTAINER,
+    description="A thing with monetary value",
+    fields=[
+        {"name": "price", "type": "decimal", "required": True},
+        {"name": "currency", "type": "string", "default": "USD"},
+        {"name": "discount", "type": "decimal", "nullable": True}
+    ],
+    operations=["set_price", "apply_discount", "get_final_price", "convert_currency"],
+    keywords=["price", "cost", "fee", "charge", "pay", "buy", "sell", "dollar", "money", "billing"],
+))
+
+register_template(MicroTemplate(
+    id="has_quantity",
+    name="Has Quantity",
+    pattern=UniversalPattern.CONTAINER,
+    description="A thing with a countable amount",
+    fields=[
+        {"name": "quantity", "type": "integer", "default": 1},
+        {"name": "unit", "type": "string", "nullable": True}
+    ],
+    operations=["increment", "decrement", "set_quantity", "check_stock"],
+    keywords=["quantity", "amount", "count", "stock", "inventory", "items", "units"],
+))
+
+register_template(MicroTemplate(
+    id="has_location",
+    name="Has Location",
+    pattern=UniversalPattern.CONTAINER,
+    description="A thing with geographical coordinates",
+    fields=[
+        {"name": "latitude", "type": "float", "nullable": True},
+        {"name": "longitude", "type": "float", "nullable": True},
+        {"name": "address", "type": "string", "nullable": True}
+    ],
+    operations=["set_location", "get_nearby", "calculate_distance", "geocode"],
+    keywords=["location", "address", "map", "geo", "place", "where", "coordinates", "nearby"],
+))
+
+register_template(MicroTemplate(
+    id="has_duration",
+    name="Has Duration",
+    pattern=UniversalPattern.FLOW,
+    description="A thing with start and end times",
+    fields=[
+        {"name": "start_time", "type": "datetime", "required": True},
+        {"name": "end_time", "type": "datetime", "nullable": True},
+        {"name": "duration_minutes", "type": "integer", "computed": True}
+    ],
+    operations=["set_duration", "extend", "get_remaining", "is_active"],
+    keywords=["duration", "time", "start", "end", "length", "span", "period", "session"],
+))
+
+register_template(MicroTemplate(
+    id="has_attachment",
+    name="Has Attachment",
+    pattern=UniversalPattern.CONTAINER,
+    description="A thing with file attachments",
+    fields=[
+        {"name": "attachments", "type": "json", "default": "[]"},
+        {"name": "max_attachments", "type": "integer", "default": 10}
+    ],
+    operations=["attach", "detach", "list_attachments", "download"],
+    keywords=["attach", "file", "upload", "document", "image", "media", "photo"],
+))
+
+register_template(MicroTemplate(
+    id="is_recurring",
+    name="Is Recurring",
+    pattern=UniversalPattern.FLOW,
+    description="A thing that repeats on a schedule",
+    fields=[
+        {"name": "recurrence_rule", "type": "string", "nullable": True},
+        {"name": "next_occurrence", "type": "datetime", "nullable": True}
+    ],
+    operations=["set_recurrence", "get_next", "skip_occurrence", "end_recurrence"],
+    keywords=["recurring", "repeat", "daily", "weekly", "monthly", "schedule", "routine"],
+))
+
+register_template(MicroTemplate(
+    id="has_priority",
+    name="Has Priority",
+    pattern=UniversalPattern.STATE,
+    description="A thing with importance level",
+    fields=[
+        {"name": "priority", "type": "enum", "values": ["low", "medium", "high", "urgent"]}
+    ],
+    operations=["set_priority", "filter_by_priority", "sort_by_priority"],
+    keywords=["priority", "importance", "urgent", "critical", "high", "low", "medium"],
+))
+
 # --- SEARCH/FILTER patterns ---
 
 register_template(MicroTemplate(
