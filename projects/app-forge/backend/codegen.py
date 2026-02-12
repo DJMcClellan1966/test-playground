@@ -105,6 +105,21 @@ def init_db(app):
         db.create_all()
 """
     
+    def generate_index_html(self, app_name: str, answers: Dict[str, bool], description: str = "") -> str:
+        """
+        Generate index.html for the app.
+        Routes to either CRUD HTML or standalone HTML based on app type.
+        """
+        needs_db = answers.get("has_data", False)
+        app_type = detect_app_type(description) if description else "generic"
+        
+        # Data apps (CRUD) use the database-backed HTML
+        if needs_db:
+            return self._crud_html(app_name, answers, description)
+        
+        # Standalone apps (games, tools, calculators) use component-based HTML
+        return self._standalone_html(app_name, app_type, description)
+    
     def generate_data_app_files(self, app_name: str, answers: Dict[str, bool], description: str = "") -> Dict[str, str]:
         """Generate all files for a multi-file data app with SQLite."""
         needs_db = answers.get("has_data", False)
