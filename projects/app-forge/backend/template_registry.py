@@ -116,6 +116,54 @@ def fuzzy_correct(text: str, cutoff: float = 0.80) -> str:
     return ' '.join(corrected)
 
 
+def normalize_input(text: str, max_length: int = 500) -> str:
+    """Normalize input text for better matching.
+    
+    Handles:
+    - Very long inputs (truncation)
+    - Hyphenated variants (to-do -> todo)
+    - Semantic synonyms (write down -> note)
+    - Special characters (removal for cleaner matching)
+    """
+    # 1. Truncate very long inputs (keep first instance of key patterns)
+    if len(text) > max_length:
+        text = text[:max_length]
+    
+    # 2. Normalize common variations
+    normalizations = [
+        # Hyphenated -> single word
+        (r'\bto-do\b', 'todo'),
+        (r'\bto do\b', 'todo'),
+        (r'\bto-dos\b', 'todos'),
+        (r'\bto dos\b', 'todos'),
+        (r'\bwork-out\b', 'workout'),
+        (r'\bwork out\b', 'workout'),
+        (r'\bbook-mark\b', 'bookmark'),
+        (r'\bbook mark\b', 'bookmark'),
+        
+        # Semantic synonyms -> known keywords
+        (r'\bwrite\s+down\s+(stuff|things|notes?|ideas?)\b', 'note'),
+        (r'\bjot\s+down\b', 'note'),
+        (r'\bkeep\s+track\s+of\b', 'tracker'),
+        (r'\bremember\s+(stuff|things)\b', 'note'),
+        (r'\bsave\s+(stuff|things|ideas?)\b', 'collection'),
+        (r'\blist\s+(stuff|things|items?)\b', 'collection'),
+        (r'\borganize\s+(stuff|things|items?)\b', 'collection'),
+        (r'\bstore\s+(stuff|things|items?)\b', 'collection'),
+    ]
+    
+    result = text.lower()
+    for pattern, replacement in normalizations:
+        result = re.sub(pattern, replacement, result)
+    
+    # 3. Remove excessive special characters (keep alphanumeric, spaces, basic punctuation)
+    # This doesn't remove all special chars, just cleans up noise like "!!!" or "@#$%"
+    result = re.sub(r'[^\w\s\-.,!?\'"]+', ' ', result)
+    result = re.sub(r'[!?]{2,}', '!', result)  # Multiple !!! -> single !
+    
+    return result.strip()
+
+
 # =====================================================================
 # Feature Extractor  (Feature Store)
 # =====================================================================
@@ -241,8 +289,10 @@ def extract_features(description: str) -> Dict[str, Feature]:
     
     Tracks position of each feature for attention-based scoring.
     """
+    # Apply normalization to handle edge cases (long input, special chars, synonyms)
+    normalized = normalize_input(description)
     # Apply fuzzy typo correction before matching
-    desc = fuzzy_correct(description.lower())
+    desc = fuzzy_correct(normalized)
     features: Dict[str, Feature] = {}
 
     for feat_name, pattern, value_extractor, conf in FEATURE_RULES:
