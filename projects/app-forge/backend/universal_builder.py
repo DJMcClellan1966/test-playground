@@ -743,11 +743,15 @@ class UniversalBuilder:
             AppCategory.API_SERVICE: ["api", "endpoint", "rest", "graphql", "service", "backend"],
             AppCategory.ML_PIPELINE: ["ml", "machine learning", "model", "predict", "train", "dataset",
                                        "classifier", "sentiment", "recommendation", "spam", "image classif"],
-            AppCategory.CLI_TOOL: ["cli", "command", "terminal", "script", "tool",
-                                    "password gen", "file converter", "backup"],
+            # AUTOMATION must come before CLI_TOOL - requires explicit "automation" or phrases like "backup automation"
+            AppCategory.AUTOMATION: ["automation script", "backup automation", "file backup automation",
+                                      "monitoring script", "price monitoring",
+                                      "automate", "bot", "schedule", "workflow", 
+                                      "scrape", "scraper", "web scraper", "sync job"],
+            AppCategory.CLI_TOOL: ["cli", "command", "terminal", "tool", "script",
+                                    "password gen", "file converter", "backup script", "file backup script"],
             AppCategory.DESKTOP: ["desktop", "gui", "window", "native"],
             AppCategory.MOBILE: ["mobile", "ios", "android", "app store"],
-            AppCategory.AUTOMATION: ["automate", "bot", "schedule", "workflow", "scrape", "scraper", "monitor"],
         }
         
         for category, keywords in category_keywords.items():

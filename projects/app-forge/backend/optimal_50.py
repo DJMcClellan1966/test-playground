@@ -810,47 +810,212 @@ def get_by_entity(entity: str) -> List[TrainingExample]:
     return [ex for ex in OPTIMAL_TRAINING_SET if entity in ex.entities]
 
 
+# Synonym mapping for better matching
+SYNONYMS = {
+    'collection': ['app', 'manager', 'tracker', 'list'],
+    'app': ['application', 'system', 'platform', 'tool'],
+    'user': ['account', 'member', 'author', 'profile'],
+    'accounts': ['auth', 'login', 'users', 'authors'],
+    'tags': ['categories', 'labels', 'groups'],
+    'categories': ['tags', 'labels', 'groups'],
+    'blog': ['post', 'article', 'journal'],
+    'recipe': ['cooking', 'meal', 'dish'],
+    'cooking': ['recipe', 'meal', 'dish'],
+    'inventory': ['product', 'stock', 'warehouse'],
+    'product': ['inventory', 'item', 'stock'],
+    'forum': ['thread', 'community', 'discuss'],
+    'thread': ['forum', 'discussion', 'topic'],
+}
+
+# Entity synonyms - map domain keywords to entity names
+ENTITY_SYNONYMS = {
+    'blog': ['post', 'article'],
+    'post': ['blog', 'article'],
+    'inventory': ['product', 'stock'],
+    'product': ['inventory', 'item'],
+    'forum': ['thread', 'reply'],
+    'thread': ['forum', 'topic'],
+    'community': ['forum', 'thread'],
+}
+
+
+def expand_synonyms(text: str) -> Set[str]:
+    """Expand text with synonyms for better matching."""
+    words = set(text.lower().split())
+    expanded = set(words)
+    for word in words:
+        if word in SYNONYMS:
+            expanded.update(SYNONYMS[word])
+    return expanded
+
+
 def find_best_match(description: str) -> TrainingExample:
     """Find the best matching training example for a description."""
     desc_lower = description.lower()
+    desc_expanded = expand_synonyms(desc_lower)
     best_match = None
-    best_score = 0
+    best_score = -999
+    
+    # Detect features mentioned in description
+    feature_keywords = {
+        'auth': ['login', 'user', 'account', 'auth', 'accounts'],
+        'search': ['search', 'find', 'filter', 'searchable'],
+        'tags': ['tag', 'category', 'label', 'tags', 'categories'],
+        'ratings': ['rate', 'rating', 'star', 'review', 'ratings'],
+        'comments': ['comment', 'reply', 'discuss', 'comments', 'forum', 'thread'],
+        'export': ['export', 'download'],
+        'share': ['share', 'social', 'sharing'],
+        'history': ['history', 'track', 'log'],
+        'stats': ['stats', 'statistics', 'analytics'],
+    }
+    
+    desc_features = set()
+    for feature, keywords in feature_keywords.items():
+        if any(kw in desc_lower for kw in keywords):
+            desc_features.add(feature)
     
     for ex in OPTIMAL_TRAINING_SET:
         score = 0
         ex_desc_lower = ex.description.lower()
+        ex_expanded = expand_synonyms(ex_desc_lower)
         
         # Exact match bonus
         if desc_lower == ex_desc_lower:
             return ex
         
-        # Word overlap
+        # Word overlap (with synonym expansion)
         desc_words = set(desc_lower.split())
         ex_words = set(ex_desc_lower.split())
-        overlap = len(desc_words & ex_words)
-        score += overlap * 2
+        direct_overlap = len(desc_words & ex_words)
+        expanded_overlap = len(desc_expanded & ex_expanded)
+        score += direct_overlap * 3  # Boost direct matches
+        score += (expanded_overlap - direct_overlap)  # Add synonym bonus
         
-        # Entity match
-        for entity in ex.entities:
-            if entity in desc_lower:
-                score += 3
+        # Entity matching with synonyms
+        if ex.entities:
+            primary = ex.entities[0]
+            entity_matched = False
+            
+            # Direct match
+            if primary in desc_lower:
+                score += 10  # Highest weight for primary entity
+                entity_matched = True
+            # Plural/variations
+            elif primary + 's' in desc_lower or (len(primary) > 3 and primary[:-1] in desc_lower):
+                score += 7
+                entity_matched = True
+            # Synonym match
+            else:
+                synonyms = ENTITY_SYNONYMS.get(primary, [])
+                for syn in synonyms:
+                    if syn in desc_lower:
+                        score += 8  # Synonym match
+                        entity_matched = True
+                        break
+                
+                # Also check reverse - does desc word have this entity as synonym?
+                for word in desc_words:
+                    if primary in ENTITY_SYNONYMS.get(word, []):
+                        score += 8
+                        entity_matched = True
+                        break
+            
+            if not entity_matched:
+                # Penalty if primary entity doesn't match at all
+                score -= 5
+            
+            # Secondary entity matches
+            for entity in ex.entities[1:]:
+                if entity in desc_lower:
+                    score += 3
+                # Extra entities not in description is a penalty
+                elif entity not in ['user', 'tag', 'category']:  # Common supporting entities
+                    score -= 1
+        else:
+            # Examples with no entities should be penalized if description implies entity
+            data_keywords = ['app', 'manager', 'tracker', 'list', 'system', 'platform', 
+                            'collection', 'inventory', 'blog', 'forum']
+            if any(kw in desc_lower for kw in data_keywords):
+                score -= 8  # Strong penalty for CLI tools matching data app descriptions
         
-        # Feature match
-        feature_keywords = {
-            'auth': ['login', 'user', 'account', 'auth'],
-            'search': ['search', 'find', 'filter'],
-            'tags': ['tag', 'category', 'label'],
-            'ratings': ['rate', 'rating', 'star', 'review'],
-            'comments': ['comment', 'reply', 'discuss'],
-            'export': ['export', 'download'],
-            'share': ['share', 'social'],
-            'history': ['history', 'track', 'log'],
-            'stats': ['stats', 'statistics', 'analytics'],
-        }
-        for feature, keywords in feature_keywords.items():
-            if any(kw in desc_lower for kw in keywords):
-                if feature in ex.features:
-                    score += 2
+        # Feature matching - both positive and negative signals
+        matched_features = desc_features & ex.features
+        extra_features = ex.features - desc_features  # Features example has but description doesn't
+        missing_features = desc_features - ex.features  # Features description has but example doesn't
+        
+        score += len(matched_features) * 4  # Reward matching features
+        score -= len(extra_features) * 2    # Penalize extra complexity
+        score -= len(missing_features) * 3  # Penalize missing features
+        
+        # Simplicity bonus: if description is simple, prefer simpler examples
+        if len(desc_features) == 0 and len(ex.features) == 0:
+            score += 5  # Both are simple
+        elif len(desc_features) == 0 and len(ex.features) > 0:
+            score -= 3  # Example too complex for simple description
+        
+        # Category matching: prefer DATA_APP examples for app/system descriptions
+        # and API examples for api descriptions
+        desc_is_api = any(w in desc_lower for w in ['api', 'rest', 'endpoint', 'service', 'backend'])
+        desc_is_app = any(w in desc_lower for w in ['app', 'system', 'platform', 'manager', 'tracker', 'collection'])
+        desc_is_cli = any(w in desc_lower for w in ['cli', 'command line', 'terminal'])
+        desc_is_game = any(w in desc_lower for w in ['game', 'play', 'puzzle'])
+        
+        ex_is_api = ex.category.value == 'api'
+        ex_is_cli = ex.category.value == 'cli'
+        ex_is_game = ex.category.value == 'game'
+        
+        # Reward matching categories, penalize mismatches
+        if desc_is_api:
+            if ex_is_api:
+                score += 8  # Strong bonus for API match
+            elif ex_is_cli:
+                score -= 10  # Strong penalty for CLI when expecting API
+            else:
+                score -= 3
+        elif desc_is_app:
+            if ex_is_api:
+                score -= 5  # Penalty for API when expecting app
+            if ex_is_cli:
+                score -= 8  # Strong penalty for CLI when expecting app
+        elif desc_is_game:
+            if ex_is_game:
+                score += 5  # Bonus for game match
+            elif not ex_is_game:
+                score -= 3
+        elif desc_is_cli:
+            if ex_is_cli:
+                score += 5
+            elif ex_is_api:
+                score -= 3
+        
+        # Direct keyword match in description - important words that should strongly influence matching
+        # Primary domain keywords (what kind of app is it) - highest priority
+        primary_keywords = ['blog', 'recipe', 'forum', 'inventory', 'todo', 'task', 'workout', 
+                            'expense', 'calendar', 'contact', 'movie', 'photo', 'quiz']
+        for keyword in primary_keywords:
+            if keyword in desc_lower:
+                # Check if this keyword appears in example description OR entities
+                if keyword in ex_desc_lower:
+                    score += 12  # Highest priority for primary domain match
+                elif keyword in ex.entities:
+                    score += 10  # Strong match via entities
+                else:
+                    # This is the PRIMARY domain but example doesn't match it - big penalty
+                    score -= 6
+        
+        # Secondary keywords (features, characteristics) - lower priority
+        secondary_keywords = ['secure', 'jwt', 'graphql', 'multiplayer']
+        for keyword in secondary_keywords:
+            if keyword in desc_lower:
+                if keyword in ex_desc_lower:
+                    score += 6  # Good bonus for matching secondary keywords
+        
+        # Exact phrase matching for common patterns - but not as strong as primary domain
+        exact_phrases = ['rest service', 'secure rest']
+        for phrase in exact_phrases:
+            if phrase in desc_lower:
+                if phrase in ex_desc_lower:
+                    score += 8  # Good bonus for exact phrase match
         
         if score > best_score:
             best_score = score

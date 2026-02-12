@@ -374,13 +374,15 @@ CATEGORY_PATTERNS = {
     
     AppCategory.AUTOMATION: {
         "keywords": [
-            "automate", "bot", "scrape", "schedule", "cron", "workflow",
-            "task", "job", "pipeline", "etl", "sync",
+            "automate", "automation", "bot", "scrape", "schedule", "cron", "workflow",
+            "backup", "monitoring", "monitor", "sync", "pipeline", "etl",
         ],
         "patterns": [
             r"\b(scrape|crawl)\s+(web|site|page)\b",
             r"\b(automate|schedule)\s+(task|job|process)\b",
             r"\bbot\b.*\b(slack|discord|telegram)\b",
+            r"\b(backup|monitoring)\s+(script|automation)\b",
+            r"\b(file|price|data)\s+(backup|monitoring|monitor)\b",
         ],
         "anti_patterns": [],
     },

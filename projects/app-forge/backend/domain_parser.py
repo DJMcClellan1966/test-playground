@@ -30,8 +30,19 @@ DOMAIN_CATALOG = {
             ("category", "db.String(80)", True),
         ],
     },
-    # Tasks / Todos
-    r"todo|task|checklist|kanban": {
+    # Todos (explicit - maps to Todo)
+    r"\btodo\b|to-do": {
+        "name": "Todo",
+        "fields": [
+            ("title", "db.String(200)", False),
+            ("description", "db.Text", True),
+            ("done", "db.Boolean", False),
+            ("priority", "db.String(20)", True),
+            ("due_date", "db.DateTime", True),
+        ],
+    },
+    # Tasks (more generic task management)
+    r"task|checklist|kanban": {
         "name": "Task",
         "fields": [
             ("title", "db.String(200)", False),
@@ -39,6 +50,14 @@ DOMAIN_CATALOG = {
             ("done", "db.Boolean", False),
             ("priority", "db.String(20)", True),
             ("due_date", "db.DateTime", True),
+        ],
+    },
+    # Tags (when explicitly mentioned)
+    r"\bwith\s+tags?\b|\btag(s|ging)?\b": {
+        "name": "Tag",
+        "fields": [
+            ("name", "db.String(80)", False),
+            ("color", "db.String(20)", True),
         ],
     },
     # Inventory / Products

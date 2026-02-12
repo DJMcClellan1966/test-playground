@@ -226,7 +226,7 @@ register_template(MicroTemplate(
         {"name": "previous_version_id", "type": "integer", "nullable": True}
     ],
     operations=["increment_version", "get_history", "rollback"],
-    keywords=["version", "revision", "history", "undo", "rollback"],
+    keywords=["version", "versioned", "revision", "history", "undo", "rollback", "changelog", "track changes"],
 ))
 
 register_template(MicroTemplate(
