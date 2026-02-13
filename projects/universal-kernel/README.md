@@ -36,7 +36,7 @@ Run `python benchmark_vs_ai.py` to compare against simulated AI agent characteri
 | **Deterministic** | **✓** | ✗ | ✗ | ✗ |
 | **Works Offline** | **✓** | ✗ | ✗ | ✗ |
 
-**Overall Score: 96/100 (A+)** | **27,000x faster than GPT-4**
+**Overall Score: 100/100 (A+)** | **11,600x faster than GPT-4**
 
 ### Where Universal Kernel Wins
 - Speed (sub-millisecond vs seconds)
