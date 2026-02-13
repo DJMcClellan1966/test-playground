@@ -41,6 +41,13 @@ try:
 except ImportError:
     HAS_COMPLIANCE = False
 
+# Enterprise features module (tests, API docs, security, devops, etc.)
+try:
+    from enterprise_features import generate_enterprise_features, detect_features
+    HAS_ENTERPRISE = True
+except ImportError:
+    HAS_ENTERPRISE = False
+
 
 def detect_app_type(description: str) -> str:
     """Use scored template registry instead of flat regex."""
@@ -449,6 +456,10 @@ def init_db(app):
         if HAS_COMPLIANCE:
             files = self._add_compliance_features(files, app_name, description, answers)
         
+        # Add enterprise features (tests, API docs, security, devops)
+        if HAS_ENTERPRISE:
+            files = self._add_enterprise_features(files, app_name, description, answers)
+        
         # Auto-validate and fix Python syntax errors
         if auto_fix and HAS_ERROR_FIXER:
             fixed_files, fix_log = validate_and_fix_files(files)
@@ -512,6 +523,102 @@ if __name__ == '__main__':'''
                     '</body>',
                     f'\n{footer_html}\n</body>'
                 )
+        
+        return files
+    
+    def _add_enterprise_features(self, files: Dict[str, str], app_name: str,
+                                   description: str, answers: Dict[str, bool]) -> Dict[str, str]:
+        """Add enterprise features (tests, API docs, security, devops, etc.)."""
+        # Get model names from description
+        models = parse_description(description) if description else []
+        model_names = [m.name for m in models] if models else ['Item']
+        
+        # Generate enterprise features
+        enterprise_files = generate_enterprise_features(
+            app_name=app_name,
+            description=description,
+            answers=answers,
+            models=model_names
+        )
+        
+        # Add generated files (except those that need injection)
+        for filename, content in enterprise_files.items():
+            if filename not in files:  # Don't overwrite existing files
+                files[filename] = content
+        
+        # Inject health check routes into app.py
+        if answers.get('has_data') and 'app.py' in files:
+            health_routes = '''
+# =============================================================================
+# Health Checks
+# =============================================================================
+import time
+_start_time = time.time()
+
+@app.route('/health')
+def health_check():
+    return jsonify({'status': 'healthy', 'timestamp': datetime.now(timezone.utc).isoformat()})
+
+@app.route('/health/ready')
+def readiness():
+    try:
+        db.session.execute(db.text('SELECT 1'))
+        return jsonify({'status': 'ready', 'uptime': int(time.time() - _start_time)})
+    except Exception as e:
+        return jsonify({'status': 'not ready', 'error': str(e)}), 503
+
+'''
+            files['app.py'] = files['app.py'].replace(
+                "if __name__ == '__main__':",
+                f"{health_routes}\nif __name__ == '__main__':"
+            )
+        
+        # Inject API docs routes if OpenAPI spec was generated
+        if 'openapi.json' in files and 'app.py' in files:
+            docs_routes = '''
+# =============================================================================
+# API Documentation
+# =============================================================================
+
+@app.route('/api/openapi.json')
+def openapi_spec():
+    return send_file('openapi.json', mimetype='application/json')
+
+@app.route('/docs')
+def swagger_ui():
+    return send_file('templates/swagger.html')
+
+'''
+            files['app.py'] = files['app.py'].replace(
+                "if __name__ == '__main__':",
+                f"{docs_routes}\nif __name__ == '__main__':"
+            )
+        
+        # Add accessibility CSS/JS links to index.html
+        if 'templates/index.html' in files:
+            accessibility_links = '''<link rel="stylesheet" href="/static/accessibility.css">'''
+            accessibility_script = '''<script src="/static/accessibility.js"></script>'''
+            
+            # Add CSS link in head
+            if '<head>' in files['templates/index.html']:
+                files['templates/index.html'] = files['templates/index.html'].replace(
+                    '</head>',
+                    f'{accessibility_links}\n</head>'
+                )
+            
+            # Add JS script before body close
+            if '</body>' in files['templates/index.html']:
+                files['templates/index.html'] = files['templates/index.html'].replace(
+                    '</body>',
+                    f'{accessibility_script}\n</body>'
+                )
+            
+            # Add skip link after body open
+            skip_link = '<a href="#main" class="skip-link">Skip to main content</a>'
+            files['templates/index.html'] = files['templates/index.html'].replace(
+                '<body>',
+                f'<body>\n{skip_link}'
+            )
         
         return files
     

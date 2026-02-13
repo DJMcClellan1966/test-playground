@@ -43,6 +43,16 @@ Build working Flask apps with natural language + smart questions. No AI hallucin
 - ✅ **NEW** Theme Variants - Light/Dark/Warm/Cool presets that preserve category identity
 - ✅ **NEW** Error Fixer - Auto-detects and fixes ~60 common Python errors (missing imports, syntax, etc.)
 - ✅ **NEW** Compliance Module - GDPR, CCPA, cookie consent, privacy policies (auto-detected from description)
+- ✅ **NEW** Enterprise Features - Production-ready app components (2000+ lines):
+  - Unit tests (pytest) - Auto-generated tests for routes and models
+  - API documentation (OpenAPI/Swagger) - Full spec + Swagger UI
+  - Database migrations (Alembic) - Schema version control
+  - Email notifications (SMTP/SendGrid) - Welcome, password reset, alerts
+  - File uploads - Image/document handling with validation
+  - Security (rate limiting, CSRF, validation, 2FA, password policies)
+  - DevOps (health checks, structured logging, Sentry, .env config)
+  - Accessibility (ARIA labels, keyboard navigation, skip links)
+  - Extras (pagination, Redis caching, PDF export, webhooks, GraphQL, i18n)
 
 ## Quick Start
 
@@ -98,6 +108,7 @@ backend/
 ├── design_system.py        # Category-aware theming with 11 themes + 5 variants (1000 lines)
 ├── error_fixer.py          # Auto-fix syntax errors, missing imports (600 lines)
 ├── compliance.py           # GDPR/CCPA compliance, cookie consent, privacy (500 lines)
+├── enterprise_features.py  # Production features: tests, API docs, security, devops (2300 lines)
 ├── test_comprehensive.py   # 130 comprehensive tests (100% pass rate)
 ├── test_adversarial.py     # 178 adversarial attack vectors (98.9% resilience)
 ├── test_stress.py          # Stress & edge case testing (49 tests)
@@ -1193,6 +1204,58 @@ The system uses keywords to auto-detect compliance needs:
 #   - Privacy policy page
 #   - GDPR export/delete endpoints
 ```
+
+## Enterprise Features
+
+App Forge generates production-ready components automatically based on your app's needs:
+
+### Generated Files
+
+| Feature | Files Generated | Trigger Keywords |
+|---------|-----------------|------------------|
+| Unit Tests | `tests/test_app.py` | Always for data apps |
+| API Docs | `openapi.json`, `templates/swagger.html` | "api", "swagger" |
+| Migrations | `alembic.ini`, `migrations/` | "migration", "schema" |
+| Email | `email_service.py` | "email", "notification", or has auth |
+| Uploads | `uploads.py` | "upload", "image", "file" |
+| Security | `security.py` | Has auth or "rate limit", "csrf", "2fa" |
+| DevOps | `devops.py`, `.env.template` | Always for data apps |
+| Accessibility | `static/accessibility.css`, `static/accessibility.js` | Always |
+| Caching | `cache.py` | "cache", "redis", "fast" |
+| PDF Export | `pdf_export.py` | "pdf", "report", "print" |
+| Webhooks | `webhooks.py` | "webhook", "callback", "trigger" |
+| i18n | `i18n.py` | "language", "translate", "international" |
+| GraphQL | `graphql_api.py` | "graphql", "query", "mutation" |
+
+### Feature Details
+
+**Unit Tests** - pytest tests for all routes and models:
+```python
+def test_create_recipe(self, client):
+    response = client.post('/api/recipe', json={'name': 'Test'})
+    assert response.status_code in [200, 201]
+```
+
+**API Documentation** at `/docs`:
+- Full OpenAPI 3.0 spec at `/api/openapi.json`
+- Swagger UI for interactive testing
+
+**Security Module**:
+- Rate limiting: `@rate_limit(limit=100, window=60)`
+- CSRF protection: Auto-token injection
+- Password policy: Strength validation, 2FA support
+- Input validation: Email, username, length checks
+
+**DevOps**:
+- Health checks: `/health`, `/health/ready`, `/health/metrics`
+- Structured JSON logging
+- Sentry error tracking (optional)
+
+**Accessibility**:
+- Skip links for keyboard navigation
+- ARIA live regions for announcements
+- Focus management
+- Reduced motion support
 
 ## Full Circle: Save & Export
 
