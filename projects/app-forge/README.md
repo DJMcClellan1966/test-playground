@@ -61,6 +61,11 @@ Build working Flask apps with natural language + smart questions. No AI hallucin
 - ✅ **NEW** Hybrid Builder - combines semantic rules with neural matching
 - ✅ **NEW** Semantic Builder - extracts semantic profiles from descriptions
 - ✅ **NEW** User Preferences - learns from your build history
+- ✅ **NEW** Universal Kernel Memory - persistent memory from Universal Kernel:
+  - Build memory (remember successful builds → better template selection)
+  - Decision memory (auto-answer similar questions → fewer prompts)
+  - User preferences (learn framework/feature preferences over time)
+  - Compression-based similarity (find similar past builds without embeddings)
 
 ## Quick Start
 
@@ -124,11 +129,13 @@ backend/
 ├── hybrid_builder.py       # Hybrid semantic/neural archetype matching (500 lines)
 ├── semantic_builder.py     # Semantic profile extraction from descriptions (300 lines)
 ├── user_prefs.py           # User preference tracking and learning
+├── kernel_memory.py        # Universal Kernel memory bridge (persistent learning)
 ├── test_comprehensive.py   # 130 comprehensive tests (100% pass rate)
 ├── test_adversarial.py     # 178 adversarial attack vectors (98.9% resilience)
 ├── test_stress.py          # Stress & edge case testing (49 tests)
 └── data/
     ├── build_memory.db     # SQLite: build history
+    ├── kernel_memory.db    # SQLite: kernel memory (builds, decisions, prefs)
     └── models/             # Trained classifier models (.pkl)
 
 frontend/
@@ -1344,15 +1351,126 @@ Done. Your app is live on GitHub.
 - [ ] Iterate mode (change answer, regenerate)
 - [ ] Component marketplace (share custom generators)
 
-## Related: Universal Kernel
+## Universal Kernel Integration
 
-See [projects/universal-kernel](../universal-kernel/) for the mathematical foundations that power parts of App Forge:
+App Forge is now **directly integrated** with [projects/universal-kernel](../universal-kernel/), using its memory system to make better decisions from the start:
 
-- **kernel.py** (~1,500 lines): Pattern recognition, Bayesian inference, CSP, memory systems
+### What This Solves
+
+> **"If an agent has some basic memory, it could make better decisions from the start."**
+
+Most AI agents (including LLM-based ones) have no memory between sessions. Every request starts fresh, learning nothing from past interactions. This wastes time on:
+- Asking questions that were already answered for similar apps
+- Making template choices that failed before
+- Ignoring user preferences that were demonstrated repeatedly
+
+### How Memory Improves App Forge
+
+| Without Memory | With Kernel Memory |
+|---------------|-------------------|
+| Always asks auth question | Remembers: "You always pick auth for social apps" |
+| Template matching only | Also checks: "Last 3 recipe apps used crud template" |
+| Starts from zero | Uses: Compression-based similarity to find past builds |
+| No personalization | Learns: Framework/feature preferences over time |
+
+### Architecture
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    Universal Kernel                       │
+│        (projects/universal-kernel/kernel.py)              │
+│                                                           │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐       │
+│  │   Working   │  │  Episodic   │  │  Semantic   │       │
+│  │   Memory    │  │   Memory    │  │   Memory    │       │
+│  │  (7 items)  │  │  (history)  │  │  (facts)    │       │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘       │
+│         │                │                │               │
+│         └────────────────┼────────────────┘               │
+│                          │                                │
+└──────────────────────────┼────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────┐
+│                kernel_memory.py (Bridge)                  │
+│                                                           │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐       │
+│  │   Build     │  │  Decision   │  │    User     │       │
+│  │   Memory    │  │   Memory    │  │   Prefs     │       │
+│  │  (builds)   │  │  (Q&A)      │  │ (learned)   │       │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘       │
+│         │                │                │               │
+│    SQLite DB      Compression       Bayesian              │
+│    Persistence    Similarity        Updates               │
+└──────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────┐
+│                     App Forge                             │
+│                                                           │
+│  smartq.py ──────► infer_from_description()              │
+│       │                   │                               │
+│       │           Similar builds?                         │
+│       │           Past decisions?                         │
+│       ▼                   │                               │
+│  app.py ──────► Template suggestion from memory          │
+│       │                   │                               │
+│       │           Learn from accept/reject                │
+│       ▼                   │                               │
+│  Output ◄─────── Better decisions over time              │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Memory Types
+
+| Memory Type | What It Stores | How It Helps |
+|-------------|---------------|--------------|
+| **Build Memory** | Past builds with outcomes | Find similar builds, suggest templates |
+| **Decision Memory** | Q&A context → answer | Auto-answer similar questions |
+| **User Preferences** | Learned framework/feature choices | Personalize suggestions |
+| **Template Associations** | Description patterns → templates | Improve matching over time |
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/memory/status` | GET | Get memory statistics |
+| `/api/memory/suggest` | POST | Get template suggestion from memory |
+| `/api/memory/similar` | POST | Find similar past builds |
+
+### Example: Memory in Action
+
+```python
+# First build for "recipe app with ratings"
+POST /api/start
+{
+  "description": "a recipe app with ratings"
+}
+# → No memory yet, uses template matching
+
+# User accepts build
+POST /api/builds/abc123/accept
+# → Stored in memory: recipe app → crud template, features: [database, ratings]
+
+# Later: "recipe collection with reviews"
+POST /api/start
+{
+  "description": "a recipe collection with reviews"
+}
+# → Memory finds similar build with 0.9 confidence
+# → Suggests: crud template, skips some questions
+# → Response includes: memory_suggestion: {template_id: "crud", confidence: 0.9}
+```
+
+### Key Insight
+
+> **Unlike LLMs that hallucinate or cloud agents that forget, App Forge remembers what worked and applies it. Every accepted build makes future builds better.**
+
+### Universal Kernel Components Used
+
+- **kernel.py** (~1,500 lines): `MemorySystem`, `compression_distance`, `bayesian_update`
 - **agent_core.py** (~1,100 lines): Universal agent traits (Bellman, attention, MCTS, A*, Hebbian)
 - **agent_loop.py** (~1,000 lines): Unified agentic system with PERCEIVE → MODEL → PLAN → ACT → LEARN
-
-The Universal Kernel provides the mathematical reasoning layer - App Forge provides the practical code generation layer. Together they enable LLM-free intelligence.
 
 ## Philosophy
 

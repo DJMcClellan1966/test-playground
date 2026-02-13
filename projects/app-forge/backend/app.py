@@ -37,6 +37,21 @@ except ImportError:
     def record_user_pref(*args, **kwargs): pass
     def get_prefs(): return None
 
+# Universal Kernel memory integration
+try:
+    from kernel_memory import (
+        app_memory, remember_build, suggest_from_memory, learn,
+        get_memory_stats
+    )
+    KERNEL_MEMORY_ENABLED = True
+except ImportError:
+    KERNEL_MEMORY_ENABLED = False
+    app_memory = None
+    def remember_build(*args, **kwargs): pass
+    def suggest_from_memory(desc): return None
+    def learn(*args, **kwargs): pass
+    def get_memory_stats(): return {}
+
 # Import classifier (optional ML module)
 try:
     from classifier import classifier
@@ -87,9 +102,27 @@ def start_wizard():
     # Auto-infer answers from description
     inferred = infer_from_description(description)
     
+    # NEW: Check kernel memory for similar past builds
+    memory_suggestion = None
+    if KERNEL_MEMORY_ENABLED:
+        try:
+            result = suggest_from_memory(description)
+            if result:
+                memory_suggestion = {
+                    'template_id': result[0],
+                    'confidence': result[1],
+                    'source': 'memory'
+                }
+        except Exception as e:
+            print(f"Warning: Memory lookup failed: {e}")
+    
     # Detect what template will be used (neural-enhanced matching)
     best_template, features, scores = smart_match_template(description)
     feature_summary = {k: f.value for k, f in features.items()}
+
+    # If memory has high confidence, use that instead
+    if memory_suggestion and memory_suggestion['confidence'] >= 0.8:
+        best_template = memory_suggestion['template_id']
 
     # If data_app features dominate, the actual path is CRUD, not a game
     if "data_app" in features and scores[0][1] < 5:
@@ -135,6 +168,9 @@ def start_wizard():
             "features": feature_summary,
             "assembled": assembled,
         },
+        # NEW: Include memory-based suggestion if available
+        "memory_suggestion": memory_suggestion,
+        "kernel_memory_enabled": KERNEL_MEMORY_ENABLED,
     })
 
 
@@ -544,6 +580,38 @@ def accept_build(build_id):
     except Exception as e:
         print(f"Warning: Failed to learn from build {build_id}: {e}")
     
+    # NEW: Remember in Universal Kernel memory for better future decisions
+    if KERNEL_MEMORY_ENABLED:
+        try:
+            # Extract features from answers
+            features = []
+            if build.answers:
+                if build.answers.get('has_data'):
+                    features.append('database')
+                if build.answers.get('needs_auth'):
+                    features.append('auth')
+                if build.answers.get('search'):
+                    features.append('search')
+                if build.answers.get('export'):
+                    features.append('export')
+                if build.answers.get('realtime'):
+                    features.append('realtime')
+            
+            # Remember this successful build
+            remember_build(
+                description=build.description,
+                template_id=build.template_used,
+                features=features,
+                success=True
+            )
+            
+            # Learn user preferences
+            if build.tech_stack:
+                for tech in build.tech_stack:
+                    learn('framework', tech)
+        except Exception as e:
+            print(f"Warning: Kernel memory error: {e}")
+    
     return jsonify({
         "success": True,
         "message": "Build accepted and moved to Good store",
@@ -721,6 +789,82 @@ def ml_predict():
     
     predictions = classifier.predict(description)
     return jsonify(predictions)
+
+
+# =============================================================================
+# Kernel Memory API (Universal Kernel Integration)
+# =============================================================================
+
+@app.route('/api/memory/status')
+def memory_status():
+    """Get kernel memory statistics."""
+    if not KERNEL_MEMORY_ENABLED:
+        return jsonify({
+            "kernel_memory_available": False,
+            "error": "Universal Kernel not integrated",
+        })
+    
+    stats = get_memory_stats()
+    return jsonify({
+        "kernel_memory_available": True,
+        **stats
+    })
+
+
+@app.route('/api/memory/suggest', methods=['POST'])
+def memory_suggest():
+    """Get template suggestion from memory."""
+    if not KERNEL_MEMORY_ENABLED:
+        return jsonify({
+            "suggestion": None,
+            "error": "Kernel memory not available",
+        })
+    
+    data = request.get_json()
+    description = data.get('description', '').strip()
+    
+    if not description:
+        return jsonify({"error": "No description provided"}), 400
+    
+    result = suggest_from_memory(description)
+    if result:
+        return jsonify({
+            "suggestion": {
+                "template_id": result[0],
+                "confidence": result[1],
+            }
+        })
+    return jsonify({"suggestion": None})
+
+
+@app.route('/api/memory/similar', methods=['POST'])
+def memory_similar():
+    """Find similar past builds."""
+    if not KERNEL_MEMORY_ENABLED or not app_memory:
+        return jsonify({
+            "similar_builds": [],
+            "error": "Kernel memory not available",
+        })
+    
+    data = request.get_json()
+    description = data.get('description', '').strip()
+    n = data.get('limit', 5)
+    
+    if not description:
+        return jsonify({"error": "No description provided"}), 400
+    
+    similar = app_memory.recall_similar_builds(description, n=n)
+    return jsonify({
+        "similar_builds": [
+            {
+                "description": b.description,
+                "template_id": b.template_id,
+                "features": b.features,
+                "success": b.success,
+            }
+            for b in similar
+        ]
+    })
 
 
 # =============================================================================
