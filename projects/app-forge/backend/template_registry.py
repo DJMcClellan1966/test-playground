@@ -1082,9 +1082,11 @@ def match_template_intent(description: str,
         for tid, sim in semantic_results:
             semantic_scores[tid] = sim * max_regex
     except ImportError:
+        # Redistribute semantic weight before zeroing (bug fix: was zeroing first)
+        old_semantic = semantic_weight
         semantic_weight = 0
-        regex_weight += semantic_weight / 2
-        intent_weight += semantic_weight / 2
+        regex_weight += old_semantic / 2
+        intent_weight += old_semantic / 2
     
     # Get intent graph scores
     intent_scores: Dict[str, float] = {}
@@ -1097,9 +1099,11 @@ def match_template_intent(description: str,
         for tid, score in intent_results.items():
             intent_scores[tid] = (score / max_intent) * max_regex if max_intent > 0 else 0
     except ImportError:
+        # Redistribute intent weight before zeroing (bug fix: was zeroing first)
+        old_intent = intent_weight
         intent_weight = 0
-        regex_weight += intent_weight / 2
-        semantic_weight += intent_weight / 2
+        regex_weight += old_intent / 2
+        semantic_weight += old_intent / 2
     
     # Get GloVe embedding scores
     glove_scores: Dict[str, float] = {}
@@ -1109,11 +1113,12 @@ def match_template_intent(description: str,
         for tid, sim in glove_results:
             glove_scores[tid] = sim * max_regex
     except ImportError:
+        # Redistribute glove weight before zeroing (bug fix: was zeroing first)
+        old_glove = glove_weight
         glove_weight = 0
-        # Redistribute weight
-        intent_weight += glove_weight / 3
-        semantic_weight += glove_weight / 3
-        regex_weight += glove_weight / 3
+        intent_weight += old_glove / 3
+        semantic_weight += old_glove / 3
+        regex_weight += old_glove / 3
     
     # Combine all four scores
     combined: List[Tuple[str, float]] = []

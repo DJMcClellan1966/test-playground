@@ -1,0 +1,20 @@
+{
+  "name": "Meal Planner",
+  "description": "a weekly meal planner with recipes, shopping list generation, and nutritional info",
+  "complexity": "complex",
+  "template": "crud",
+  "features": [],
+  "inferred": {
+    "has_data": true,
+    "performance_critical": false,
+    "realtime": false
+  },
+  "files": [
+    "README.md",
+    "app.py",
+    "db.py",
+    "models.py",
+    "requirements.txt",
+    "templates/index.html"
+  ]
+}

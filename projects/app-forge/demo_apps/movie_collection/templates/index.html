@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Movie Collection</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .navbar { background: #ff7a59; color: white; padding: 14px 20px; display: flex; align-items: center; gap: 20px; }
+        .navbar h1 { font-size: 20px; }
+        .navbar a { color: white; text-decoration: none; font-size: 14px; opacity: .85; }
+        .navbar a:hover { opacity: 1; }
+        .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+        .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+        input, textarea, select { padding: 9px 11px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; width: 100%; font-family: inherit; }
+        input:focus, textarea:focus { outline: none; border-color: #ff7a59; box-shadow: 0 0 0 3px rgba(255,122,89,.12); }
+        button { padding: 9px 18px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all .2s; }
+        .btn-primary { background: #ff7a59; color: white; }
+        .btn-primary:hover { background: #ff6b3f; transform: translateY(-1px); }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-danger { background: transparent; color: #dc3545; font-size: 18px; padding: 4px 10px; border-radius: 4px; }
+        .btn-danger:hover { background: #ffeaea; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; font-weight: 600; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+        tr:hover td { background: #fafafa; }
+        .hidden { display: none; }
+        .section { display: none; }
+        .section.active { display: block; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-field { display: flex; flex-direction: column; }
+        .form-field.full-width { grid-column: 1 / -1; }
+        .form-field label { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 4px; }
+        .form-field label input[type="checkbox"] { width: auto; margin-right: 6px; }
+        .empty-state { text-align: center; padding: 40px 20px; color: #bbb; font-size: 15px; }
+        .toast { position: fixed; bottom: 24px; right: 24px; background: #2ecc71; color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; transform: translateY(80px); opacity: 0; transition: all .3s; z-index: 999; pointer-events: none; }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        #auth-section { margin-bottom: 16px; }
+        .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+        .form-row > * { flex: 1; min-width: 150px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>Movie Collection</h1>
+        <a href="#" onclick="showSection('movie')">Movies</a>
+
+    </nav>
+    <div class="container">
+
+        <div id="auth-section" class="card">
+            <div id="auth-forms">
+                <h3>Login or Register</h3>
+                <div class="form-row">
+                    <input id="auth-username" placeholder="Username">
+                    <input id="auth-email" placeholder="Email">
+                    <input id="auth-password" type="password" placeholder="Password">
+                </div>
+                <button class="btn-primary" onclick="doRegister()">Register</button>
+                <button class="btn-secondary" onclick="doLogin()">Login</button>
+            </div>
+            <div id="auth-info" class="hidden">
+                <p>Logged in as <strong id="auth-name"></strong>
+                <button class="btn-secondary" onclick="doLogout()">Logout</button></p>
+            </div>
+        </div>
+
+        <div id="section-movie" class="section card">
+            <h2 style="margin-bottom:16px">Movies</h2>
+            <input id="search-movie" placeholder="Search Movies..." oninput="loadMovies()" style="margin-bottom:16px">
+            <form id="form-movie" onsubmit="return addMovie()">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="add-movie-title">Title *</label>
+                        <input id="add-movie-title" required>
+                    </div>
+                    <div class="form-field">
+                        <label for="add-movie-year">Year</label>
+                        <input type="number" step="1" id="add-movie-year">
+                    </div>
+                    <div class="form-field">
+                        <label for="add-movie-genre">Genre</label>
+                        <input id="add-movie-genre">
+                    </div>
+                    <div class="form-field">
+                        <label for="add-movie-rating">Rating</label>
+                        <input type="number" step="0.1" id="add-movie-rating">
+                    </div>
+                    <div class="form-field">
+                        <label><input type="checkbox" id="add-movie-watched"> Watched</label>
+                    </div>
+                    <div class="form-field full-width">
+                        <label for="add-movie-notes">Notes</label>
+                        <textarea id="add-movie-notes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div style="margin-top:14px">
+                    <button type="submit" class="btn-primary">Add Movie</button> <button type="button" class="btn-secondary" onclick="window.location='/api/movies/export'">Export CSV</button>
+                </div>
+            </form>
+            <div id="empty-movie" class="empty-state">No movies yet &mdash; add your first one above!</div>
+            <table id="table-wrap-movie" style="display:none">
+                <thead><tr><th>Title</th><th>Year</th><th>Genre</th><th>Rating</th><th>Watched</th><th style="width:50px"></th></tr></thead>
+                <tbody id="table-movie"></tbody>
+            </table>
+        </div>
+    </div>
+    <div id="toast" class="toast"></div>
+<script>
+
+    function showToast(msg) {
+        var t = document.getElementById('toast');
+        t.textContent = msg; t.classList.add('show');
+        setTimeout(function(){ t.classList.remove('show'); }, 2000);
+    }
+    function showSection(name) {
+        document.querySelectorAll('.section').forEach(function(s){ s.classList.remove('active'); });
+        var el = document.getElementById('section-' + name);
+        if (el) el.classList.add('active');
+    }
+
+
+    async function checkAuth() {
+        var res = await fetch('/api/me');
+        var data = await res.json();
+        if (data.user) {
+            document.getElementById('auth-forms').classList.add('hidden');
+            document.getElementById('auth-info').classList.remove('hidden');
+            document.getElementById('auth-name').textContent = data.user.username;
+        } else {
+            document.getElementById('auth-forms').classList.remove('hidden');
+            document.getElementById('auth-info').classList.add('hidden');
+        }
+    }
+    async function doRegister() {
+        var res = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+                username: document.getElementById('auth-username').value,
+                email: document.getElementById('auth-email').value,
+                password: document.getElementById('auth-password').value,
+            })});
+        var data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        checkAuth();
+    }
+    async function doLogin() {
+        var res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+                email: document.getElementById('auth-email').value,
+                password: document.getElementById('auth-password').value,
+            })});
+        var data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        checkAuth();
+    }
+    async function doLogout() {
+        await fetch('/api/logout', {method:'POST'});
+        checkAuth();
+    }
+    checkAuth();
+
+
+    async function loadMovies() {
+        var q = document.getElementById('search-movie') ? document.getElementById('search-movie').value : '';
+        var url = '/api/movies' + (q ? '?q=' + encodeURIComponent(q) : '');
+        var res = await fetch(url);
+        var items = await res.json();
+        if (items.length === 0) {
+            document.getElementById('empty-movie').style.display = 'block';
+            document.getElementById('table-wrap-movie').style.display = 'none';
+        } else {
+            document.getElementById('empty-movie').style.display = 'none';
+            document.getElementById('table-wrap-movie').style.display = 'table';
+            document.getElementById('table-movie').innerHTML = items.map(function(item) {
+                return `<tr><td>${item.title || ''}</td><td>${item.year || ''}</td><td>${item.genre || ''}</td><td>${item.rating || ''}</td><td>${item.watched ? '&#10003;' : ''}</td><td><button class='btn-danger' onclick='deleteMovie(${item.id})'>&#215;</button></td></tr>`;
+            }).join('');
+        }
+    }
+    async function addMovie() {
+        await fetch('/api/movies', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ title: document.getElementById('add-movie-title').value, year: parseInt(document.getElementById('add-movie-year').value) || 0, genre: document.getElementById('add-movie-genre').value, rating: parseFloat(document.getElementById('add-movie-rating').value) || 0, watched: document.getElementById('add-movie-watched').checked, notes: document.getElementById('add-movie-notes').value }) });
+        document.getElementById('form-movie').reset();
+        showToast('Movie added!');
+        loadMovies();
+        return false;
+    }
+    async function deleteMovie(id) {
+        await fetch('/api/movies/' + id, { method:'DELETE' });
+        showToast('Movie removed');
+        loadMovies();
+    }
+    loadMovies();
+
+    showSection('movie');
+</script>
+</body>
+</html>

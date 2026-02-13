@@ -501,6 +501,122 @@ register_template(MicroTemplate(
 
 
 # =============================================================================
+# Enterprise Micro-Templates
+# =============================================================================
+
+register_template(MicroTemplate(
+    id="has_roles",
+    name="Has Roles (RBAC)",
+    pattern=UniversalPattern.RELATIONSHIP,
+    description="Role-based access control with permissions",
+    fields=[
+        {"name": "role", "type": "enum", "values": ["admin", "editor", "viewer", "guest"]},
+        {"name": "permissions", "type": "json", "default": "[]"}
+    ],
+    operations=["assign_role", "check_permission", "list_by_role", "revoke_role"],
+    requires=["has_owner"],
+    keywords=["role", "permission", "admin", "editor", "viewer", "access", "rbac", "authorize"],
+))
+
+register_template(MicroTemplate(
+    id="has_file_upload",
+    name="Has File Upload",
+    pattern=UniversalPattern.CONTAINER,
+    description="Support for file uploads with storage",
+    fields=[
+        {"name": "file_path", "type": "string", "nullable": True},
+        {"name": "file_name", "type": "string", "nullable": True},
+        {"name": "file_size", "type": "integer", "nullable": True},
+        {"name": "file_type", "type": "string", "nullable": True}
+    ],
+    operations=["upload_file", "download_file", "delete_file", "list_files"],
+    keywords=["upload", "file", "download", "attachment", "document", "pdf", "image", "photo"],
+))
+
+register_template(MicroTemplate(
+    id="has_email_notify",
+    name="Has Email Notifications",
+    pattern=UniversalPattern.FLOW,
+    description="Email notification capabilities",
+    fields=[
+        {"name": "email_sent_at", "type": "datetime", "nullable": True},
+        {"name": "email_status", "type": "enum", "values": ["pending", "sent", "failed"]}
+    ],
+    operations=["send_email", "queue_email", "get_email_history"],
+    keywords=["email", "notify", "notification", "alert", "send", "mail", "message"],
+))
+
+register_template(MicroTemplate(
+    id="has_background_job",
+    name="Has Background Jobs",
+    pattern=UniversalPattern.FLOW,
+    description="Async background task processing",
+    fields=[
+        {"name": "job_id", "type": "string", "nullable": True},
+        {"name": "job_status", "type": "enum", "values": ["queued", "running", "completed", "failed"]},
+        {"name": "job_result", "type": "json", "nullable": True}
+    ],
+    operations=["queue_job", "get_job_status", "cancel_job", "retry_job"],
+    keywords=["background", "async", "job", "task", "queue", "worker", "process", "celery"],
+))
+
+register_template(MicroTemplate(
+    id="has_audit_log",
+    name="Has Audit Log",
+    pattern=UniversalPattern.STATE,
+    description="Track all changes with audit trail",
+    fields=[
+        {"name": "audit_log", "type": "json", "default": "[]"},
+        {"name": "last_modified_by", "type": "integer", "nullable": True}
+    ],
+    operations=["log_change", "get_audit_trail", "revert_to"],
+    requires=["has_owner"],
+    keywords=["audit", "log", "history", "track", "change", "who", "compliance"],
+))
+
+register_template(MicroTemplate(
+    id="has_api_key",
+    name="Has API Key Auth",
+    pattern=UniversalPattern.RELATIONSHIP,
+    description="API key authentication for external access",
+    fields=[
+        {"name": "api_key", "type": "string", "unique": True},
+        {"name": "api_key_created", "type": "datetime", "nullable": True},
+        {"name": "api_rate_limit", "type": "integer", "default": 1000}
+    ],
+    operations=["generate_api_key", "revoke_api_key", "check_api_key", "get_usage"],
+    keywords=["api", "key", "token", "integration", "external", "webhook", "rest"],
+))
+
+register_template(MicroTemplate(
+    id="has_multi_tenant",
+    name="Multi-Tenant",
+    pattern=UniversalPattern.HIERARCHY,
+    description="Multi-tenant data isolation",
+    fields=[
+        {"name": "tenant_id", "type": "integer", "required": True},
+        {"name": "tenant_name", "type": "string", "nullable": True}
+    ],
+    operations=["filter_by_tenant", "switch_tenant", "list_tenants"],
+    keywords=["tenant", "organization", "company", "workspace", "team", "multi-tenant", "saas"],
+))
+
+register_template(MicroTemplate(
+    id="has_soft_delete",
+    name="Soft Delete",
+    pattern=UniversalPattern.STATE,
+    description="Soft delete with restore capability",
+    fields=[
+        {"name": "is_deleted", "type": "boolean", "default": False},
+        {"name": "deleted_at", "type": "datetime", "nullable": True},
+        {"name": "deleted_by", "type": "integer", "nullable": True}
+    ],
+    operations=["soft_delete", "restore", "purge", "list_deleted"],
+    keywords=["delete", "trash", "archive", "restore", "undo", "recycle"],
+))
+
+
+# =============================================================================
 # Template Composition Engine
 # =============================================================================
 

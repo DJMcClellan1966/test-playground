@@ -9,10 +9,26 @@ Features:
 """
 
 import re
-from typing import Dict, List
+from typing import Dict, List, Set, Tuple
 from domain_parser import DomainModel, parse_description
 from template_registry import match_template, extract_features
 from component_assembler import can_assemble, assemble_html
+from template_algebra import algebra, MICRO_TEMPLATES, MicroTemplate
+from template_synthesis import SmartSynthesizer
+
+# Error validation and auto-fixing
+try:
+    from error_fixer import validate_and_fix_files, validate_generated_code
+    HAS_ERROR_FIXER = True
+except ImportError:
+    HAS_ERROR_FIXER = False
+
+# Design system for category-aware theming
+try:
+    from design_system import get_category_css, detect_category, AppCategory
+    HAS_DESIGN_SYSTEM = True
+except ImportError:
+    HAS_DESIGN_SYSTEM = False
 
 
 def detect_app_type(description: str) -> str:
@@ -26,6 +42,246 @@ def detect_app_type(description: str) -> str:
 
 class CodeGenerator:
     """Generates Flask app boilerplate from requirements + description."""
+    
+    def __init__(self):
+        self.synthesizer = SmartSynthesizer()
+        self._current_description = ""  # Used for category-aware theming
+
+    # ==================================================================
+    # Micro-Template Integration (Enterprise Features + Synthesis)
+    # ==================================================================
+    
+    def _detect_micro_templates(self, description: str) -> List[str]:
+        """Detect which micro-templates apply + synthesize new ones if needed."""
+        # Use SmartSynthesizer which both detects AND synthesizes
+        result = self.synthesizer.analyze_and_synthesize(description)
+        
+        # Return all template IDs (existing + newly synthesized)
+        template_ids = result.get('existing_templates', [])
+        synthesized = result.get('synthesized_templates', [])
+        
+        # Add synthesized template IDs
+        for synth in synthesized:
+            if hasattr(synth, 'id'):
+                template_ids.append(synth.id)
+        
+        return template_ids
+    
+    def _get_synthesis_report(self, description: str) -> Dict:
+        """Get full synthesis report for debugging/display."""
+        return self.synthesizer.analyze_and_synthesize(description)
+    
+    def _get_enterprise_fields(self, template_ids: List[str]) -> List[Tuple[str, str, bool]]:
+        """Get extra fields from detected micro-templates (including synthesized).
+        Returns list of (field_name, sql_type, nullable) tuples."""
+        fields = []
+        seen = set()
+        
+        type_map = {
+            'string': 'db.String(255)',
+            'str': 'db.String(255)',
+            'text': 'db.Text',
+            'integer': 'db.Integer',
+            'int': 'db.Integer',
+            'float': 'db.Float',
+            'boolean': 'db.Boolean',
+            'bool': 'db.Boolean',
+            'datetime': 'db.DateTime',
+            'json': 'db.JSON',
+            'list': 'db.JSON',
+            'enum': 'db.String(50)',
+            'decimal': 'db.Float',
+            'reference': 'db.Integer',
+            'self_reference': 'db.Integer',
+        }
+        
+        for tid in template_ids:
+            if tid not in MICRO_TEMPLATES:
+                continue
+            template = MICRO_TEMPLATES[tid]
+            for field in template.fields:
+                # Handle both dict format (MicroTemplate) and string format (synthesized)
+                if isinstance(field, dict):
+                    fname = field.get('name', '')
+                    ftype_key = field.get('type', 'string')
+                    nullable = field.get('nullable', True)
+                else:
+                    # Synthesized templates use string field names
+                    fname = str(field)
+                    ftype_key = 'string'  # Default to string for synthesized
+                    nullable = True
+                
+                if not fname or fname in seen:
+                    continue
+                seen.add(fname)
+                
+                ftype = type_map.get(ftype_key, 'db.String(255)')
+                fields.append((fname, ftype, nullable))
+        
+        return fields
+    
+    def _get_enterprise_operations(self, template_ids: List[str]) -> List[str]:
+        """Get operations enabled by detected micro-templates."""
+        ops = []
+        for tid in template_ids:
+            if tid in MICRO_TEMPLATES:
+                ops.extend(MICRO_TEMPLATES[tid].operations)
+        return list(set(ops))
+    
+    def _generate_enterprise_routes(self, model_name: str, operations: List[str], 
+                                     has_auth: bool) -> str:
+        """Generate Flask routes for enterprise operations."""
+        lower = model_name.lower()
+        cls = model_name
+        auth_dec = "\n@login_required" if has_auth else ""
+        lines = []
+        
+        # File upload routes
+        if 'upload_file' in operations:
+            lines.append(f"""
+# ==== File Upload for {cls} ====
+import os
+from werkzeug.utils import secure_filename
+UPLOAD_FOLDER = 'uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+@app.route('/api/{lower}s/<int:id>/upload', methods=['POST']){auth_dec}
+def upload_{lower}_file(id):
+    item = {cls}.query.get_or_404(id)
+    if 'file' not in request.files:
+        return jsonify({{"error": "No file provided"}}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({{"error": "No file selected"}}), 400
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(UPLOAD_FOLDER, f"{{id}}_{{filename}}")
+    file.save(filepath)
+    item.file_path = filepath
+    item.file_name = filename
+    item.file_size = os.path.getsize(filepath)
+    item.file_type = file.content_type
+    db.session.commit()
+    return jsonify(item.to_dict())
+""")
+        
+        # Role management routes
+        if 'assign_role' in operations:
+            lines.append(f"""
+# ==== RBAC Routes for {cls} ====
+@app.route('/api/{lower}s/<int:id>/role', methods=['PUT']){auth_dec}
+def assign_{lower}_role(id):
+    item = {cls}.query.get_or_404(id)
+    data = request.get_json()
+    role = data.get('role', 'viewer')
+    if role not in ['admin', 'editor', 'viewer', 'guest']:
+        return jsonify({{"error": "Invalid role"}}), 400
+    item.role = role
+    db.session.commit()
+    return jsonify(item.to_dict())
+
+@app.route('/api/{lower}s/by-role/<role>'){auth_dec}
+def list_{lower}s_by_role(role):
+    items = {cls}.query.filter_by(role=role).all()
+    return jsonify([item.to_dict() for item in items])
+""")
+        
+        # Soft delete routes
+        if 'soft_delete' in operations:
+            lines.append(f"""
+# ==== Soft Delete Routes for {cls} ====
+@app.route('/api/{lower}s/<int:id>/delete', methods=['POST']){auth_dec}
+def soft_delete_{lower}(id):
+    item = {cls}.query.get_or_404(id)
+    item.is_deleted = True
+    item.deleted_at = datetime.utcnow()
+    item.deleted_by = session.get('user_id')
+    db.session.commit()
+    return jsonify({{"ok": True, "message": "Item moved to trash"}})
+
+@app.route('/api/{lower}s/<int:id>/restore', methods=['POST']){auth_dec}
+def restore_{lower}(id):
+    item = {cls}.query.get_or_404(id)
+    item.is_deleted = False
+    item.deleted_at = None
+    item.deleted_by = None
+    db.session.commit()
+    return jsonify(item.to_dict())
+
+@app.route('/api/{lower}s/trash'){auth_dec}
+def list_{lower}s_trash():
+    items = {cls}.query.filter_by(is_deleted=True).all()
+    return jsonify([item.to_dict() for item in items])
+""")
+        
+        # Audit log routes  
+        if 'log_change' in operations:
+            lines.append(f"""
+# ==== Audit Log Routes for {cls} ====
+@app.route('/api/{lower}s/<int:id>/audit'){auth_dec}
+def get_{lower}_audit(id):
+    item = {cls}.query.get_or_404(id)
+    return jsonify({{"audit_log": item.audit_log or []}})
+
+def _log_{lower}_change(item, action, changes):
+    import json
+    log = json.loads(item.audit_log) if item.audit_log else []
+    log.append({{
+        "action": action,
+        "changes": changes,
+        "user_id": session.get('user_id'),
+        "timestamp": datetime.utcnow().isoformat()
+    }})
+    item.audit_log = json.dumps(log)
+    item.last_modified_by = session.get('user_id')
+""")
+        
+        # Background job routes
+        if 'queue_job' in operations:
+            lines.append(f"""
+# ==== Background Job Routes for {cls} ====
+import uuid
+
+@app.route('/api/{lower}s/<int:id>/job', methods=['POST']){auth_dec}
+def queue_{lower}_job(id):
+    item = {cls}.query.get_or_404(id)
+    data = request.get_json()
+    job_type = data.get('type', 'process')
+    item.job_id = str(uuid.uuid4())
+    item.job_status = 'queued'
+    db.session.commit()
+    # In production, this would queue to Celery/RQ
+    return jsonify({{"job_id": item.job_id, "status": "queued"}})
+
+@app.route('/api/{lower}s/<int:id>/job/status'){auth_dec}
+def get_{lower}_job_status(id):
+    item = {cls}.query.get_or_404(id)
+    return jsonify({{"job_id": item.job_id, "status": item.job_status, "result": item.job_result}})
+""")
+        
+        # API key routes
+        if 'generate_api_key' in operations:
+            lines.append(f"""
+# ==== API Key Routes for {cls} ====
+import secrets
+
+@app.route('/api/{lower}s/<int:id>/api-key', methods=['POST']){auth_dec}
+def generate_{lower}_api_key(id):
+    item = {cls}.query.get_or_404(id)
+    item.api_key = secrets.token_urlsafe(32)
+    item.api_key_created = datetime.utcnow()
+    db.session.commit()
+    return jsonify({{"api_key": item.api_key}})
+
+@app.route('/api/{lower}s/<int:id>/api-key', methods=['DELETE']){auth_dec}
+def revoke_{lower}_api_key(id):
+    item = {cls}.query.get_or_404(id)
+    item.api_key = None
+    item.api_key_created = None
+    db.session.commit()
+    return jsonify({{"ok": True}})
+""")
+        
+        return '\n'.join(lines)
 
     # ==================================================================
     # app.py  (backend generation — unchanged)
@@ -75,9 +331,13 @@ class CodeGenerator:
     # ==================================================================
     
     def generate_models_py(self, answers: Dict[str, bool], description: str = "") -> str:
-        """Generate models.py with SQLAlchemy models."""
+        """Generate models.py with SQLAlchemy models + enterprise fields."""
         needs_auth = answers.get("needs_auth", False)
         models = parse_description(description) if description else []
+        
+        # Detect micro-templates for enterprise features
+        detected_templates = self._detect_micro_templates(description) if description else []
+        enterprise_fields = self._get_enterprise_fields(detected_templates)
         
         parts = [
             "from db import db",
@@ -89,9 +349,27 @@ class CodeGenerator:
             parts.append(self._user_model())
         
         for m in models:
-            parts.append(self._domain_model(m, needs_auth))
+            # Enhance model with enterprise fields
+            enhanced_model = self._enhance_model_with_enterprise(m, enterprise_fields)
+            parts.append(self._domain_model(enhanced_model, needs_auth))
         
         return "\n".join(parts)
+    
+    def _enhance_model_with_enterprise(self, model: DomainModel, enterprise_fields: List[Tuple[str, str, bool]]) -> DomainModel:
+        """Add enterprise fields to a domain model."""
+        existing_names = {f[0] for f in model.fields}
+        new_fields = list(model.fields)
+        
+        for fname, ftype, nullable in enterprise_fields:
+            if fname not in existing_names:
+                new_fields.append((fname, ftype, nullable))
+        
+        return DomainModel(
+            name=model.name,
+            table_name=model.table_name,
+            fields=new_fields,
+            has_relationship=model.has_relationship
+        )
     
     def generate_db_py(self) -> str:
         """Generate db.py for database initialization."""
@@ -110,6 +388,9 @@ def init_db(app):
         Generate index.html for the app.
         Routes to either CRUD HTML or standalone HTML based on app type.
         """
+        # Store description for category-aware theming
+        self._current_description = description
+        
         needs_db = answers.get("has_data", False)
         app_type = detect_app_type(description) if description else "generic"
         
@@ -120,38 +401,63 @@ def init_db(app):
         # Standalone apps (games, tools, calculators) use component-based HTML
         return self._standalone_html(app_name, app_type, description)
     
-    def generate_data_app_files(self, app_name: str, answers: Dict[str, bool], description: str = "") -> Dict[str, str]:
-        """Generate all files for a multi-file data app with SQLite."""
+    def generate_data_app_files(self, app_name: str, answers: Dict[str, bool], description: str = "",
+                                  auto_fix: bool = True) -> Dict[str, str]:
+        """Generate all files for a multi-file data app with SQLite.
+        
+        Args:
+            app_name: Name of the app
+            answers: Feature flags (has_data, needs_auth, etc.)
+            description: Natural language description
+            auto_fix: If True, automatically validate and fix syntax errors
+            
+        Returns:
+            Dict of filename -> content (with fixes applied if auto_fix=True)
+        """
         needs_db = answers.get("has_data", False)
         
         if not needs_db:
             # Single file app
-            return {
+            files = {
                 "app.py": self.generate_app_py(app_name, answers, description),
                 "requirements.txt": self.generate_requirements_txt(answers),
                 "templates/index.html": self.generate_index_html(app_name, answers, description)
             }
+        else:
+            # Multi-file data app
+            files = {
+                "app.py": self._generate_data_app_py(app_name, answers, description),
+                "models.py": self.generate_models_py(answers, description),
+                "db.py": self.generate_db_py(),
+                "requirements.txt": self.generate_requirements_txt(answers),
+                "templates/index.html": self.generate_index_html(app_name, answers, description),
+                "README.md": self._generate_readme(app_name, description)
+            }
         
-        # Multi-file data app
-        return {
-            "app.py": self._generate_data_app_py(app_name, answers, description),
-            "models.py": self.generate_models_py(answers, description),
-            "db.py": self.generate_db_py(),
-            "requirements.txt": self.generate_requirements_txt(answers),
-            "templates/index.html": self.generate_index_html(app_name, answers, description),
-            "README.md": self._generate_readme(app_name, description)
-        }
+        # Auto-validate and fix Python syntax errors
+        if auto_fix and HAS_ERROR_FIXER:
+            fixed_files, fix_log = validate_and_fix_files(files)
+            # Store fix log for debugging (accessible via generator.last_fix_log)
+            self.last_fix_log = fix_log
+            return fixed_files
+        
+        return files
     
     def _generate_data_app_py(self, app_name: str, answers: Dict[str, bool], description: str = "") -> str:
-        """Generate app.py that imports from models and db modules."""
+        """Generate app.py that imports from models and db modules + enterprise routes."""
         needs_auth = answers.get("needs_auth", False)
         needs_search = answers.get("search", False)
         needs_export = answers.get("export", False)
         models = parse_description(description) if description else []
         
+        # Detect micro-templates for enterprise features
+        detected_templates = self._detect_micro_templates(description) if description else []
+        enterprise_ops = self._get_enterprise_operations(detected_templates)
+        
         imports = [
             "from flask import Flask, render_template, request, jsonify, session, redirect, url_for",
             "from flask_cors import CORS",
+            "from datetime import datetime",
             "from db import db, init_db"
         ]
         
@@ -180,6 +486,9 @@ def init_db(app):
         
         for m in models:
             parts.append(self._crud_routes(m, needs_auth, needs_search, needs_export))
+            # Add enterprise routes for this model
+            if enterprise_ops:
+                parts.append(self._generate_enterprise_routes(m.name, enterprise_ops, needs_auth))
         
         parts.append("\nif __name__ == '__main__':")
         parts.append("    app.run(debug=True)")
@@ -334,6 +643,19 @@ venv/
             "railway.json": self.generate_railway_config(),
             "render.yaml": self.generate_render_config(app_name),
         }
+
+    def _imports(self, db: bool, auth: bool, rt: bool, search: bool, export: bool) -> str:
+        """Generate import statements for single-file app.py."""
+        lines = [
+            "from flask import Flask, render_template, request, jsonify, session, redirect, url_for",
+            "from flask_cors import CORS",
+            "from datetime import datetime",
+        ]
+        if db:
+            lines.append("from flask_sqlalchemy import SQLAlchemy")
+        if auth:
+            lines.append("from werkzeug.security import generate_password_hash, check_password_hash")
+            lines.append("from functools import wraps")
         if rt:
             lines.append("from flask_socketio import SocketIO, emit")
         if export:
@@ -543,24 +865,39 @@ def current_user():
     # STANDALONE HTML  (non-data apps — games, tools, etc.)
     # ==================================================================
 
-    def _base_page(self, title, body_html, css="", js=""):
+    def _base_page(self, title, body_html, css="", js="", description=""):
+        """Generate base HTML page with category-aware theming."""
+        # Use passed description or fall back to instance variable
+        desc = description or self._current_description
+        
+        # Use design system if available, otherwise fallback to default
+        if HAS_DESIGN_SYSTEM and desc:
+            base_css = get_category_css(desc)
+        else:
+            # Fallback to original styling
+            base_css = """
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f5f5;color:#333}
+.navbar{background:#ff7a59;color:#fff;padding:16px 20px;text-align:center}
+.navbar h1{font-size:22px;font-weight:700}
+.container{max-width:640px;margin:30px auto;padding:0 16px}
+.card{background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,.08);margin-bottom:16px;text-align:center}
+button{padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600;transition:all .2s}
+.btn-primary{background:#ff7a59;color:#fff}.btn-primary:hover{background:#ff6b3f;transform:translateY(-1px)}
+.btn-secondary{background:#6c757d;color:#fff}.btn-secondary:hover{background:#5a6268}
+input,select{padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;width:100%;margin-bottom:10px}
+input:focus{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122,89,.15)}
+"""
+        
+        # Combine base CSS with any additional custom CSS
+        full_css = base_css + "\n" + css if css else base_css
+        
         return f"""<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <style>
-*{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f5f5;color:#333}}
-.navbar{{background:#ff7a59;color:#fff;padding:16px 20px;text-align:center}}
-.navbar h1{{font-size:22px;font-weight:700}}
-.container{{max-width:640px;margin:30px auto;padding:0 16px}}
-.card{{background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,.08);margin-bottom:16px;text-align:center}}
-button{{padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600;transition:all .2s}}
-.btn-primary{{background:#ff7a59;color:#fff}}.btn-primary:hover{{background:#ff6b3f;transform:translateY(-1px)}}
-.btn-secondary{{background:#6c757d;color:#fff}}.btn-secondary:hover{{background:#5a6268}}
-input,select{{padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;width:100%;margin-bottom:10px}}
-input:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122,89,.15)}}
-{css}
+{full_css}
 </style>
 </head>
 <body>
@@ -575,13 +912,18 @@ input:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122
 </html>"""
 
     def _standalone_html(self, title, app_type, description):
+        # Store description for category-aware theming in _base_page
+        self._current_description = description
+        
         # Templates that matched via required features — always trustworthy
         REQUIRED_FEATURE_TEMPLATES = {
             "tictactoe", "hangman", "wordle", "calculator", "converter", "timer",
             "reaction_game", "simon_game", "reflex_game", "minesweeper",
             "snake", "tetris", "game_2048",
             "platformer", "shooter", "breakout",
-            "pong", "cookie_clicker", "sudoku", "connect_four", "blackjack", "flappy"
+            "pong", "cookie_clicker", "sudoku", "connect_four", "blackjack", "flappy",
+            # Games that were missing - would break if routed through component assembler
+            "memory_game", "sliding_puzzle", "quiz", "guess_game", "jigsaw"
         }
 
         # Check the component assembler FIRST for novel apps
@@ -668,13 +1010,13 @@ newGame();"""
     # --- Quiz ---
     def _quiz_html(self, title, desc):
         css = """.progress{width:100%;height:6px;background:#eee;border-radius:3px;margin-bottom:16px}
-.progress-bar{height:100%;background:#ff7a59;border-radius:3px;transition:width .3s}
+.progress-bar{height:100%;background:var(--color-primary);border-radius:3px;transition:width .3s}
 .options{display:flex;flex-direction:column;gap:10px;margin:20px 0;text-align:left}
 .option{padding:14px 18px;background:#f8f8f8;border:2px solid #e0e0e0;border-radius:8px;cursor:pointer;font-size:15px;transition:all .2s}
-.option:hover{border-color:#ff7a59;background:#fff5f2}
+.option:hover{border-color:var(--color-primary);background:rgba(var(--color-primary-rgb,255,122,89),.05)}
 .option.correct{border-color:#2ecc71;background:#d4edda}
 .option.wrong{border-color:#e74c3c;background:#ffeaea}
-.score-big{font-size:56px;font-weight:700;color:#ff7a59;margin:16px 0}"""
+.score-big{font-size:56px;font-weight:700;color:var(--color-primary);margin:16px 0}"""
         body = """<div class="card" id="quiz-card">
     <div class="progress"><div class="progress-bar" id="progress" style="width:0%"></div></div>
     <p id="q-count" style="font-size:13px;color:#888;margin-bottom:10px"></p>
@@ -1712,12 +2054,12 @@ newGame();"""
 .info-box.score{color:#27ae60}.info-box.high{color:#9b59b6}
 canvas{border:2px solid #333;border-radius:8px;background:#1a1a2e;touch-action:none}
 .controls{display:flex;gap:10px;margin-top:15px;flex-wrap:wrap;justify-content:center}
-.game-btn{background:#ff7a59;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
-.game-btn:hover{background:#e5684a}
+.game-btn{background:var(--color-primary);color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+.game-btn:hover{filter:brightness(0.9)}
 .mobile-controls{display:none;margin-top:15px}
 .d-pad{display:grid;grid-template-columns:repeat(3,50px);grid-template-rows:repeat(3,50px);gap:4px}
 .d-btn{background:#444;color:#fff;border:none;border-radius:8px;font-size:20px;cursor:pointer}
-.d-btn:active{background:#ff7a59}
+.d-btn:active{background:var(--color-primary)}
 @media(max-width:600px){.mobile-controls{display:block}canvas{width:min(90vw,320px);height:min(90vw,320px)}}"""
         body = """<div class="card">
     <h2>""" + title + """</h2>
@@ -1798,7 +2140,7 @@ startGame();"""
 .mobile-controls{display:none;margin-top:15px}
 .d-pad{display:grid;grid-template-columns:repeat(3,50px);grid-template-rows:repeat(3,50px);gap:4px}
 .d-btn{background:#8f7a66;color:#fff;border:none;border-radius:8px;font-size:20px;cursor:pointer}
-.d-btn:active{background:#ff7a59}
+.d-btn:active{background:var(--color-primary)}
 @media(max-width:500px){.mobile-controls{display:block}}"""
         body = """<div class="card">
     <h2>""" + title + """</h2>
@@ -2711,6 +3053,39 @@ loop();
 
         scripts = self._html_scripts(models, needs_auth)
 
+        # Use design system for theming if available
+        if HAS_DESIGN_SYSTEM:
+            from design_system import get_theme_for_description
+            theme = get_theme_for_description(description)
+            p = theme.palette
+            css_vars = f"""
+        :root {{
+            --color-primary: {p.primary};
+            --color-secondary: {p.secondary};
+            --color-bg: {p.background};
+            --color-surface: {p.surface};
+            --color-text: {p.text};
+            --color-text-muted: {p.text_muted};
+            --color-border: {p.border};
+            --color-success: {p.success};
+            --color-warning: {p.warning};
+            --color-error: {p.error};
+        }}"""
+        else:
+            css_vars = """
+        :root {
+            --color-primary: #ff7a59;
+            --color-secondary: #ff6b3f;
+            --color-bg: #f5f5f5;
+            --color-surface: #ffffff;
+            --color-text: #333333;
+            --color-text-muted: #888888;
+            --color-border: #dddddd;
+            --color-success: #2ecc71;
+            --color-warning: #f39c12;
+            --color-error: #dc3545;
+        }"""
+
         return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -2718,36 +3093,37 @@ loop();
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{title}</title>
     <style>
+        {css_vars}
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; }}
-        .navbar {{ background: #ff7a59; color: white; padding: 14px 20px; display: flex; align-items: center; gap: 20px; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--color-bg); color: var(--color-text); }}
+        .navbar {{ background: var(--color-primary); color: white; padding: 14px 20px; display: flex; align-items: center; gap: 20px; }}
         .navbar h1 {{ font-size: 20px; }}
         .navbar a {{ color: white; text-decoration: none; font-size: 14px; opacity: .85; }}
         .navbar a:hover {{ opacity: 1; }}
         .container {{ max-width: 900px; margin: 24px auto; padding: 0 16px; }}
-        .card {{ background: white; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }}
-        input, textarea, select {{ padding: 9px 11px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; width: 100%; font-family: inherit; }}
-        input:focus, textarea:focus {{ outline: none; border-color: #ff7a59; box-shadow: 0 0 0 3px rgba(255,122,89,.12); }}
+        .card {{ background: var(--color-surface); border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }}
+        input, textarea, select {{ padding: 9px 11px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 14px; width: 100%; font-family: inherit; }}
+        input:focus, textarea:focus {{ outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(0,0,0,.08); }}
         button {{ padding: 9px 18px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all .2s; }}
-        .btn-primary {{ background: #ff7a59; color: white; }}
-        .btn-primary:hover {{ background: #ff6b3f; transform: translateY(-1px); }}
+        .btn-primary {{ background: var(--color-primary); color: white; }}
+        .btn-primary:hover {{ filter: brightness(1.1); transform: translateY(-1px); }}
         .btn-secondary {{ background: #6c757d; color: white; }}
-        .btn-danger {{ background: transparent; color: #dc3545; font-size: 18px; padding: 4px 10px; border-radius: 4px; }}
+        .btn-danger {{ background: transparent; color: var(--color-error); font-size: 18px; padding: 4px 10px; border-radius: 4px; }}
         .btn-danger:hover {{ background: #ffeaea; }}
         table {{ width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }}
-        th, td {{ padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }}
-        th {{ background: #fafafa; font-weight: 600; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .5px; }}
-        tr:hover td {{ background: #fafafa; }}
+        th, td {{ padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--color-border); }}
+        th {{ background: var(--color-bg); font-weight: 600; font-size: 12px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: .5px; }}
+        tr:hover td {{ background: var(--color-bg); }}
         .hidden {{ display: none; }}
         .section {{ display: none; }}
         .section.active {{ display: block; }}
         .form-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }}
         .form-field {{ display: flex; flex-direction: column; }}
         .form-field.full-width {{ grid-column: 1 / -1; }}
-        .form-field label {{ font-size: 13px; font-weight: 600; color: #555; margin-bottom: 4px; }}
+        .form-field label {{ font-size: 13px; font-weight: 600; color: var(--color-text-muted); margin-bottom: 4px; }}
         .form-field label input[type="checkbox"] {{ width: auto; margin-right: 6px; }}
-        .empty-state {{ text-align: center; padding: 40px 20px; color: #bbb; font-size: 15px; }}
-        .toast {{ position: fixed; bottom: 24px; right: 24px; background: #2ecc71; color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; transform: translateY(80px); opacity: 0; transition: all .3s; z-index: 999; pointer-events: none; }}
+        .empty-state {{ text-align: center; padding: 40px 20px; color: var(--color-text-muted); font-size: 15px; }}
+        .toast {{ position: fixed; bottom: 24px; right: 24px; background: var(--color-success); color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; transform: translateY(80px); opacity: 0; transition: all .3s; z-index: 999; pointer-events: none; }}
         .toast.show {{ transform: translateY(0); opacity: 1; }}
         #auth-section {{ margin-bottom: 16px; }}
         .form-row {{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }}

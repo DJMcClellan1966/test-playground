@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Meal Planner</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .navbar { background: #ff7a59; color: white; padding: 14px 20px; display: flex; align-items: center; gap: 20px; }
+        .navbar h1 { font-size: 20px; }
+        .navbar a { color: white; text-decoration: none; font-size: 14px; opacity: .85; }
+        .navbar a:hover { opacity: 1; }
+        .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+        .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+        input, textarea, select { padding: 9px 11px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; width: 100%; font-family: inherit; }
+        input:focus, textarea:focus { outline: none; border-color: #ff7a59; box-shadow: 0 0 0 3px rgba(255,122,89,.12); }
+        button { padding: 9px 18px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all .2s; }
+        .btn-primary { background: #ff7a59; color: white; }
+        .btn-primary:hover { background: #ff6b3f; transform: translateY(-1px); }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-danger { background: transparent; color: #dc3545; font-size: 18px; padding: 4px 10px; border-radius: 4px; }
+        .btn-danger:hover { background: #ffeaea; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; font-weight: 600; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+        tr:hover td { background: #fafafa; }
+        .hidden { display: none; }
+        .section { display: none; }
+        .section.active { display: block; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-field { display: flex; flex-direction: column; }
+        .form-field.full-width { grid-column: 1 / -1; }
+        .form-field label { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 4px; }
+        .form-field label input[type="checkbox"] { width: auto; margin-right: 6px; }
+        .empty-state { text-align: center; padding: 40px 20px; color: #bbb; font-size: 15px; }
+        .toast { position: fixed; bottom: 24px; right: 24px; background: #2ecc71; color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; transform: translateY(80px); opacity: 0; transition: all .3s; z-index: 999; pointer-events: none; }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        #auth-section { margin-bottom: 16px; }
+        .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+        .form-row > * { flex: 1; min-width: 150px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>Meal Planner</h1>
+        <a href="#" onclick="showSection('recipe')">Recipes</a>
+        <a href="#" onclick="showSection('product')">Products</a>
+
+    </nav>
+    <div class="container">
+
+        <div id="auth-section" class="card">
+            <div id="auth-forms">
+                <h3>Login or Register</h3>
+                <div class="form-row">
+                    <input id="auth-username" placeholder="Username">
+                    <input id="auth-email" placeholder="Email">
+                    <input id="auth-password" type="password" placeholder="Password">
+                </div>
+                <button class="btn-primary" onclick="doRegister()">Register</button>
+                <button class="btn-secondary" onclick="doLogin()">Login</button>
+            </div>
+            <div id="auth-info" class="hidden">
+                <p>Logged in as <strong id="auth-name"></strong>
+                <button class="btn-secondary" onclick="doLogout()">Logout</button></p>
+            </div>
+        </div>
+
+        <div id="section-recipe" class="section card">
+            <h2 style="margin-bottom:16px">Recipes</h2>
+            <input id="search-recipe" placeholder="Search Recipes..." oninput="loadRecipes()" style="margin-bottom:16px">
+            <form id="form-recipe" onsubmit="return addRecipe()">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="add-recipe-title">Title *</label>
+                        <input id="add-recipe-title" required>
+                    </div>
+                    <div class="form-field full-width">
+                        <label for="add-recipe-description">Description</label>
+                        <textarea id="add-recipe-description" rows="3"></textarea>
+                    </div>
+                    <div class="form-field full-width">
+                        <label for="add-recipe-ingredients">Ingredients</label>
+                        <textarea id="add-recipe-ingredients" rows="3"></textarea>
+                    </div>
+                    <div class="form-field full-width">
+                        <label for="add-recipe-instructions">Instructions</label>
+                        <textarea id="add-recipe-instructions" rows="3"></textarea>
+                    </div>
+                    <div class="form-field">
+                        <label for="add-recipe-cook_time_minutes">Cook Time Minutes</label>
+                        <input type="number" step="1" id="add-recipe-cook_time_minutes">
+                    </div>
+                    <div class="form-field">
+                        <label for="add-recipe-servings">Servings</label>
+                        <input type="number" step="1" id="add-recipe-servings">
+                    </div>
+                    <div class="form-field">
+                        <label for="add-recipe-rating">Rating</label>
+                        <input type="number" step="0.1" id="add-recipe-rating">
+                    </div>
+                    <div class="form-field">
+                        <label for="add-recipe-category">Category</label>
+                        <input id="add-recipe-category">
+                    </div>
+                </div>
+                <div style="margin-top:14px">
+                    <button type="submit" class="btn-primary">Add Recipe</button> <button type="button" class="btn-secondary" onclick="window.location='/api/recipes/export'">Export CSV</button>
+                </div>
+            </form>
+            <div id="empty-recipe" class="empty-state">No recipes yet &mdash; add your first one above!</div>
+            <table id="table-wrap-recipe" style="display:none">
+                <thead><tr><th>Title</th><th>Cook Time Minutes</th><th>Servings</th><th>Rating</th><th>Category</th><th style="width:50px"></th></tr></thead>
+                <tbody id="table-recipe"></tbody>
+            </table>
+        </div>
+        <div id="section-product" class="section card">
+            <h2 style="margin-bottom:16px">Products</h2>
+            <input id="search-product" placeholder="Search Products..." oninput="loadProducts()" style="margin-bottom:16px">
+            <form id="form-product" onsubmit="return addProduct()">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="add-product-name">Name *</label>
+                        <input id="add-product-name" required>
+                    </div>
+                    <div class="form-field">
+                        <label for="add-product-sku">Sku</label>
+                        <input id="add-product-sku">
+                    </div>
+                    <div class="form-field">
+                        <label for="add-product-quantity">Quantity *</label>
+                        <input type="number" step="1" id="add-product-quantity" required>
+                    </div>
+                    <div class="form-field">
+                        <label for="add-product-price">Price</label>
+                        <input type="number" step="0.1" id="add-product-price">
+                    </div>
+                    <div class="form-field">
+                        <label for="add-product-category">Category</label>
+                        <input id="add-product-category">
+                    </div>
+                    <div class="form-field full-width">
+                        <label for="add-product-description">Description</label>
+                        <textarea id="add-product-description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div style="margin-top:14px">
+                    <button type="submit" class="btn-primary">Add Product</button> <button type="button" class="btn-secondary" onclick="window.location='/api/products/export'">Export CSV</button>
+                </div>
+            </form>
+            <div id="empty-product" class="empty-state">No products yet &mdash; add your first one above!</div>
+            <table id="table-wrap-product" style="display:none">
+                <thead><tr><th>Name</th><th>Sku</th><th>Quantity</th><th>Price</th><th>Category</th><th style="width:50px"></th></tr></thead>
+                <tbody id="table-product"></tbody>
+            </table>
+        </div>
+    </div>
+    <div id="toast" class="toast"></div>
+<script>
+
+    function showToast(msg) {
+        var t = document.getElementById('toast');
+        t.textContent = msg; t.classList.add('show');
+        setTimeout(function(){ t.classList.remove('show'); }, 2000);
+    }
+    function showSection(name) {
+        document.querySelectorAll('.section').forEach(function(s){ s.classList.remove('active'); });
+        var el = document.getElementById('section-' + name);
+        if (el) el.classList.add('active');
+    }
+
+
+    async function checkAuth() {
+        var res = await fetch('/api/me');
+        var data = await res.json();
+        if (data.user) {
+            document.getElementById('auth-forms').classList.add('hidden');
+            document.getElementById('auth-info').classList.remove('hidden');
+            document.getElementById('auth-name').textContent = data.user.username;
+        } else {
+            document.getElementById('auth-forms').classList.remove('hidden');
+            document.getElementById('auth-info').classList.add('hidden');
+        }
+    }
+    async function doRegister() {
+        var res = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+                username: document.getElementById('auth-username').value,
+                email: document.getElementById('auth-email').value,
+                password: document.getElementById('auth-password').value,
+            })});
+        var data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        checkAuth();
+    }
+    async function doLogin() {
+        var res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+                email: document.getElementById('auth-email').value,
+                password: document.getElementById('auth-password').value,
+            })});
+        var data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        checkAuth();
+    }
+    async function doLogout() {
+        await fetch('/api/logout', {method:'POST'});
+        checkAuth();
+    }
+    checkAuth();
+
+
+    async function loadRecipes() {
+        var q = document.getElementById('search-recipe') ? document.getElementById('search-recipe').value : '';
+        var url = '/api/recipes' + (q ? '?q=' + encodeURIComponent(q) : '');
+        var res = await fetch(url);
+        var items = await res.json();
+        if (items.length === 0) {
+            document.getElementById('empty-recipe').style.display = 'block';
+            document.getElementById('table-wrap-recipe').style.display = 'none';
+        } else {
+            document.getElementById('empty-recipe').style.display = 'none';
+            document.getElementById('table-wrap-recipe').style.display = 'table';
+            document.getElementById('table-recipe').innerHTML = items.map(function(item) {
+                return `<tr><td>${item.title || ''}</td><td>${item.cook_time_minutes || ''}</td><td>${item.servings || ''}</td><td>${item.rating || ''}</td><td>${item.category || ''}</td><td><button class='btn-danger' onclick='deleteRecipe(${item.id})'>&#215;</button></td></tr>`;
+            }).join('');
+        }
+    }
+    async function addRecipe() {
+        await fetch('/api/recipes', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ title: document.getElementById('add-recipe-title').value, description: document.getElementById('add-recipe-description').value, ingredients: document.getElementById('add-recipe-ingredients').value, instructions: document.getElementById('add-recipe-instructions').value, cook_time_minutes: parseInt(document.getElementById('add-recipe-cook_time_minutes').value) || 0, servings: parseInt(document.getElementById('add-recipe-servings').value) || 0, rating: parseFloat(document.getElementById('add-recipe-rating').value) || 0, category: document.getElementById('add-recipe-category').value }) });
+        document.getElementById('form-recipe').reset();
+        showToast('Recipe added!');
+        loadRecipes();
+        return false;
+    }
+    async function deleteRecipe(id) {
+        await fetch('/api/recipes/' + id, { method:'DELETE' });
+        showToast('Recipe removed');
+        loadRecipes();
+    }
+    loadRecipes();
+
+
+    async function loadProducts() {
+        var q = document.getElementById('search-product') ? document.getElementById('search-product').value : '';
+        var url = '/api/products' + (q ? '?q=' + encodeURIComponent(q) : '');
+        var res = await fetch(url);
+        var items = await res.json();
+        if (items.length === 0) {
+            document.getElementById('empty-product').style.display = 'block';
+            document.getElementById('table-wrap-product').style.display = 'none';
+        } else {
+            document.getElementById('empty-product').style.display = 'none';
+            document.getElementById('table-wrap-product').style.display = 'table';
+            document.getElementById('table-product').innerHTML = items.map(function(item) {
+                return `<tr><td>${item.name || ''}</td><td>${item.sku || ''}</td><td>${item.quantity || ''}</td><td>${item.price || ''}</td><td>${item.category || ''}</td><td><button class='btn-danger' onclick='deleteProduct(${item.id})'>&#215;</button></td></tr>`;
+            }).join('');
+        }
+    }
+    async function addProduct() {
+        await fetch('/api/products', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ name: document.getElementById('add-product-name').value, sku: document.getElementById('add-product-sku').value, quantity: parseInt(document.getElementById('add-product-quantity').value) || 0, price: parseFloat(document.getElementById('add-product-price').value) || 0, category: document.getElementById('add-product-category').value, description: document.getElementById('add-product-description').value }) });
+        document.getElementById('form-product').reset();
+        showToast('Product added!');
+        loadProducts();
+        return false;
+    }
+    async function deleteProduct(id) {
+        await fetch('/api/products/' + id, { method:'DELETE' });
+        showToast('Product removed');
+        loadProducts();
+    }
+    loadProducts();
+
+    showSection('recipe');
+</script>
+</body>
+</html>

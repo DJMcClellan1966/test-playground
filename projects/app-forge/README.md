@@ -39,6 +39,9 @@ Build working Flask apps with natural language + smart questions. No AI hallucin
 - ✅ **NEW** 5D Complexity Model with architecture recommendations
 - ✅ **NEW** Hybrid Neural Router - 8-stage routing pipeline (semantic traps, multi-language, contradiction detection)
 - ✅ **NEW** Adversarial robustness - 98.9% resilience against prompt injection, nonsense, edge cases
+- ✅ **NEW** Design System - 11 category-aware themes (games=purple, finance=green, health=teal, etc.)
+- ✅ **NEW** Theme Variants - Light/Dark/Warm/Cool presets that preserve category identity
+- ✅ **NEW** Error Fixer - Auto-detects and fixes ~60 common Python errors (missing imports, syntax, etc.)
 
 ## Quick Start
 
@@ -91,6 +94,8 @@ backend/
 ├── universal_builder.py    # Universal app builder pipeline (integrates all systems)
 ├── complexity_model.py     # 5D complexity analysis + architecture recommendations
 ├── hybrid_router.py        # 8-stage routing pipeline (650 lines, semantic/neural hybrid)
+├── design_system.py        # Category-aware theming with 11 themes + 5 variants (1000 lines)
+├── error_fixer.py          # Auto-fix syntax errors, missing imports (600 lines)
 ├── test_comprehensive.py   # 130 comprehensive tests (100% pass rate)
 ├── test_adversarial.py     # 178 adversarial attack vectors (98.9% resilience)
 ├── test_stress.py          # Stress & edge case testing (49 tests)
@@ -1095,6 +1100,48 @@ Build tracked in memory for learning:
 - Accept → Good store (used for future training)
 - Reject → Bad store (with reason for analysis)
 - Revise → New version linked to original
+
+## Design System - Category-Aware Theming
+
+Apps now get **automatic visual theming** based on their category:
+
+| Category | Primary Color | Feeling |
+|----------|---------------|---------|
+| Game | Purple `#8b5cf6` | Energetic, focused |
+| Finance | Green `#059669` | Trust, growth |
+| Health | Teal `#14b8a6` | Calm, wellness |
+| Productivity | Blue `#2563eb` | Professional, clean |
+| Education | Amber `#f59e0b` | Engaging, clear |
+| Creative | Pink `#ec4899` | Expressive, vibrant |
+| Social | Orange `#f97316` | Friendly, warm |
+| Utility | Indigo `#6366f1` | Technical, precise |
+| Entertainment | Rose `#e11d48` | Fun, bold |
+| Data | Sky `#0ea5e9` | Analytical, clear |
+| Ecommerce | Violet `#7c3aed` | Premium, trustworthy |
+
+### Theme Variants
+
+Users can choose from 5 variants that preserve the category's identity:
+
+```python
+from design_system import get_category_css, ThemeVariant
+
+# Default (category-optimized)
+css = get_category_css("snake game")  # Purple, dark background
+
+# Switch to warm variant
+css = get_category_css("snake game", ThemeVariant.WARM)  # Purple buttons, sepia bg
+```
+
+| Variant | Background | Use Case |
+|---------|------------|----------|
+| Default | Category-optimized | Best for most users |
+| Light | `#fafafa` | Bright environments |
+| Dark | `#1a1a2e` | Low-light, gaming |
+| Warm | `#fdf6e3` | Cozy, reading apps |
+| Cool | `#f0f9ff` | Professional, business |
+
+**Key insight:** The primary color stays the same across variants. A game in dark mode still has purple buttons—only backgrounds/surfaces change.
 
 ## Full Circle: Save & Export
 

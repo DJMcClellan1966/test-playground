@@ -1,0 +1,22 @@
+{
+  "name": "Bookmark Manager",
+  "description": "a bookmark manager with folders, tags, search, and import/export",
+  "complexity": "complex",
+  "template": "crud",
+  "features": [],
+  "inferred": {
+    "export": true,
+    "has_data": true,
+    "performance_critical": false,
+    "realtime": false,
+    "search": true
+  },
+  "files": [
+    "README.md",
+    "app.py",
+    "db.py",
+    "models.py",
+    "requirements.txt",
+    "templates/index.html"
+  ]
+}

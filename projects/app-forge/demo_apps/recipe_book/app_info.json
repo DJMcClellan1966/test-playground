@@ -1,0 +1,21 @@
+{
+  "name": "Recipe Book",
+  "description": "a recipe collection app with ingredients and cooking time",
+  "complexity": "medium",
+  "template": "crud",
+  "features": [],
+  "inferred": {
+    "has_data": true,
+    "performance_critical": false,
+    "realtime": false,
+    "search": true
+  },
+  "files": [
+    "README.md",
+    "app.py",
+    "db.py",
+    "models.py",
+    "requirements.txt",
+    "templates/index.html"
+  ]
+}

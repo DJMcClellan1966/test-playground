@@ -1,0 +1,20 @@
+{
+  "name": "Expense Tracker",
+  "description": "an expense tracker with categories and monthly totals",
+  "complexity": "medium",
+  "template": "expense_tracker",
+  "features": [],
+  "inferred": {
+    "has_data": true,
+    "performance_critical": false,
+    "realtime": false
+  },
+  "files": [
+    "README.md",
+    "app.py",
+    "db.py",
+    "models.py",
+    "requirements.txt",
+    "templates/index.html"
+  ]
+}

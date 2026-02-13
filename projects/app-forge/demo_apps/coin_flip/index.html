@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coin Flip</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #1a1a2e;
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        h1 {
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+        #scoreDisplay {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #2196F3;
+        }
+        #gameContainer {
+            position: relative;
+            background: #16213e;
+            border-radius: 10px;
+            padding: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        canvas {
+            display: block;
+            background: #0f0f23;
+            border-radius: 5px;
+        }
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            padding: 10px;
+        }
+        .grid-cell {
+            aspect-ratio: 1;
+            background: #2d3436;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .grid-cell:hover { background: #636e72; }
+        .card-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            max-width: 500px;
+        }
+        .card {
+            width: 60px;
+            height: 90px;
+            background: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #333;
+        }
+        #gameOver {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+        }
+        #gameOver h2 { color: #4CAF50; margin-bottom: 10px; }
+        #gameOver p { margin-bottom: 20px; }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1em;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        button:hover { filter: brightness(1.1); }
+        .controls {
+            margin-top: 15px;
+            color: #888;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Coin Flip</h1>
+    <div id="scoreDisplay">Score: <span id="score">0</span></div>
+    <div id="gameContainer">
+        <div id="gameArea" class="game-area"></div>
+        <div id="gameOver">
+            <h2>Game Over!</h2>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <button onclick="restart()">Play Again</button>
+        </div>
+    </div>
+    <div class="controls">Use arrow keys or click</div>
+    <button onclick="restart()">Restart</button>
+    
+    <script>
+        // ===== ENGINE SETUP =====
+        const gameArea = document.getElementById('gameArea');
+        
+        // ===== GAME STATE =====
+        let result = "";
+let flipping = false;
+let heads = 0;
+let tails = 0;
+        let score = 0;
+        let gameOver = false;
+        
+        // ===== HELPER FUNCTIONS =====
+        
+function flipCoin() {
+    if (flipping) return;
+    flipping = true;
+    let count = 0;
+    const interval = setInterval(() => {
+        result = Math.random() > 0.5 ? "HEADS" : "TAILS";
+        renderCoin();
+        count++;
+        if (count > 10) {
+            clearInterval(interval);
+            flipping = false;
+            if (result === "HEADS") heads++; else tails++;
+            renderCoin();
+        }
+    }, 100);
+}
+
+function renderCoin() {
+    document.getElementById('gameArea').innerHTML = `
+        <div style="text-align:center;padding:40px">
+            <div style="font-size:120px;cursor:pointer;user-select:none;transition:transform 0.1s;${flipping ? 'transform:rotateY(' + Math.random() * 360 + 'deg)' : ''}" onclick="flipCoin()">
+                ${result === "HEADS" ? '🪙' : result === "TAILS" ? '⚪' : '🪙'}
+            </div>
+            <h2 style="margin-top:20px">${result || 'Click to flip!'}</h2>
+            <p style="color:#888">Heads: ${heads} | Tails: ${tails}</p>
+        </div>
+    `;
+}
+
+        
+        function showGameOver() {
+            gameOver = true;
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameOver').style.display = 'flex';
+        }
+        
+        function updateScore(points) {
+            score += points;
+            document.getElementById('score').textContent = score;
+        }
+        
+        function setScore(val) {
+            score = val;
+            document.getElementById('score').textContent = score;
+        }
+        
+        // ===== GAME LOGIC =====
+        function init() {
+            score = 0;
+            gameOver = false;
+            document.getElementById('score').textContent = '0';
+            document.getElementById('gameOver').style.display = 'none';
+            
+result = "";
+flipping = false;
+heads = 0;
+tails = 0;
+renderCoin();
+
+        }
+        
+        function update() {
+            if (gameOver) return;
+            
+        }
+        
+        function render() {
+            renderCoin();
+        }
+        
+        function restart() {
+            init();
+            render();
+        }
+        
+        // ===== INPUT HANDLING =====
+        
+document.getElementById('gameContainer').addEventListener('click', e => {
+    if (gameOver) return;
+    
+});
+        
+        // ===== GAME LOOP =====
+        // Event-driven game - no loop needed
+        
+        // Start the game
+        init();
+        render();
+    </script>
+</body>
+</html>

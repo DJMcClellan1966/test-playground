@@ -1,0 +1,20 @@
+{
+  "name": "Workout Log",
+  "description": "a workout log with exercise tracking, sets, reps, weight, and progress charts",
+  "complexity": "complex",
+  "template": "crud",
+  "features": [],
+  "inferred": {
+    "has_data": true,
+    "performance_critical": false,
+    "realtime": false
+  },
+  "files": [
+    "README.md",
+    "app.py",
+    "db.py",
+    "models.py",
+    "requirements.txt",
+    "templates/index.html"
+  ]
+}

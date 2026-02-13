@@ -54,7 +54,72 @@
       ],
       "description": "build a photographic image tracker",
       "timestamp": "2026-02-11T23:31:20.371320"
+    },
+    {
+      "template_id": "crud",
+      "features": [
+        "data_app"
+      ],
+      "description": "a simple todo list to track tasks",
+      "timestamp": "2026-02-12T19:37:15.723770"
+    },
+    {
+      "template_id": "crud",
+      "features": [
+        "generic_app",
+        "data_app"
+      ],
+      "description": "a recipe collection app with ingredients and cooking time",
+      "timestamp": "2026-02-12T19:37:18.796275"
+    },
+    {
+      "template_id": "crud",
+      "features": [
+        "tags",
+        "data_app"
+      ],
+      "description": "an expense tracker with categories and monthly totals",
+      "timestamp": "2026-02-12T19:37:21.400373"
+    },
+    {
+      "template_id": "crud",
+      "features": [
+        "dashboard",
+        "data_app"
+      ],
+      "description": "a workout log with exercise tracking, sets, reps, weight, and progress charts",
+      "timestamp": "2026-02-12T19:37:24.274466"
+    },
+    {
+      "template_id": "crud",
+      "features": [
+        "search",
+        "data_app"
+      ],
+      "description": "a movie collection with ratings, genres, watch status, and search",
+      "timestamp": "2026-02-12T19:37:26.970983"
+    },
+    {
+      "template_id": "crud",
+      "features": [
+        "data_app"
+      ],
+      "description": "a weekly meal planner with recipes, shopping list generation, and nutritional info",
+      "timestamp": "2026-02-12T19:37:29.612788"
+    },
+    {
+      "template_id": "crud",
+      "features": [
+        "file_manager",
+        "storage",
+        "search",
+        "tags",
+        "export",
+        "data_app"
+      ],
+      "description": "a bookmark manager with folders, tags, search, and import/export",
+      "timestamp": "2026-02-12T19:37:32.315686"
     }
   ],
-  "updated": "2026-02-11T23:31:20.371320"
+  "updated": "2026-02-12T19:37:32.315686"
 }

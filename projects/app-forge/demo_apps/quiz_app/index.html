@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz App</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #1a1a2e;
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        h1 {
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+        #scoreDisplay {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #2196F3;
+        }
+        #gameContainer {
+            position: relative;
+            background: #16213e;
+            border-radius: 10px;
+            padding: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        canvas {
+            display: block;
+            background: #0f0f23;
+            border-radius: 5px;
+        }
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            padding: 10px;
+        }
+        .grid-cell {
+            aspect-ratio: 1;
+            background: #2d3436;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .grid-cell:hover { background: #636e72; }
+        .card-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            max-width: 500px;
+        }
+        .card {
+            width: 60px;
+            height: 90px;
+            background: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #333;
+        }
+        #gameOver {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+        }
+        #gameOver h2 { color: #4CAF50; margin-bottom: 10px; }
+        #gameOver p { margin-bottom: 20px; }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1em;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        button:hover { filter: brightness(1.1); }
+        .controls {
+            margin-top: 15px;
+            color: #888;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Quiz App</h1>
+    <div id="scoreDisplay">Score: <span id="score">0</span></div>
+    <div id="gameContainer">
+        <div id="gameArea" class="game-area"></div>
+        <div id="gameOver">
+            <h2>Game Over!</h2>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <button onclick="restart()">Play Again</button>
+        </div>
+    </div>
+    <div class="controls">Use arrow keys or click</div>
+    <button onclick="restart()">Restart</button>
+    
+    <script>
+        // ===== ENGINE SETUP =====
+        const gameArea = document.getElementById('gameArea');
+        
+        // ===== GAME STATE =====
+        let questions = [];
+let current = 0;
+let correct = 0;
+        let score = 0;
+        let gameOver = false;
+        
+        // ===== HELPER FUNCTIONS =====
+        
+function answer(idx) {
+    if (idx === questions[current].answer) {
+        correct++;
+        updateScore(20);
+    }
+    current++;
+    if (current >= questions.length) {
+        setTimeout(showGameOver, 500);
+    }
+    renderQuiz();
+}
+
+function renderQuiz() {
+    if (current >= questions.length) {
+        document.getElementById('gameArea').innerHTML = `<div style="text-align:center;padding:40px"><h2>Quiz Complete!</h2><p>You got ${correct}/${questions.length} correct</p></div>`;
+        return;
+    }
+    const q = questions[current];
+    document.getElementById('gameArea').innerHTML = `
+        <div style="padding:20px;max-width:500px;margin:auto">
+            <p style="color:#888;margin-bottom:10px">Question ${current + 1} of ${questions.length}</p>
+            <h2 style="margin-bottom:20px">${q.q}</h2>
+            <div style="display:flex;flex-direction:column;gap:10px">
+                ${q.options.map((opt, i) => `<button onclick="answer(${i})" style="padding:15px;font-size:1.1em;text-align:left">${opt}</button>`).join('')}
+            </div>
+        </div>
+    `;
+}
+
+        
+        function showGameOver() {
+            gameOver = true;
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameOver').style.display = 'flex';
+        }
+        
+        function updateScore(points) {
+            score += points;
+            document.getElementById('score').textContent = score;
+        }
+        
+        function setScore(val) {
+            score = val;
+            document.getElementById('score').textContent = score;
+        }
+        
+        // ===== GAME LOGIC =====
+        function init() {
+            score = 0;
+            gameOver = false;
+            document.getElementById('score').textContent = '0';
+            document.getElementById('gameOver').style.display = 'none';
+            
+questions = [
+    {q: "What is the capital of France?", options: ["London", "Paris", "Berlin", "Madrid"], answer: 1},
+    {q: "What is 7 x 8?", options: ["54", "56", "64", "48"], answer: 1},
+    {q: "Who wrote Romeo and Juliet?", options: ["Dickens", "Austen", "Shakespeare", "Hemingway"], answer: 2},
+    {q: "What planet is known as the Red Planet?", options: ["Venus", "Mars", "Jupiter", "Saturn"], answer: 1},
+    {q: "What is the largest ocean?", options: ["Atlantic", "Indian", "Arctic", "Pacific"], answer: 3}
+];
+current = 0;
+correct = 0;
+renderQuiz();
+
+        }
+        
+        function update() {
+            if (gameOver) return;
+            
+        }
+        
+        function render() {
+            renderQuiz();
+        }
+        
+        function restart() {
+            init();
+            render();
+        }
+        
+        // ===== INPUT HANDLING =====
+        
+document.getElementById('gameContainer').addEventListener('click', e => {
+    if (gameOver) return;
+    
+});
+        
+        // ===== GAME LOOP =====
+        // Event-driven game - no loop needed
+        
+        // Start the game
+        init();
+        render();
+    </script>
+</body>
+</html>

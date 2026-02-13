@@ -13,6 +13,13 @@ combining pre-built UI component fragments.
 import re
 from typing import Dict, List, Tuple
 
+# Design system for category-aware theming
+try:
+    from design_system import get_category_css
+    HAS_DESIGN_SYSTEM = True
+except ImportError:
+    HAS_DESIGN_SYSTEM = False
+
 # =====================================================================
 # Component catalogue — each component is a dict with:
 #   id, css, body_html, js, tags (for matching)
@@ -831,8 +838,20 @@ render();""",
 # =====================================================================
 
 def _component_game(game_type: str, label: str) -> dict:
-    """Create a game component stub."""
-    return {"id": game_type, "label": label, "type": "game", "html": f"<!-- {game_type} game component -->"}
+    """Create a game component placeholder.
+    
+    Note: Games should normally bypass the component assembler via 
+    REQUIRED_FEATURE_TEMPLATES in codegen.py and use dedicated generators.
+    This provides a fallback structure if a game accidentally routes here.
+    """
+    return {
+        "id": game_type,
+        "label": label,
+        "type": "game",
+        "css": ".game-container{text-align:center;padding:20px}",
+        "body": f'<div class="card game-container"><h2>{label}</h2><p>Loading {game_type.replace("_", " ")} game...</p><p style="color:#888;font-size:14px">If this message persists, the game generator may not be configured.</p></div>',
+        "js": f"console.log('Game component stub for {game_type} - should use dedicated generator');"
+    }
 
 # (pattern_regex, component_builder_function, priority)
 COMPONENT_PATTERNS: List[Tuple[str, object, int]] = [
@@ -921,24 +940,34 @@ def assemble_html(title: str, description: str) -> str:
     # Use the first (highest priority) component
     _, comp = components[0]
 
+    # Use design system for base CSS if available
+    if HAS_DESIGN_SYSTEM:
+        base_css = get_category_css(description)
+    else:
+        # Fallback to original styling
+        base_css = """*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f5f5;color:#333}
+.navbar{background:#ff7a59;color:#fff;padding:16px 20px;text-align:center}
+.navbar h1{font-size:22px;font-weight:700}
+.container{max-width:700px;margin:30px auto;padding:0 16px}
+.card{background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,.08);margin-bottom:16px;text-align:center}
+button{padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600;transition:all .2s}
+.btn-primary{background:#ff7a59;color:#fff}.btn-primary:hover{background:#ff6b3f;transform:translateY(-1px)}
+.btn-secondary{background:#6c757d;color:#fff}.btn-secondary:hover{background:#5a6268}
+input,select,textarea{padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;width:100%;margin-bottom:10px;font-family:inherit}
+input:focus,textarea:focus{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122,89,.15)}"""
+    
+    # Component-specific CSS
+    component_css = comp.get("css", "")
+
     # Build a minimal base page with the component
     return f"""<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <style>
-*{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f5f5;color:#333}}
-.navbar{{background:#ff7a59;color:#fff;padding:16px 20px;text-align:center}}
-.navbar h1{{font-size:22px;font-weight:700}}
-.container{{max-width:700px;margin:30px auto;padding:0 16px}}
-.card{{background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,.08);margin-bottom:16px;text-align:center}}
-button{{padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600;transition:all .2s}}
-.btn-primary{{background:#ff7a59;color:#fff}}.btn-primary:hover{{background:#ff6b3f;transform:translateY(-1px)}}
-.btn-secondary{{background:#6c757d;color:#fff}}.btn-secondary:hover{{background:#5a6268}}
-input,select,textarea{{padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;width:100%;margin-bottom:10px;font-family:inherit}}
-input:focus,textarea:focus{{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgba(255,122,89,.15)}}
-{comp.get("css", "")}
+{base_css}
+{component_css}
 </style>
 </head>
 <body>

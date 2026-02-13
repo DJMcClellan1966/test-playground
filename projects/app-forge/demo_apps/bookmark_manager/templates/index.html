@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bookmark Manager</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .navbar { background: #ff7a59; color: white; padding: 14px 20px; display: flex; align-items: center; gap: 20px; }
+        .navbar h1 { font-size: 20px; }
+        .navbar a { color: white; text-decoration: none; font-size: 14px; opacity: .85; }
+        .navbar a:hover { opacity: 1; }
+        .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+        .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+        input, textarea, select { padding: 9px 11px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; width: 100%; font-family: inherit; }
+        input:focus, textarea:focus { outline: none; border-color: #ff7a59; box-shadow: 0 0 0 3px rgba(255,122,89,.12); }
+        button { padding: 9px 18px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all .2s; }
+        .btn-primary { background: #ff7a59; color: white; }
+        .btn-primary:hover { background: #ff6b3f; transform: translateY(-1px); }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-danger { background: transparent; color: #dc3545; font-size: 18px; padding: 4px 10px; border-radius: 4px; }
+        .btn-danger:hover { background: #ffeaea; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; font-weight: 600; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+        tr:hover td { background: #fafafa; }
+        .hidden { display: none; }
+        .section { display: none; }
+        .section.active { display: block; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-field { display: flex; flex-direction: column; }
+        .form-field.full-width { grid-column: 1 / -1; }
+        .form-field label { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 4px; }
+        .form-field label input[type="checkbox"] { width: auto; margin-right: 6px; }
+        .empty-state { text-align: center; padding: 40px 20px; color: #bbb; font-size: 15px; }
+        .toast { position: fixed; bottom: 24px; right: 24px; background: #2ecc71; color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; transform: translateY(80px); opacity: 0; transition: all .3s; z-index: 999; pointer-events: none; }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        #auth-section { margin-bottom: 16px; }
+        .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+        .form-row > * { flex: 1; min-width: 150px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>Bookmark Manager</h1>
+        <a href="#" onclick="showSection('tag')">Tags</a>
+        <a href="#" onclick="showSection('note')">Notes</a>
+
+    </nav>
+    <div class="container">
+
+        <div id="auth-section" class="card">
+            <div id="auth-forms">
+                <h3>Login or Register</h3>
+                <div class="form-row">
+                    <input id="auth-username" placeholder="Username">
+                    <input id="auth-email" placeholder="Email">
+                    <input id="auth-password" type="password" placeholder="Password">
+                </div>
+                <button class="btn-primary" onclick="doRegister()">Register</button>
+                <button class="btn-secondary" onclick="doLogin()">Login</button>
+            </div>
+            <div id="auth-info" class="hidden">
+                <p>Logged in as <strong id="auth-name"></strong>
+                <button class="btn-secondary" onclick="doLogout()">Logout</button></p>
+            </div>
+        </div>
+
+        <div id="section-tag" class="section card">
+            <h2 style="margin-bottom:16px">Tags</h2>
+            <input id="search-tag" placeholder="Search Tags..." oninput="loadTags()" style="margin-bottom:16px">
+            <form id="form-tag" onsubmit="return addTag()">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="add-tag-name">Name *</label>
+                        <input id="add-tag-name" required>
+                    </div>
+                    <div class="form-field">
+                        <label for="add-tag-color">Color</label>
+                        <input id="add-tag-color">
+                    </div>
+                </div>
+                <div style="margin-top:14px">
+                    <button type="submit" class="btn-primary">Add Tag</button> <button type="button" class="btn-secondary" onclick="window.location='/api/tags/export'">Export CSV</button>
+                </div>
+            </form>
+            <div id="empty-tag" class="empty-state">No tags yet &mdash; add your first one above!</div>
+            <table id="table-wrap-tag" style="display:none">
+                <thead><tr><th>Name</th><th>Color</th><th style="width:50px"></th></tr></thead>
+                <tbody id="table-tag"></tbody>
+            </table>
+        </div>
+        <div id="section-note" class="section card">
+            <h2 style="margin-bottom:16px">Notes</h2>
+            <input id="search-note" placeholder="Search Notes..." oninput="loadNotes()" style="margin-bottom:16px">
+            <form id="form-note" onsubmit="return addNote()">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="add-note-title">Title *</label>
+                        <input id="add-note-title" required>
+                    </div>
+                    <div class="form-field full-width">
+                        <label for="add-note-content">Content *</label>
+                        <textarea id="add-note-content" rows="3" required></textarea>
+                    </div>
+                    <div class="form-field">
+                        <label for="add-note-category">Category</label>
+                        <input id="add-note-category">
+                    </div>
+                    <div class="form-field">
+                        <label><input type="checkbox" id="add-note-pinned"> Pinned</label>
+                    </div>
+                </div>
+                <div style="margin-top:14px">
+                    <button type="submit" class="btn-primary">Add Note</button> <button type="button" class="btn-secondary" onclick="window.location='/api/notes/export'">Export CSV</button>
+                </div>
+            </form>
+            <div id="empty-note" class="empty-state">No notes yet &mdash; add your first one above!</div>
+            <table id="table-wrap-note" style="display:none">
+                <thead><tr><th>Title</th><th>Category</th><th>Pinned</th><th style="width:50px"></th></tr></thead>
+                <tbody id="table-note"></tbody>
+            </table>
+        </div>
+    </div>
+    <div id="toast" class="toast"></div>
+<script>
+
+    function showToast(msg) {
+        var t = document.getElementById('toast');
+        t.textContent = msg; t.classList.add('show');
+        setTimeout(function(){ t.classList.remove('show'); }, 2000);
+    }
+    function showSection(name) {
+        document.querySelectorAll('.section').forEach(function(s){ s.classList.remove('active'); });
+        var el = document.getElementById('section-' + name);
+        if (el) el.classList.add('active');
+    }
+
+
+    async function checkAuth() {
+        var res = await fetch('/api/me');
+        var data = await res.json();
+        if (data.user) {
+            document.getElementById('auth-forms').classList.add('hidden');
+            document.getElementById('auth-info').classList.remove('hidden');
+            document.getElementById('auth-name').textContent = data.user.username;
+        } else {
+            document.getElementById('auth-forms').classList.remove('hidden');
+            document.getElementById('auth-info').classList.add('hidden');
+        }
+    }
+    async function doRegister() {
+        var res = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+                username: document.getElementById('auth-username').value,
+                email: document.getElementById('auth-email').value,
+                password: document.getElementById('auth-password').value,
+            })});
+        var data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        checkAuth();
+    }
+    async function doLogin() {
+        var res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+                email: document.getElementById('auth-email').value,
+                password: document.getElementById('auth-password').value,
+            })});
+        var data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        checkAuth();
+    }
+    async function doLogout() {
+        await fetch('/api/logout', {method:'POST'});
+        checkAuth();
+    }
+    checkAuth();
+
+
+    async function loadTags() {
+        var q = document.getElementById('search-tag') ? document.getElementById('search-tag').value : '';
+        var url = '/api/tags' + (q ? '?q=' + encodeURIComponent(q) : '');
+        var res = await fetch(url);
+        var items = await res.json();
+        if (items.length === 0) {
+            document.getElementById('empty-tag').style.display = 'block';
+            document.getElementById('table-wrap-tag').style.display = 'none';
+        } else {
+            document.getElementById('empty-tag').style.display = 'none';
+            document.getElementById('table-wrap-tag').style.display = 'table';
+            document.getElementById('table-tag').innerHTML = items.map(function(item) {
+                return `<tr><td>${item.name || ''}</td><td>${item.color || ''}</td><td><button class='btn-danger' onclick='deleteTag(${item.id})'>&#215;</button></td></tr>`;
+            }).join('');
+        }
+    }
+    async function addTag() {
+        await fetch('/api/tags', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ name: document.getElementById('add-tag-name').value, color: document.getElementById('add-tag-color').value }) });
+        document.getElementById('form-tag').reset();
+        showToast('Tag added!');
+        loadTags();
+        return false;
+    }
+    async function deleteTag(id) {
+        await fetch('/api/tags/' + id, { method:'DELETE' });
+        showToast('Tag removed');
+        loadTags();
+    }
+    loadTags();
+
+
+    async function loadNotes() {
+        var q = document.getElementById('search-note') ? document.getElementById('search-note').value : '';
+        var url = '/api/notes' + (q ? '?q=' + encodeURIComponent(q) : '');
+        var res = await fetch(url);
+        var items = await res.json();
+        if (items.length === 0) {
+            document.getElementById('empty-note').style.display = 'block';
+            document.getElementById('table-wrap-note').style.display = 'none';
+        } else {
+            document.getElementById('empty-note').style.display = 'none';
+            document.getElementById('table-wrap-note').style.display = 'table';
+            document.getElementById('table-note').innerHTML = items.map(function(item) {
+                return `<tr><td>${item.title || ''}</td><td>${item.category || ''}</td><td>${item.pinned ? '&#10003;' : ''}</td><td><button class='btn-danger' onclick='deleteNote(${item.id})'>&#215;</button></td></tr>`;
+            }).join('');
+        }
+    }
+    async function addNote() {
+        await fetch('/api/notes', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ title: document.getElementById('add-note-title').value, content: document.getElementById('add-note-content').value, category: document.getElementById('add-note-category').value, pinned: document.getElementById('add-note-pinned').checked }) });
+        document.getElementById('form-note').reset();
+        showToast('Note added!');
+        loadNotes();
+        return false;
+    }
+    async function deleteNote(id) {
+        await fetch('/api/notes/' + id, { method:'DELETE' });
+        showToast('Note removed');
+        loadNotes();
+    }
+    loadNotes();
+
+    showSection('tag');
+</script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+{"name": "Password Generator", "description": "a secure password generator", "complexity": "basic", "template": "password_gen", "files": ["index.html"]}

@@ -1,0 +1,21 @@
+{
+  "name": "Movie Collection",
+  "description": "a movie collection with ratings, genres, watch status, and search",
+  "complexity": "complex",
+  "template": "crud",
+  "features": [],
+  "inferred": {
+    "has_data": true,
+    "performance_critical": false,
+    "realtime": false,
+    "search": true
+  },
+  "files": [
+    "README.md",
+    "app.py",
+    "db.py",
+    "models.py",
+    "requirements.txt",
+    "templates/index.html"
+  ]
+}
