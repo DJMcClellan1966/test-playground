@@ -30,6 +30,17 @@ try:
 except ImportError:
     HAS_DESIGN_SYSTEM = False
 
+# Compliance module for privacy/GDPR/cookies
+try:
+    from compliance import (
+        detect_data_collection, generate_compliance_features,
+        generate_cookie_consent_html, generate_privacy_policy_html,
+        generate_gdpr_routes, Jurisdiction
+    )
+    HAS_COMPLIANCE = True
+except ImportError:
+    HAS_COMPLIANCE = False
+
 
 def detect_app_type(description: str) -> str:
     """Use scored template registry instead of flat regex."""
@@ -434,12 +445,73 @@ def init_db(app):
                 "README.md": self._generate_readme(app_name, description)
             }
         
+        # Add compliance features (cookie consent, privacy policy, GDPR routes)
+        if HAS_COMPLIANCE:
+            files = self._add_compliance_features(files, app_name, description, answers)
+        
         # Auto-validate and fix Python syntax errors
         if auto_fix and HAS_ERROR_FIXER:
             fixed_files, fix_log = validate_and_fix_files(files)
             # Store fix log for debugging (accessible via generator.last_fix_log)
             self.last_fix_log = fix_log
             return fixed_files
+        
+        return files
+    
+    def _add_compliance_features(self, files: Dict[str, str], app_name: str, 
+                                   description: str, answers: Dict[str, bool]) -> Dict[str, str]:
+        """Add compliance features based on detected requirements."""
+        # Get compliance features
+        compliance_files = generate_compliance_features(
+            app_name=app_name,
+            description=description,
+            answers=answers,
+            model_fields=[]  # Could extract from models.py if needed
+        )
+        
+        # Add privacy policy page if generated
+        if 'templates/privacy.html' in compliance_files:
+            files['templates/privacy.html'] = compliance_files['templates/privacy.html']
+        
+        # Inject cookie consent into index.html
+        if 'cookie_consent_html' in compliance_files:
+            if 'templates/index.html' in files:
+                # Insert cookie banner before closing </body>
+                consent_html = compliance_files['cookie_consent_html']
+                files['templates/index.html'] = files['templates/index.html'].replace(
+                    '</body>',
+                    f'\n{consent_html}\n</body>'
+                )
+        
+        # Inject GDPR routes into app.py
+        if 'gdpr_routes' in compliance_files:
+            if 'app.py' in files:
+                gdpr_routes = compliance_files['gdpr_routes']
+                # Insert before if __name__ == '__main__':
+                files['app.py'] = files['app.py'].replace(
+                    "if __name__ == '__main__':",
+                    f"{gdpr_routes}\n\nif __name__ == '__main__':"
+                )
+                # Add privacy policy route
+                files['app.py'] = files['app.py'].replace(
+                    "if __name__ == '__main__':",
+                    '''@app.route('/privacy')
+def privacy():
+    return send_file('templates/privacy.html')
+
+
+if __name__ == '__main__':'''
+                )
+        
+        # Inject CCPA footer if needed
+        if 'ccpa_footer_html' in compliance_files:
+            if 'templates/index.html' in files:
+                # Insert footer before closing </body>
+                footer_html = compliance_files['ccpa_footer_html']
+                files['templates/index.html'] = files['templates/index.html'].replace(
+                    '</body>',
+                    f'\n{footer_html}\n</body>'
+                )
         
         return files
     

@@ -4,13 +4,20 @@ import re
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
+# Try to import compliance module for detection
+try:
+    from compliance import detect_data_collection, get_compliance_questions
+    HAS_COMPLIANCE = True
+except ImportError:
+    HAS_COMPLIANCE = False
+
 
 @dataclass
 class Question:
     """A yes/no question about app requirements."""
     id: str
     text: str
-    category: str  # "auth", "data", "realtime", "mobile", etc.
+    category: str  # "auth", "data", "realtime", "mobile", "compliance" etc.
     follow_up: bool = False  # Show only if previous question answered yes
     depends_on: str = ""  # Which question this depends on (e.g., "multi_user")
 
@@ -63,6 +70,19 @@ QUESTIONS = [
         id="performance_critical",
         text="Is this performance-critical (e.g., real-time gaming)?",
         category="performance",
+    ),
+    # Compliance questions (only asked when personal data detected)
+    Question(
+        id="compliance_eu",
+        text="Will users from the EU access this app?",
+        category="compliance",
+        depends_on="needs_auth",  # Only ask if auth is needed
+    ),
+    Question(
+        id="compliance_analytics",
+        text="Will you use analytics or third-party tracking?",
+        category="compliance",
+        depends_on="has_data",  # Only ask if data is stored
     ),
 ]
 
@@ -140,6 +160,16 @@ INFERENCE_RULES = [
     # --- Performance ---
     (r"performance.?critical|competitive|real.?time\s+gaming",
      {"performance_critical": True}),
+
+    # --- Compliance / Privacy ---
+    (r"eu\b|europe|european|gdpr|germany|france|spain|italy",
+     {"compliance_eu": True}),
+    (r"uk\b|united\s*kingdom|britain",
+     {"compliance_eu": True}),  # UK GDPR similar to EU
+    (r"california|ccpa|cpra",
+     {"compliance_eu": False}),  # CCPA handled differently, but still privacy-aware
+    (r"analytics|tracking|google\s*analytics|gtag|mixpanel|amplitude",
+     {"compliance_analytics": True}),
 ]
 
 

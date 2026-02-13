@@ -42,6 +42,7 @@ Build working Flask apps with natural language + smart questions. No AI hallucin
 - ✅ **NEW** Design System - 11 category-aware themes (games=purple, finance=green, health=teal, etc.)
 - ✅ **NEW** Theme Variants - Light/Dark/Warm/Cool presets that preserve category identity
 - ✅ **NEW** Error Fixer - Auto-detects and fixes ~60 common Python errors (missing imports, syntax, etc.)
+- ✅ **NEW** Compliance Module - GDPR, CCPA, cookie consent, privacy policies (auto-detected from description)
 
 ## Quick Start
 
@@ -96,6 +97,7 @@ backend/
 ├── hybrid_router.py        # 8-stage routing pipeline (650 lines, semantic/neural hybrid)
 ├── design_system.py        # Category-aware theming with 11 themes + 5 variants (1000 lines)
 ├── error_fixer.py          # Auto-fix syntax errors, missing imports (600 lines)
+├── compliance.py           # GDPR/CCPA compliance, cookie consent, privacy (500 lines)
 ├── test_comprehensive.py   # 130 comprehensive tests (100% pass rate)
 ├── test_adversarial.py     # 178 adversarial attack vectors (98.9% resilience)
 ├── test_stress.py          # Stress & edge case testing (49 tests)
@@ -1142,6 +1144,55 @@ css = get_category_css("snake game", ThemeVariant.WARM)  # Purple buttons, sepia
 | Cool | `#f0f9ff` | Professional, business |
 
 **Key insight:** The primary color stays the same across variants. A game in dark mode still has purple buttons—only backgrounds/surfaces change.
+
+## Compliance & Privacy
+
+App Forge automatically detects when your app needs compliance features:
+
+| Detected Pattern | Compliance Feature | Description |
+|-----------------|-------------------|-------------|
+| "login", "users", "register" | Privacy Policy | Auto-generated based on data fields |
+| "EU", "European", "GDPR" | GDPR Rights | Export data, delete account APIs |
+| "analytics", "tracking" | Cookie Consent | GDPR-compliant banner |
+| "California", "CCPA" | Do Not Sell | Footer link + CCPA disclosure |
+| Health/Financial data | SSL Required | Security warning |
+
+### Generated Features
+
+**Cookie Consent Banner:**
+- Shows on first visit
+- Stores preference in localStorage
+- Blocks analytics until accepted
+- Respects user choice
+
+**Privacy Policy Page:**
+- Auto-generated at `/privacy`
+- Lists data types collected
+- GDPR rights (if EU detected)
+- CCPA rights (if California detected)
+
+**GDPR Data Rights:**
+```
+GET /api/me/export   # Download all user data (JSON)
+DELETE /api/me/delete  # Delete account and all data
+POST /api/consent     # Record consent for audit trail
+```
+
+### Smart Detection
+
+The system uses keywords to auto-detect compliance needs:
+
+```python
+# Description: "health tracking app for European users"
+# → Detects:
+#   - Health data (sensitive)
+#   - Auth (basic data)
+#   - EU region (GDPR required)
+# → Generates:
+#   - Cookie consent banner
+#   - Privacy policy page
+#   - GDPR export/delete endpoints
+```
 
 ## Full Circle: Save & Export
 
