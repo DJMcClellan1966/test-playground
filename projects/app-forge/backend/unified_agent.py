@@ -225,28 +225,64 @@ class UnifiedAgent:
         if HAS_KERNEL:
             self.kernel = SemanticClusterEngine()
             try:
-                from projects.universal-kernel.agent_loop import LocalAgent, WorldModel
-                self.agentic_loop = LocalAgent()
-                self.world_model = WorldModel()
-                self.feedback_enabled = True
+                import sys, os
+                uk_path = str(Path(__file__).parent.parent.parent / 'projects' / 'universal-kernel')
+                if os.path.isdir(uk_path):
+                    sys.path.insert(0, uk_path)
+                    try:
+                        import importlib
+                        agent_loop = importlib.import_module('agent_loop')
+                        self.agentic_loop = agent_loop.LocalAgent()
+                        self.world_model = agent_loop.WorldModel()
+                        self.feedback_enabled = True
+                    except Exception:
+                        self.agentic_loop = None
+                        self.world_model = None
+                        self.feedback_enabled = False
+                else:
+                    self.agentic_loop = None
+                    self.world_model = None
+                    self.feedback_enabled = False
             except Exception:
                 self.agentic_loop = None
                 self.world_model = None
                 self.feedback_enabled = False
         
         try:
-            from projects.universal-kernel.kernel import MemorySystem
-            self.memory_system = MemorySystem()
+            import sys, os
+            uk_path = str(Path(__file__).parent.parent.parent / 'projects' / 'universal-kernel')
+            if os.path.isdir(uk_path):
+                sys.path.insert(0, uk_path)
+                try:
+                    import importlib
+                    kernel_mod = importlib.import_module('kernel')
+                    self.memory_system = kernel_mod.MemorySystem()
+                except Exception:
+                    self.memory_system = None
+            else:
+                self.memory_system = None
         except Exception:
             self.memory_system = None
         # Integrate Socratic-Learner
         try:
             import sys
             sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'projects' / 'socratic-learner'))
-            from blueprint_advisor import BlueprintAdvisor
-            from socrates import Socrates
-            self.socratic_advisor = BlueprintAdvisor()
-            self.socratic_dialogue = Socrates()
+            import sys, os
+            sl_path = str(Path(__file__).parent.parent.parent / 'projects' / 'socratic-learner')
+            if os.path.isdir(sl_path):
+                sys.path.insert(0, sl_path)
+                try:
+                    import importlib
+                    blueprint_advisor_mod = importlib.import_module('blueprint_advisor')
+                    socrates_mod = importlib.import_module('socrates')
+                    self.socratic_advisor = blueprint_advisor_mod.BlueprintAdvisor()
+                    self.socratic_dialogue = socrates_mod.Socrates()
+                except Exception:
+                    self.socratic_advisor = None
+                    self.socratic_dialogue = None
+            else:
+                self.socratic_advisor = None
+                self.socratic_dialogue = None
         except Exception:
             self.socratic_advisor = None
             self.socratic_dialogue = None
@@ -267,12 +303,22 @@ class UnifiedAgent:
         # Step 2: World Model feature inference
         if self.world_model:
             try:
-                from projects.universal-kernel.agent_loop import Percept
-                percept = Percept(raw=description)
-                agent_features = self.world_model._infer_features(percept)
-                for feat in agent_features:
-                    detected_features[feat] = max(detected_features.get(feat, 0), 0.7)
-                result.add_reasoning(f"WorldModel inferred features: {list(agent_features)}")
+                import sys, os
+                uk_path = str(Path(__file__).parent.parent.parent / 'projects' / 'universal-kernel')
+                if os.path.isdir(uk_path):
+                    sys.path.insert(0, uk_path)
+                    try:
+                        import importlib
+                        agent_loop = importlib.import_module('agent_loop')
+                        percept = agent_loop.Percept(raw=description)
+                        agent_features = self.world_model._infer_features(percept)
+                        for feat in agent_features:
+                            detected_features[feat] = max(detected_features.get(feat, 0), 0.7)
+                        result.add_reasoning(f"WorldModel inferred features: {list(agent_features)}")
+                    except Exception:
+                        result.add_reasoning("WorldModel not available")
+                else:
+                    result.add_reasoning("WorldModel not available")
             except Exception:
                 result.add_reasoning("WorldModel not available")
         # Step 3: Socratic-Learner feature discovery
