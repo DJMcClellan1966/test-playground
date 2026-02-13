@@ -78,19 +78,32 @@ class PerceptionEngine:
     
     def __init__(self):
         # Entity patterns (nouns that become models/objects)
+        # Using s? for optional plural handling
         self.entity_patterns = [
-            r'\b(recipe|task|todo|item|user|product|order|event|post|comment|'
-            r'note|message|file|image|document|book|movie|song|playlist|'
-            r'project|goal|habit|expense|budget|contact|appointment|'
-            r'workout|exercise|meal|ingredient|category|tag)\b'
+            r'\b(recipes?|tasks?|todos?|items?|users?|products?|orders?|events?|posts?|comments?|'
+            r'notes?|messages?|files?|images?|documents?|books?|movies?|songs?|playlists?|'
+            r'projects?|goals?|habits?|expenses?|budgets?|contacts?|appointments?|'
+            r'workouts?|exercises?|meals?|ingredients?|categor(?:y|ies)|tags?|'
+            r'transactions?|payments?|invoices?|customers?|clients?|employees?|'
+            r'articles?|blogs?|pages?|albums?|photos?|videos?|podcasts?|episodes?|'
+            r'courses?|lessons?|quizzes?|tests?|scores?|grades?|students?|teachers?|'
+            r'notifications?|alerts?|reminders?|timers?|schedules?|calendars?|'
+            r'locations?|addresses?|cities?|countries?|trips?|destinations?|'
+            r'reviews?|ratings?|feedbacks?|surveys?|polls?|votes?)\b'
         ]
         
         # Action patterns (verbs that become features)
         self.action_patterns = [
-            r'\b(create|add|edit|update|delete|remove|save|load|export|import|'
-            r'search|find|filter|sort|track|manage|organize|schedule|plan|'
-            r'calculate|compute|analyze|generate|build|make|rate|review|'
-            r'share|send|receive|upload|download|play|pause|stop)\b'
+            r'\b(creat(?:e|ing)|add(?:ing)?|edit(?:ing)?|updat(?:e|ing)|delet(?:e|ing)|remov(?:e|ing)|'
+            r'sav(?:e|ing)|load(?:ing)?|export(?:ing)?|import(?:ing)?|'
+            r'search(?:ing)?|find(?:ing)?|filter(?:ing)?|sort(?:ing)?|track(?:ing)?|manag(?:e|ing)|'
+            r'organiz(?:e|ing)|schedul(?:e|ing)|plan(?:ning)?|'
+            r'calculat(?:e|ing)|comput(?:e|ing)|analyz(?:e|ing)|generat(?:e|ing)|build(?:ing)?|mak(?:e|ing)|'
+            r'rat(?:e|ing)|review(?:ing)?|'
+            r'shar(?:e|ing)|send(?:ing)?|receiv(?:e|ing)|upload(?:ing)?|download(?:ing)?|'
+            r'play(?:ing)?|paus(?:e|ing)|stopp?(?:ing)?|'
+            r'login|logout|register(?:ing)?|authenticat(?:e|ing)|'
+            r'bookmark(?:ing)?|favorit(?:e|ing)|lik(?:e|ing)|follow(?:ing)?|subscrib(?:e|ing)?)\b'
         ]
         
         # Relation patterns (prepositions that show structure)
@@ -161,6 +174,42 @@ class PerceptionEngine:
             for imp in implied:
                 self.concept_graph[trigger].add(imp)
     
+    def _normalize_entity(self, entity: str) -> str:
+        """Normalize entity to canonical singular form."""
+        # Handle common irregular plurals first
+        irregulars = {
+            'categories': 'category',
+            'cities': 'city',
+            'countries': 'country',
+            'quizzes': 'quiz',
+        }
+        if entity in irregulars:
+            return irregulars[entity]
+        
+        # Handle regular plurals: remove trailing 's' or 'es'
+        if entity.endswith('ies') and len(entity) > 4:
+            return entity[:-3] + 'y'  # categories -> category
+        if entity.endswith('es') and entity not in ('expenses', 'exercises'):
+            if entity.endswith('sses') or entity.endswith('shes') or entity.endswith('ches'):
+                return entity[:-2]
+        if entity.endswith('s') and not entity.endswith('ss'):
+            return entity[:-1]
+        
+        return entity
+    
+    def _normalize_action(self, action: str) -> str:
+        """Normalize verb to canonical base form."""
+        # Handle -ing forms
+        if action.endswith('ing'):
+            # tracking -> track, creating -> create
+            base = action[:-3]
+            if base.endswith('t') or base.endswith('d'):  # track, add
+                return base
+            if len(base) > 2 and base[-1] == base[-2]:  # stopping -> stop
+                return base[:-1]
+            return base + 'e'  # creating -> create
+        return action
+    
     def perceive(self, text: str) -> Percept:
         """Extract structured percept from natural language."""
         text_lower = text.lower()
@@ -168,12 +217,18 @@ class PerceptionEngine:
         # Extract entities
         entities = []
         for pattern in self.entity_patterns:
-            entities.extend(re.findall(pattern, text_lower))
+            matches = re.findall(pattern, text_lower)
+            for match in matches:
+                normalized = self._normalize_entity(match)
+                entities.append(normalized)
         
-        # Extract actions
+        # Extract actions (with normalization)
         actions = []
         for pattern in self.action_patterns:
-            actions.extend(re.findall(pattern, text_lower))
+            matches = re.findall(pattern, text_lower)
+            for match in matches:
+                normalized = self._normalize_action(match)
+                actions.append(normalized)
         
         # Extract relations
         relations = []
