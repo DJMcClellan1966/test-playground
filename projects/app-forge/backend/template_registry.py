@@ -173,7 +173,7 @@ def normalize_input(text: str, max_length: int = 500) -> str:
 # Extracts structured features from a natural-language description.
 # Each feature has a name, value, and confidence (0-1).
 
-@dataclass
+@dataclass(frozen=True)
 class Feature:
     name: str
     value: str          # e.g. "3" for grid_size, "numbers" for tile_content

@@ -38,7 +38,7 @@ EXTRAS:
 
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Set, Optional, Tuple
+from typing import Dict, List, Set
 from enum import Enum, auto
 
 
@@ -77,7 +77,7 @@ class Feature(Enum):
     GRAPHQL = auto()
 
 
-@dataclass
+@dataclass(frozen=True)
 class FeatureRequirements:
     """What features are needed based on app description."""
     features: Set[Feature] = field(default_factory=set)

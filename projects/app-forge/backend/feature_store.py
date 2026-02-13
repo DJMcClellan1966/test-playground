@@ -1,38 +1,46 @@
 """Feature Store - Composable building blocks for apps.
-
-Features are framework-agnostic specifications that know how to
-inject code into the universal template's slots.
-
-Each feature declares:
-- What slots it injects code into (per framework)
-- What other features it requires
-- What dependencies (packages) it needs
-- What config keys it needs
-"""
-
-from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional, Callable
-from enum import Enum
 import json
 from pathlib import Path
-
+import types
 from universal_template import Slot, TemplateRenderer, TemplateContext
 
-
-@dataclass
+@dataclass(frozen=True)
 class Feature:
     """A composable feature that injects code into template slots."""
     id: str
     name: str
     description: str
-    
-    # Code to inject per slot (slot_name -> code)
-    # This is the default; variants override per framework
-    slots: Dict[Slot, str] = field(default_factory=dict)
-    
-    # Framework-specific variants
-    # framework -> {slot -> code}
-    variants: Dict[str, Dict[Slot, str]] = field(default_factory=dict)
+    slots: types.MappingProxyType = field(default_factory=lambda: types.MappingProxyType({}))
+    variants: types.MappingProxyType = field(default_factory=lambda: types.MappingProxyType({}))
+    requires_features: tuple = field(default_factory=tuple)
+    requires_packages: types.MappingProxyType = field(default_factory=lambda: types.MappingProxyType({}))
+    config_keys: tuple = field(default_factory=tuple)
+    priority: int = 50
+
+    def get_slots(self, framework: str) -> dict:
+        """Get slot content for a specific framework."""
+        #...
+
+    def __hash__(self):
+        def make_hashable(obj):
+            if isinstance(obj, dict) or isinstance(obj, types.MappingProxyType):
+                return tuple(sorted((k, make_hashable(v)) for k, v in obj.items()))
+            elif isinstance(obj, (list, set, frozenset, tuple)):
+                return tuple(make_hashable(x) for x in obj)
+            elif hasattr(obj, '__dict__'):
+                return make_hashable(vars(obj))
+            return obj
+        return hash((
+            self.id,
+            self.name,
+            self.description,
+            make_hashable(self.slots),
+            make_hashable(self.variants),
+            make_hashable(self.requires_features),
+            make_hashable(self.requires_packages),
+            make_hashable(self.config_keys),
+            self.priority
+        ))
     
     # Dependencies
     requires_features: List[str] = field(default_factory=list)
