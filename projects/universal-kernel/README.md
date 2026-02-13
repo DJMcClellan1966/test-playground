@@ -293,6 +293,97 @@ python demo.py
 └─────────────────────────────────────────────────────────────┘
 ```
 
+## Universal Agent Core (agent_core.py)
+
+**NEW:** Algorithmic foundations common to ALL intelligent agents.
+
+These mathematical invariants appear across RL, planning, game theory, cognitive science, and neuroscience:
+
+| Component | Math Foundation | Appears In |
+|-----------|-----------------|------------|
+| **Bellman Optimality** | V(s) = max[R + γV(s')] | RL, Planning, Games |
+| **Attention** | softmax(QK^T/√d) | Transformers, Cognition |
+| **Exploration/Exploitation** | UCB, Thompson, ε-greedy | RL, Bandits, Search |
+| **Credit Assignment** | TD(λ), GAE, eligibility traces | Backprop, RL |
+| **Predictive Coding** | Minimize prediction error | Neuroscience, Free Energy |
+| **Hierarchical Abstraction** | State chunking, options | HTM, HRL |
+| **Hebbian Learning** | "Fire together, wire together" | Neural nets, Association |
+| **Game Theory** | Nash, Minimax, Alpha-Beta | Multi-agent, Adversarial |
+| **Planning** | A*, MCTS | Search, Game AI |
+
+### Usage Examples
+
+```python
+from agent_core import (
+    value_iteration, q_learning_update,  # Bellman
+    attention_weights, attend,            # Attention
+    ucb_select, thompson_sample,          # Exploration
+    temporal_difference, advantage_estimation,  # Credit assignment
+    PredictiveCoder,                      # Predictive coding
+    StateAbstractor, HierarchicalRL,      # Abstraction
+    HebbianNetwork,                       # Associative learning
+    minimax, alpha_beta, nash_equilibrium_2x2,  # Game theory
+    a_star, MCTS                          # Planning
+)
+
+# Value Iteration (Bellman)
+from agent_core import MDP
+V = value_iteration(mdp)  # Optimal value function
+
+# UCB Exploration
+action = ucb_select(q_values, visit_counts, total_visits)
+
+# Attention mechanism
+weights = attention_weights(query, keys, temperature=0.5)
+result, weights = attend(query, keys, values)
+
+# Predictive Coding (Free Energy)
+coder = PredictiveCoder(levels=3)
+coder.predict(0, value, confidence=0.7)
+error = coder.observe(0, actual_value)
+surprise = coder.total_surprise()
+
+# Hebbian associative memory
+net = HebbianNetwork(size=10)
+net.learn([1, 0, 1, 0, 1, 0, 1, 0, 1, 0])
+recalled = net.recall([1, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+
+# Nash Equilibrium (2x2 games)
+payoffs = [[(1,-1), (-1,1)], [(-1,1), (1,-1)]]  # Matching Pennies
+p1_strat, p2_strat = nash_equilibrium_2x2(payoffs)
+# [0.5, 0.5], [0.5, 0.5] - mixed equilibrium
+
+# A* Search
+path = a_star(start, goal_test, successors, heuristic)
+
+# MCTS Planning
+mcts = MCTS()
+action = mcts.search(state, get_actions, simulate, n_simulations=100)
+```
+
+### Universal Agent Interface
+
+All agents share these operations:
+
+```python
+from agent_core import UniversalAgent, CompositeAgent
+
+class MyAgent(UniversalAgent):
+    def perceive(self, observation): ...
+    def decide(self, options): ...
+    def learn(self, feedback): ...
+    def predict(self, query): ...
+
+# Pre-built composite agent
+agent = CompositeAgent(state_dim=10)
+next_state, reward = agent.act(state, get_actions, step_fn)
+```
+
+Run agent demos:
+```bash
+python agent_core.py
+```
+
 ## Theoretical Foundations
 
 ### Solomonoff Induction
