@@ -1,7 +1,18 @@
-"""Feature Store - Composable building blocks for apps.
 import json
 from pathlib import Path
 import types
+from universal_template import Slot, TemplateRenderer, TemplateContext
+
+@dataclass(frozen=True)
+class Feature:
+    """A composable feature that injects code into template slots."""
+    id: str
+"""Feature Store - Composable building blocks for apps."""
+import json
+from pathlib import Path
+import types
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional
 from universal_template import Slot, TemplateRenderer, TemplateContext
 
 @dataclass(frozen=True)

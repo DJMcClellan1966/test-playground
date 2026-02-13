@@ -61,11 +61,6 @@ SEMANTIC_TRAPS: List[Tuple[str, str]] = [
     (r"\bwin\s*at\s*(organiz|manag|task|life|work)", "crud"),
     (r"\b(space\s*invader|costume|collect|tracker)\b", "crud"),  # Costume tracker
     (r"\bplatform\s+(for|to)\s+(shar|post|connect|discuss)", "crud"),  # Sharing platform != platformer
-    
-    # Common data/planning apps (not games)
-    (r"\b(meal|menu)\s*(plan|schedul|organiz)", "crud"),  # Meal planner
-    (r"\b(project|task|event)?\s*timeline\b", "crud"),  # Timeline/Gantt
-    (r"\b(weekly|daily|monthly)\s*(plan|schedul|menu)", "crud"),  # Planning apps
 ]
 
 
@@ -338,8 +333,6 @@ SEMANTIC_ROUTES: List[Tuple[str, List[str]]] = [
     
     # Utility apps (before CRUD to catch specific patterns)
     ("timer", [r"pomodoro", r"focus\s*timer|work\s*timer", r"25\s*min|tomato\s*timer"]),
-    ("qr_generator", [r"qr\s*(code|generator)", r"barcode\s*generator", r"generate\s*qr"]),
-    ("markdown_editor", [r"text\s*editor|code\s*editor|notepad", r"plain\s*text|rich\s*text"]),
     ("crud", [r"weather", r"forecast|temperature|rain\s*(today|tomorrow)"]),
     ("crud", [r"markdown\s*editor|markdown\s*preview", r"md\s*editor|wysiwyg"]),
     ("crud", [r"kanban", r"board.*column|column.*card|drag.*column|trello"]),

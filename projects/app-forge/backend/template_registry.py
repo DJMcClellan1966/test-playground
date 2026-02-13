@@ -13,13 +13,10 @@ Concepts used:
  - Learning:       User preferences boost frequently-used templates
 """
 
-
 import re
 from dataclasses import dataclass, field
 from difflib import get_close_matches
 from typing import Dict, List, Optional, Tuple
-from functools import lru_cache
-import threading
 
 # User preference learning (AI-free)
 try:
@@ -173,7 +170,7 @@ def normalize_input(text: str, max_length: int = 500) -> str:
 # Extracts structured features from a natural-language description.
 # Each feature has a name, value, and confidence (0-1).
 
-@dataclass(frozen=True)
+@dataclass
 class Feature:
     name: str
     value: str          # e.g. "3" for grid_size, "numbers" for tile_content
@@ -342,15 +339,17 @@ FEATURE_RULES: List[Tuple[str, str, object, float]] = [
 ]
 
 
-def _extract_features(description: str) -> Dict[str, Feature]:
+def extract_features(description: str) -> Dict[str, Feature]:
     """Pull structured features from a description.
     
     Tracks position of each feature for attention-based scoring.
     """
     # Apply normalization to handle edge cases (long input, special chars, synonyms)
     normalized = normalize_input(description)
+    # Apply fuzzy typo correction before matching
     desc = fuzzy_correct(normalized)
     features: Dict[str, Feature] = {}
+
     for feat_name, pattern, value_extractor, conf in FEATURE_RULES:
         m = re.search(pattern, desc)
         if m:
@@ -359,17 +358,13 @@ def _extract_features(description: str) -> Dict[str, Feature]:
                 val = m.group(gnum)
             else:
                 val = str(value_extractor)
+            # Track position for attention scoring
             pos = m.start()
+            # Don't overwrite higher-confidence features (or earlier if same conf)
             if feat_name not in features or features[feat_name].confidence < conf:
                 features[feat_name] = Feature(feat_name, val, conf, pos)
-    return features
 
-# Memoized version for repeated calls
-@lru_cache(maxsize=128)
-def extract_features(description: str) -> Dict[str, Feature]:
-    # lru_cache requires hashable return, so convert to tuple and back
-    feats = _extract_features(description)
-    return {k: v for k, v in feats.items()}
+    return features
 
 
 # =====================================================================
@@ -880,15 +875,8 @@ TEMPLATE_REGISTRY: List[TemplateEntry] = [
 ]
 
 
-@lru_cache(maxsize=256)
-def score_template_cached(template_id: str, features_hash: int, desc_len: int = 100, position_weight: float = 3.0) -> float:
-    template = next(t for t in TEMPLATE_REGISTRY if t.id == template_id)
-    # Unpack features from hash (for cache)
-    # This is a simple optimization; in practice, use a better hash/serialization
-    features = features_hash_map[features_hash]
-    return score_template(template, features, desc_len, position_weight)
-
-def score_template(template: TemplateEntry, features: Dict[str, Feature], desc_len: int = 100, position_weight: float = 3.0) -> float:
+def score_template(template: TemplateEntry, features: Dict[str, Feature], 
+                   desc_len: int = 100, position_weight: float = 3.0) -> float:
     """Score a template against extracted features.  Higher = better match.
 
     Scoring (attention-like weighting):
@@ -938,33 +926,20 @@ def match_template(description: str, use_prefs: bool = True) -> Tuple[str, Dict[
     """
     features = extract_features(description)
     desc_len = len(description)
-    # For caching, hash features dict
-    features_hash = hash(tuple(sorted(features.items())))
-    global features_hash_map
-    if 'features_hash_map' not in globals():
-        features_hash_map = {}
-    features_hash_map[features_hash] = features
 
     scores: List[Tuple[str, float]] = []
-    threads = []
-    results = [None] * len(TEMPLATE_REGISTRY)
-
-    def score_worker(idx, tmpl):
-        s = score_template_cached(tmpl.id, features_hash, desc_len=desc_len)
+    for tmpl in TEMPLATE_REGISTRY:
+        s = score_template(tmpl, features, desc_len=desc_len)
+        
+        # Apply user preference boost (AI-free learning)
         if use_prefs and USER_PREFS_ENABLED:
             pref_boost = get_template_boost(tmpl.id)
             s += pref_boost
-        results[idx] = (tmpl.id, round(s, 2))
+        
+        scores.append((tmpl.id, round(s, 2)))
 
-    # Parallelize scoring for speed
-    for idx, tmpl in enumerate(TEMPLATE_REGISTRY):
-        t = threading.Thread(target=score_worker, args=(idx, tmpl))
-        threads.append(t)
-        t.start()
-    for t in threads:
-        t.join()
-    scores = [r for r in results if r is not None]
     scores.sort(key=lambda x: -x[1])
+
     best_id = scores[0][0] if scores else "generic_game"
     return best_id, features, scores
 
@@ -1107,11 +1082,9 @@ def match_template_intent(description: str,
         for tid, sim in semantic_results:
             semantic_scores[tid] = sim * max_regex
     except ImportError:
-        # Redistribute semantic weight before zeroing (bug fix: was zeroing first)
-        old_semantic = semantic_weight
         semantic_weight = 0
-        regex_weight += old_semantic / 2
-        intent_weight += old_semantic / 2
+        regex_weight += semantic_weight / 2
+        intent_weight += semantic_weight / 2
     
     # Get intent graph scores
     intent_scores: Dict[str, float] = {}
@@ -1124,11 +1097,9 @@ def match_template_intent(description: str,
         for tid, score in intent_results.items():
             intent_scores[tid] = (score / max_intent) * max_regex if max_intent > 0 else 0
     except ImportError:
-        # Redistribute intent weight before zeroing (bug fix: was zeroing first)
-        old_intent = intent_weight
         intent_weight = 0
-        regex_weight += old_intent / 2
-        semantic_weight += old_intent / 2
+        regex_weight += intent_weight / 2
+        semantic_weight += intent_weight / 2
     
     # Get GloVe embedding scores
     glove_scores: Dict[str, float] = {}
@@ -1138,12 +1109,11 @@ def match_template_intent(description: str,
         for tid, sim in glove_results:
             glove_scores[tid] = sim * max_regex
     except ImportError:
-        # Redistribute glove weight before zeroing (bug fix: was zeroing first)
-        old_glove = glove_weight
         glove_weight = 0
-        intent_weight += old_glove / 3
-        semantic_weight += old_glove / 3
-        regex_weight += old_glove / 3
+        # Redistribute weight
+        intent_weight += glove_weight / 3
+        semantic_weight += glove_weight / 3
+        regex_weight += glove_weight / 3
     
     # Combine all four scores
     combined: List[Tuple[str, float]] = []
