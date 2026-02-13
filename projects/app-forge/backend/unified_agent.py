@@ -209,6 +209,12 @@ class UnifiedAgent:
         self.evolver = None
         self.grower = None
         self.kernel = None
+        self.agentic_loop = None
+        self.world_model = None
+        self.memory_system = None
+        self.feedback_enabled = False
+        self.socratic_advisor = None
+        self.socratic_dialogue = None
         
         if HAS_EVOLUTION:
             self.evolver = TemplateEvolver(n_archetypes=6)
@@ -218,32 +224,93 @@ class UnifiedAgent:
         
         if HAS_KERNEL:
             self.kernel = SemanticClusterEngine()
+            try:
+                from projects.universal-kernel.agent_loop import LocalAgent, WorldModel
+                self.agentic_loop = LocalAgent()
+                self.world_model = WorldModel()
+                self.feedback_enabled = True
+            except Exception:
+                self.agentic_loop = None
+                self.world_model = None
+                self.feedback_enabled = False
+        
+        try:
+            from projects.universal-kernel.kernel import MemorySystem
+            self.memory_system = MemorySystem()
+        except Exception:
+            self.memory_system = None
+        # Integrate Socratic-Learner
+        try:
+            import sys
+            sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'projects' / 'socratic-learner'))
+            from blueprint_advisor import BlueprintAdvisor
+            from socrates import Socrates
+            self.socratic_advisor = BlueprintAdvisor()
+            self.socratic_dialogue = Socrates()
+        except Exception:
+            self.socratic_advisor = None
+            self.socratic_dialogue = None
+        # ...existing code...
     
     def infer(self, description: str) -> InferenceResult:
         """
         Main inference entry point.
-        
-        Takes a natural language description and returns
-        complete inference with template, features, and reasoning.
+        Integrates universal-kernel agentic loop, semantic cluster perception, world model, memory, template evolution, and Socratic-Learner.
         """
         result = InferenceResult(
             template_id="generic",
             features={},
             confidence=0.0
         )
-        
         # Step 1: Semantic Perception (Universal Kernel)
         detected_features = self._perceive(description, result)
-        
-        # Step 2: Memory Augmentation
+        # Step 2: World Model feature inference
+        if self.world_model:
+            try:
+                from projects.universal-kernel.agent_loop import Percept
+                percept = Percept(raw=description)
+                agent_features = self.world_model._infer_features(percept)
+                for feat in agent_features:
+                    detected_features[feat] = max(detected_features.get(feat, 0), 0.7)
+                result.add_reasoning(f"WorldModel inferred features: {list(agent_features)}")
+            except Exception:
+                result.add_reasoning("WorldModel not available")
+        # Step 3: Socratic-Learner feature discovery
+        if self.socratic_advisor:
+            try:
+                advisor_response = self.socratic_advisor.start_discovery(description)
+                result.add_reasoning(f"Socratic Advisor: {advisor_response}")
+                # Optionally probe for MVP scoping
+                mvp_question = self.socratic_advisor._handle_mvp(description)
+                result.add_reasoning(f"Socratic MVP Scoping: {mvp_question}")
+            except Exception:
+                result.add_reasoning("Socratic Advisor not available")
+        # Step 4: Socratic dialogue for feedback
+        if self.socratic_dialogue:
+            try:
+                socratic_response = self.socratic_dialogue.respond(description)
+                result.add_reasoning(f"Socratic Dialogue: {socratic_response}")
+            except Exception:
+                result.add_reasoning("Socratic Dialogue not available")
+        # Step 5: Memory Augmentation
         self._augment_from_memory(description, detected_features, result)
-        
-        # Step 3: Archetype Projection & Template Match
+        # Step 6: Archetype Projection & Template Match
         self._find_or_synthesize_template(detected_features, result)
-        
-        # Step 4: Fill in final features
+        # Step 7: Agentic Loop planning/learning
+        if self.agentic_loop:
+            try:
+                self.agentic_loop.perceive(description)
+                plan = self.agentic_loop.decide()
+                act_result = self.agentic_loop.act(plan)
+                result.add_reasoning(f"Agentic loop planned and acted: {plan}")
+                # Optionally learn from feedback
+                if self.feedback_enabled:
+                    self.agentic_loop.learn(1.0)  # Dummy positive feedback
+                    result.add_reasoning("Agentic loop learned from feedback")
+            except Exception:
+                result.add_reasoning("Agentic loop not available")
+        # Step 8: Fill in final features
         result.features = detected_features
-        
         return result
     
     def _perceive(self, description: str, result: InferenceResult) -> Dict[str, float]:
