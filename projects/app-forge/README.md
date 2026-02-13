@@ -2,6 +2,8 @@
 
 Build working Flask apps with natural language + smart questions. No AI hallucination, no visual block editors—just describe what you want and get a working preview.
 
+**Stats:** 77 Python modules | ~47,000 lines of code | 357 tests | 98.9% adversarial resilience
+
 ## The Vision
 
 **Your workflow:**
@@ -53,6 +55,12 @@ Build working Flask apps with natural language + smart questions. No AI hallucin
   - DevOps (health checks, structured logging, Sentry, .env config)
   - Accessibility (ARIA labels, keyboard navigation, skip links)
   - Extras (pagination, Redis caching, PDF export, webhooks, GraphQL, i18n)
+- ✅ **NEW** App Algebra - formal composition of fields, constraints, and operations
+- ✅ **NEW** Category Registry - 12 app type definitions with auto-detection
+- ✅ **NEW** GloVe Embeddings - word vector similarity for semantic matching
+- ✅ **NEW** Hybrid Builder - combines semantic rules with neural matching
+- ✅ **NEW** Semantic Builder - extracts semantic profiles from descriptions
+- ✅ **NEW** User Preferences - learns from your build history
 
 ## Quick Start
 
@@ -109,6 +117,13 @@ backend/
 ├── error_fixer.py          # Auto-fix syntax errors, missing imports (600 lines)
 ├── compliance.py           # GDPR/CCPA compliance, cookie consent, privacy (500 lines)
 ├── enterprise_features.py  # Production features: tests, API docs, security, devops (2300 lines)
+├── ai_assist.py            # Numerical resonance core - prime-based similarity matching
+├── app_algebra.py          # Algebraic app composition (fields, constraints, operations)
+├── category_registry.py    # 12 app category definitions with detection rules
+├── glove_matcher.py        # GloVe word embeddings for semantic similarity
+├── hybrid_builder.py       # Hybrid semantic/neural archetype matching (500 lines)
+├── semantic_builder.py     # Semantic profile extraction from descriptions (300 lines)
+├── user_prefs.py           # User preference tracking and learning
 ├── test_comprehensive.py   # 130 comprehensive tests (100% pass rate)
 ├── test_adversarial.py     # 178 adversarial attack vectors (98.9% resilience)
 ├── test_stress.py          # Stress & edge case testing (49 tests)
@@ -1316,12 +1331,28 @@ Done. Your app is live on GitHub.
 - [x] **Universal Template Architecture** (slot-based code injection for 5 frameworks)
 - [x] **Feature Store** (12+ composable features with dependency resolution)
 - [x] **Trait Store** (8 seed traits + learns from successful builds)
+- [x] **App Algebra** (formal field/constraint/operation composition)
+- [x] **Category Registry** (12 app types with auto-detection)
+- [x] **GloVe Embeddings** (word vector semantic similarity)
+- [x] **Hybrid Builder** (semantic rules + neural matching)
+- [x] **Semantic Builder** (profile extraction from descriptions)
+- [x] **User Preferences** (learns from build history)
 - [ ] K-means clustering for "similar apps" recommendations
 - [ ] Ollama integration (smart Q generation from description)
 - [ ] More kernels (FastAPI, Django)
 - [ ] Custom components (user-defined patterns)
 - [ ] Iterate mode (change answer, regenerate)
 - [ ] Component marketplace (share custom generators)
+
+## Related: Universal Kernel
+
+See [projects/universal-kernel](../universal-kernel/) for the mathematical foundations that power parts of App Forge:
+
+- **kernel.py** (~1,500 lines): Pattern recognition, Bayesian inference, CSP, memory systems
+- **agent_core.py** (~1,100 lines): Universal agent traits (Bellman, attention, MCTS, A*, Hebbian)
+- **agent_loop.py** (~1,000 lines): Unified agentic system with PERCEIVE → MODEL → PLAN → ACT → LEARN
+
+The Universal Kernel provides the mathematical reasoning layer - App Forge provides the practical code generation layer. Together they enable LLM-free intelligence.
 
 ## Philosophy
 
