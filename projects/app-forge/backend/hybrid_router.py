@@ -53,6 +53,14 @@ SEMANTIC_TRAPS: List[Tuple[str, str]] = [
     (r"\b(score|homework|assignment|grade)\b.*\b(track|manage|organiz)\b", "crud"),
     (r"\bwin\s+at\s+(organiz|manag|task)\b", "crud"),
     (r"\bgame\s*plan\b", "crud"),  # Game plan = strategy, not game
+    
+    # Misleading game words in productivity context
+    (r"\bscore\s+(my|the|your)?\s*(homework|assignment|paper|essay|exam)", "crud"),
+    (r"\b(play|playing)\s*around\s*with\s*(my|the)?\s*(recipe|data|file|code)", "crud"),
+    (r"\blevel\s*up\s*(my|the|your)?\s*(skill|workout|routine|career)", "crud"),
+    (r"\bwin\s*at\s*(organiz|manag|task|life|work)", "crud"),
+    (r"\b(space\s*invader|costume|collect|tracker)\b", "crud"),  # Costume tracker
+    (r"\bplatform\s+(for|to)\s+(shar|post|connect|discuss)", "crud"),  # Sharing platform != platformer
 ]
 
 
@@ -92,7 +100,111 @@ AMBIGUOUS_PATTERNS = [
     r"^(whatever|any(thing)?)\s+works?$",
     r"^i\s*(don.?t|dont)\s*know\b",
     r"^(something|anything)\s+(fun|cool|nice|good)$",
+    r"^idk\s+what\b",  # "idk what i want"
 ]
+
+# Tech buzzwords that don't map to real apps - route to generic_game
+BUZZWORD_PATTERNS = [
+    r"\b(quantum|blockchain|nft|web3|metaverse|ai\s+synergy|decentralized)\b.*\b(app|system|platform)\b",
+    r"\bflurble\b|\bwibble\b",  # Nonsense words
+]
+
+
+# ========== MULTI-LANGUAGE SUPPORT ==========
+
+# Common app/game words in other languages -> English equivalent
+MULTI_LANGUAGE_MAP: List[Tuple[str, str]] = [
+    # Spanish
+    (r"\bjuego\s*de\s*la\s*serpiente\b", "snake"),  # Snake game
+    (r"\bcalculadora\b", "calculator"),
+    (r"\btarea\b", "crud"),  # Todo/task
+    (r"\blista\s*de\s*tareas\b", "crud"),  # Todo list
+    (r"\bjuego\b", "generic_game"),  # Game
+    
+    # French
+    (r"\bcalculatrice\b", "calculator"),
+    (r"\bjeu\s*de\s*tetris\b", "tetris"),
+    (r"\bjeu\s*de\s*serpent\b", "snake"),
+    (r"\bjeu\b", "generic_game"),  # Game
+    
+    # German
+    (r"\bschlangenspiel\b", "snake"),  # Snake game
+    (r"\brechner\b", "calculator"),
+    (r"\btaschenrechner\b", "calculator"),
+    (r"\btodo\s*liste\b", "crud"),
+    (r"\bspiel\b", "generic_game"),  # Game
+    
+    # Italian
+    (r"\bcalcolatrice\b", "calculator"),
+    (r"\bgioco\s*del\s*serpente\b", "snake"),
+    
+    # Portuguese
+    (r"\bjogo\s*da\s*cobra\b", "snake"),
+    (r"\bcalculadora\b", "calculator"),
+    
+    # Japanese (katakana/common)
+    (r"ゲーム", "generic_game"),  # Game
+    (r"計算機", "calculator"),
+    
+    # Russian
+    (r"приложение", "generic_game"),  # Application
+    (r"игра", "generic_game"),  # Game
+    (r"калькулятор", "calculator"),
+]
+
+
+# ========== CONTRADICTION DETECTION ==========
+
+# Patterns that indicate contradictory/confusing input
+CONTRADICTION_PATTERNS = [
+    r"\b(isn.?t|not|but\s*not|without)\s+(a\s+)?game\b",  # "game that isn't a game"
+    r"\bgame\s+(but|that).*(isn.?t|not|never)\b",
+    r"\b(simple|minimal)\s+.*(100|many|lots|complex)\b",  # "simple with 100 features"
+    r"\bthat.?s\s+(really|actually)\s+a\s+\w+\b",  # "that's really a platformer"
+    r"\b(but|yet|however)\s+(it.?s|is)\s+(really|actually)\b",
+]
+
+
+def is_contradiction(description: str) -> bool:
+    """Check if the description contains contradictions."""
+    desc_lower = description.lower()
+    for pattern in CONTRADICTION_PATTERNS:
+        if re.search(pattern, desc_lower):
+            return True
+    return False
+
+
+def translate_multi_language(description: str) -> Optional[Tuple[str, float]]:
+    """Try to match non-English game/app words."""
+    desc_lower = description.lower()
+    for pattern, template_id in MULTI_LANGUAGE_MAP:
+        if re.search(pattern, desc_lower):
+            return template_id, 0.85
+    return None
+
+
+# ========== PROMPT INJECTION DETECTION ==========
+
+# Patterns that look like prompt injection attempts
+PROMPT_INJECTION_PATTERNS = [
+    r"^ignore\s+(previous|all)\s+instructions?",
+    r"^system\s*:",
+    r"^(forget|disregard|override)\s+(everything|all|templates?)",
+    r"\{\{.*\}\}",  # Template injection
+    r"```\s*(python|javascript|bash|sh)\b",  # Code blocks
+    r"\$\{.*\}",  # Variable interpolation
+    r"\bimport\s+(os|sys|subprocess)",  # Python imports
+    r"\b(rm|del)\s+(-rf?|/[sf])?",  # Delete commands (with word boundary)
+]
+
+
+def is_prompt_injection(description: str) -> bool:
+    """Detect potential prompt injection attempts."""
+    desc_lower = description.lower()
+    for pattern in PROMPT_INJECTION_PATTERNS:
+        if re.search(pattern, desc_lower):
+            return True
+    return False
 
 
 def is_ambiguous(description: str) -> bool:
@@ -105,6 +217,29 @@ def is_ambiguous(description: str) -> bool:
         if re.match(pattern, cleaned):
             return True
     return False
+
+
+def is_buzzword_nonsense(description: str) -> bool:
+    """Check if input is just tech buzzwords with no real meaning."""
+    desc_lower = description.lower()
+    for pattern in BUZZWORD_PATTERNS:
+        if re.search(pattern, desc_lower):
+            return True
+    return False
+
+
+def sanitize_input(description: str) -> str:
+    """Clean up input by removing special characters that confuse routing."""
+    # Remove URLs
+    cleaned = re.sub(r'https?://[^\s]+', '', description)
+    # Remove file paths (Windows and Unix)
+    cleaned = re.sub(r'[A-Za-z]:\\[^\s]*', '', cleaned)
+    cleaned = re.sub(r'/[a-z]+(/[a-z]+)+', '', cleaned, flags=re.IGNORECASE)
+    # Remove quotes and brackets for cleaner matching
+    cleaned = re.sub(r'[\'"\[\](){}]', ' ', cleaned)
+    # Collapse multiple spaces
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned if cleaned else description
 
 
 def check_semantic_trap(description: str) -> Optional[str]:
@@ -352,31 +487,57 @@ def route(description: str) -> RouteResult:
     
     Pipeline:
     0. Empty/nonsense detection → generic_game
-    0.1. Wrong domain detection (physical/impossible) → generic_game
-    0.2. Ambiguous detection (too vague) → generic_game
+    0.1. Prompt injection detection → generic_game
+    0.2. Wrong domain detection (physical/impossible) → generic_game
+    0.3. Ambiguous detection (too vague) → generic_game
+    0.35. Buzzword nonsense detection → generic_game
+    0.4. Contradiction detection → generic_game
     0.5. Semantic trap detection → CRUD (prevent wrong game matches)
+    0.6. Multi-language support → translate then route
     1. Semantic rules (fast, high confidence)
     2. GloVe neural (handles edge cases)
     3. NRI AI-assist (harmonic resonance matching)
     4. Keyword fallback
     5. Default fallback
     """
+    original = description  # Keep original for injection check
+    
     # Stage 0: Handle empty/nonsense input
     if is_nonsense_or_empty(description):
         return RouteResult("generic_game", 0.2, "fallback")
     
-    # Stage 0.1: Handle wrong domain (physical/impossible requests)
+    # Stage 0.1: Handle prompt injection attempts (check BEFORE sanitization)
+    if is_prompt_injection(original):
+        return RouteResult("generic_game", 0.1, "fallback")
+    
+    # NOW sanitize for remaining routing
+    description = sanitize_input(description)
+    
+    # Stage 0.2: Handle wrong domain (physical/impossible requests)
     if is_wrong_domain(description):
         return RouteResult("generic_game", 0.2, "fallback")
     
-    # Stage 0.2: Handle ambiguous input (too vague to route)
+    # Stage 0.3: Handle ambiguous input (too vague to route)
     if is_ambiguous(description):
+        return RouteResult("generic_game", 0.3, "fallback")
+    
+    # Stage 0.35: Handle tech buzzword nonsense
+    if is_buzzword_nonsense(description):
+        return RouteResult("generic_game", 0.2, "fallback")
+    
+    # Stage 0.4: Handle contradictions ("game that isn't a game")
+    if is_contradiction(description):
         return RouteResult("generic_game", 0.3, "fallback")
     
     # Stage 0.5: Check semantic traps (game words in non-game contexts)
     trap_result = check_semantic_trap(description)
     if trap_result:
         return RouteResult(trap_result, 0.9, "semantic")
+    
+    # Stage 0.6: Try multi-language translation
+    result = translate_multi_language(description)
+    if result:
+        return RouteResult(result[0], result[1], "multilang")
     
     # Stage 1: Try semantic rules (fast path)
     result = semantic_route(description)

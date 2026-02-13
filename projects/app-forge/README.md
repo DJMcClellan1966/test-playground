@@ -37,6 +37,8 @@ Build working Flask apps with natural language + smart questions. No AI hallucin
 - ✅ **NEW** Optimal 50 Training Set - 55 examples cover 92% of all app types
 - ✅ **NEW** Template Updater - periodic learning and improvement system
 - ✅ **NEW** 5D Complexity Model with architecture recommendations
+- ✅ **NEW** Hybrid Neural Router - 8-stage routing pipeline (semantic traps, multi-language, contradiction detection)
+- ✅ **NEW** Adversarial robustness - 98.9% resilience against prompt injection, nonsense, edge cases
 
 ## Quick Start
 
@@ -88,7 +90,10 @@ backend/
 ├── template_updater.py     # Periodic template learning & improvement (550 lines)
 ├── universal_builder.py    # Universal app builder pipeline (integrates all systems)
 ├── complexity_model.py     # 5D complexity analysis + architecture recommendations
-├── test_algorithms.py      # Test suite for all algorithms
+├── hybrid_router.py        # 8-stage routing pipeline (650 lines, semantic/neural hybrid)
+├── test_comprehensive.py   # 130 comprehensive tests (100% pass rate)
+├── test_adversarial.py     # 178 adversarial attack vectors (98.9% resilience)
+├── test_stress.py          # Stress & edge case testing (49 tests)
 └── data/
     ├── build_memory.db     # SQLite: build history
     └── models/             # Trained classifier models (.pkl)
@@ -137,18 +142,37 @@ frontend/
 
 ### Benchmark Results (Base 44 Test Suite)
 
-App Forge scores **93.8% (Grade A)** on 130 comprehensive tests:
+App Forge scores **100% (Grade A+)** on 130 comprehensive tests:
 
 | Test Category | Score |
 |--------------|-------|
-| Category Detection | 95.5% |
+| Category Detection | 100% |
 | Feature Extraction | 100% |
 | Template Synthesis | 100% |
 | Domain Field Inference | 100% |
 | Intent Graph | 100% |
-| Full Pipeline | 95% |
+| Full Pipeline | 100% |
 
 *Base 44: 44 representative app descriptions covering games, data apps, APIs, CLI tools, ML pipelines, and automation scripts.*
+
+### Adversarial Robustness (178 Attack Vectors)
+
+App Forge withstands **98.9%** of adversarial inputs:
+
+| Test Category | Score |
+|--------------|-------|
+| Routing Accuracy | 97.6% (82/84) |
+| Code Generation | 100% (84/84) |
+| Output Safety | 100% (6/6) |
+| Determinism | 100% (4/4) |
+
+**Attack categories tested:**
+- Contradictions ("todo list that's really a platformer")
+- Misleading keywords ("score my homework", "level up my workout")
+- Prompt injection ("ignore instructions", "{{template:hack}}", code blocks)
+- Nonsense ("quantum blockchain AI synergy")
+- Multi-language (Spanish, French, German, Japanese, Russian)
+- Special characters, extreme lengths, ambiguous inputs
 
 ## Semantic Kernel - What LLMs Do, Without LLMs
 
