@@ -61,6 +61,11 @@ SEMANTIC_TRAPS: List[Tuple[str, str]] = [
     (r"\bwin\s*at\s*(organiz|manag|task|life|work)", "crud"),
     (r"\b(space\s*invader|costume|collect|tracker)\b", "crud"),  # Costume tracker
     (r"\bplatform\s+(for|to)\s+(shar|post|connect|discuss)", "crud"),  # Sharing platform != platformer
+    
+    # Common data/planning apps (not games)
+    (r"\b(meal|menu)\s*(plan|schedul|organiz)", "crud"),  # Meal planner
+    (r"\b(project|task|event)?\s*timeline\b", "crud"),  # Timeline/Gantt
+    (r"\b(weekly|daily|monthly)\s*(plan|schedul|menu)", "crud"),  # Planning apps
 ]
 
 
