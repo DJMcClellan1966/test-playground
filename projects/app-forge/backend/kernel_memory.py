@@ -34,7 +34,7 @@ if str(KERNEL_PATH) not in sys.path:
 
 # Import Universal Kernel's memory system
 try:
-    from kernel import MemorySystem, Memory, compression_distance, bayesian_update
+    from kernel import MemorySystem, Memory, compression_distance, bayesian_update  # type: ignore
     KERNEL_AVAILABLE = True
 except ImportError:
     # Fallback if kernel not available

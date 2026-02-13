@@ -52,6 +52,14 @@ except ImportError:
     def learn(*args, **kwargs): pass
     def get_memory_stats(): return {}
 
+# Imagination system - creative template exploration
+try:
+    from imagination import creative_system
+    IMAGINATION_ENABLED = True
+except ImportError:
+    IMAGINATION_ENABLED = False
+    creative_system = None
+
 # Import classifier (optional ML module)
 try:
     from classifier import classifier
@@ -155,6 +163,24 @@ def start_wizard():
     
     next_q = remaining[0] if remaining else None
     
+    # NEW: Creative exploration via imagination system
+    creative_insights = None
+    if IMAGINATION_ENABLED and creative_system:
+        try:
+            exploration = creative_system.explore_idea(description)
+            exp = exploration.get('exploration', {})
+            if exp.get('tensions_found', 0) > 0 or exp.get('bridges_found', 0) > 5:
+                creative_insights = {
+                    'tensions': exp.get('tensions_found', 0),
+                    'bridges': exp.get('bridges_found', 0),
+                    'resonances': exp.get('templates_resonated', 0),
+                    'hybrid_proposal': exploration.get('hybrid_proposal'),
+                    'questions': exploration.get('questions', [])[:2],
+                    'suggestions': exploration.get('suggestions', [])[:2],
+                }
+        except Exception as e:
+            print(f"Warning: Imagination exploration failed: {e}")
+
     return jsonify({
         "profile": session['profile'],
         "inferred": inferred,
@@ -171,6 +197,9 @@ def start_wizard():
         # NEW: Include memory-based suggestion if available
         "memory_suggestion": memory_suggestion,
         "kernel_memory_enabled": KERNEL_MEMORY_ENABLED,
+        # NEW: Creative exploration insights
+        "creative_insights": creative_insights,
+        "imagination_enabled": IMAGINATION_ENABLED,
     })
 
 

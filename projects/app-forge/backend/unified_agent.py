@@ -50,7 +50,7 @@ KERNEL_PATH = Path(__file__).parent.parent.parent / 'universal-kernel'
 sys.path.insert(0, str(KERNEL_PATH))
 
 try:
-    from cluster_perception import (
+    from cluster_perception import (  # type: ignore
         SemanticClusterEngine, ClusterPercept, 
         perceive_for_app_forge, SEMANTIC_CLUSTERS
     )

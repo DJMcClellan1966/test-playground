@@ -46,7 +46,7 @@ vocab_tests = [
     'pasta dishes',     # Compound
 ]
 
-from cluster_perception import SemanticClusterEngine
+from cluster_perception import SemanticClusterEngine  # type: ignore
 engine = SemanticClusterEngine()
 
 print()

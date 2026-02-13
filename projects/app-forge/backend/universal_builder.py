@@ -24,21 +24,28 @@ Benefits:
 - Constraint propagation reduces questions needed
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any, Type, Set
+from typing import Dict, List, Optional, Tuple, Any, Type, Set, TYPE_CHECKING
 from enum import Enum
+
+if TYPE_CHECKING:
+    from domain_parser import DomainModel
+    from template_registry import Feature
 
 # Import existing App Forge components (backward compatible)
 try:
-    from domain_parser import DomainModel, parse_description
+    from domain_parser import DomainModel, parse_description  # noqa: F811
     from template_registry import extract_features, Feature
     from intent_graph import IntentGraph
+    _HAS_DOMAIN_PARSER = True
 except ImportError:
     # Standalone mode
-    DomainModel = None
-    parse_description = lambda x: []
-    extract_features = lambda x: {}
+    _HAS_DOMAIN_PARSER = False
+    parse_description = lambda x: []  # type: ignore[misc]
+    extract_features = lambda x: {}  # type: ignore[misc]
     IntentGraph = None
 
 # Import the 50 optimal training examples

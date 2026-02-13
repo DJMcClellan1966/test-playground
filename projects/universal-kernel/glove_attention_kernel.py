@@ -23,7 +23,7 @@ from typing import Dict, List, Tuple, Set, Optional, Any
 
 # Add embeddings directory to path
 sys.path.insert(0, str(Path(__file__).parent / 'embeddings'))
-from domain_vectors import get_embedding, similarity, most_similar, vocabulary_size
+from domain_vectors import get_embedding, similarity, most_similar, vocabulary_size  # type: ignore
 
 # ============================================================================
 # ATTENTION MECHANISM
