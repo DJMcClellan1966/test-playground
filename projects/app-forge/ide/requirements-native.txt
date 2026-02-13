@@ -1,0 +1,4 @@
+# requirements.txt for native Python IDE
+PyQt5
+pyqt5-tools
+pygments

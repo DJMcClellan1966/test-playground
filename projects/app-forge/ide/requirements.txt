@@ -1,0 +1,4 @@
+# requirements.txt for IDE backend
+fastapi
+uvicorn
+python-multipart

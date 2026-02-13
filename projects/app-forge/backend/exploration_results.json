@@ -1,0 +1,168 @@
+[
+  {
+    "idea": "a recipe collection app",
+    "best_template": "crud",
+    "features": [
+      "generic_app",
+      "data_app"
+    ],
+    "top_scores": [
+      [
+        "crud",
+        21.74
+      ],
+      [
+        "generic_game",
+        -2.4
+      ],
+      [
+        "sliding_puzzle",
+        -997.03
+      ]
+    ],
+    "explanation": "Description: \"a recipe collection app\"\n\nExtracted Features:\n  Feature(generic_app=true, conf=0.50, pos=20)\n  Feature(data_app=true, conf=0.80, pos=2)\n\nTemplate Scores (top 5):\n    21.74  Data Collection App (crud) \u2190 SELECTED\n    -2.40  Generic Game (generic_game)\n  -997.03  Sliding Tile Puzzle (sliding_puzzle)\n  -998.02  Memory Match (memory_game)\n  -999.00  Image Puzzle / Jigsaw (jigsaw)",
+    "constraints_solved": {
+      "backend": "Flask",
+      "database": "SQLite",
+      "realtime": "REST polling",
+      "frontend": "HTML + JavaScript (Vanilla or Htmx)",
+      "auth": "Session-based (secure)",
+      "notes": [
+        "SQLite (local-first, no server needed)"
+      ]
+    }
+  },
+  {
+    "idea": "a workout tracker with progress graphs",
+    "best_template": "crud",
+    "features": [
+      "dashboard",
+      "data_app"
+    ],
+    "top_scores": [
+      [
+        "crud",
+        21.84
+      ],
+      [
+        "dashboard",
+        20.84
+      ],
+      [
+        "generic_game",
+        -2.4
+      ]
+    ],
+    "explanation": "Description: \"a workout tracker with progress graphs\"\n\nExtracted Features:\n  Feature(dashboard=true, conf=0.90, pos=32)\n  Feature(data_app=true, conf=0.80, pos=2)\n\nTemplate Scores (top 5):\n    21.84  Data Collection App (crud) \u2190 SELECTED\n    20.84  Dashboard / Analytics (dashboard)\n    -2.40  Generic Game (generic_game)\n  -997.03  Sliding Tile Puzzle (sliding_puzzle)\n  -998.02  Memory Match (memory_game)",
+    "constraints_solved": {
+      "backend": "Flask",
+      "database": "SQLite",
+      "realtime": "REST polling",
+      "frontend": "HTML + JavaScript (Vanilla or Htmx)",
+      "auth": "Session-based (secure)",
+      "notes": [
+        "SQLite (local-first, no server needed)"
+      ]
+    }
+  },
+  {
+    "idea": "a flashcard study app",
+    "best_template": "quiz",
+    "features": [
+      "trivia",
+      "generic_app"
+    ],
+    "top_scores": [
+      [
+        "quiz",
+        16.21
+      ],
+      [
+        "flashcards",
+        8.0
+      ],
+      [
+        "generic_game",
+        -2.8
+      ]
+    ],
+    "explanation": "Description: \"a flashcard study app\"\n\nExtracted Features:\n  Feature(trivia=true, conf=0.85, pos=2)\n  Feature(generic_app=true, conf=0.50, pos=18)\n\nTemplate Scores (top 5):\n    16.21  Quiz / Trivia (quiz) \u2190 SELECTED\n     8.00  Flashcard Study App (flashcards)\n    -2.80  Generic Game (generic_game)\n  -994.00  Data Collection App (crud)\n  -997.03  Sliding Tile Puzzle (sliding_puzzle)",
+    "constraints_solved": {
+      "backend": "Flask",
+      "database": "SQLite",
+      "realtime": "REST polling",
+      "frontend": "HTML + JavaScript (Vanilla or Htmx)",
+      "auth": "Session-based (secure)",
+      "notes": [
+        "SQLite (local-first, no server needed)"
+      ]
+    }
+  },
+  {
+    "idea": "a collaborative whiteboard tool",
+    "best_template": "drawing_canvas",
+    "features": [
+      "grid_game",
+      "drawing",
+      "generic_app",
+      "share"
+    ],
+    "top_scores": [
+      [
+        "drawing_canvas",
+        10.0
+      ],
+      [
+        "generic_game",
+        4.0
+      ],
+      [
+        "crud",
+        -994.0
+      ]
+    ],
+    "explanation": "Description: \"a collaborative whiteboard tool\"\n\nExtracted Features:\n  Feature(grid_game=true, conf=0.80, pos=21)\n  Feature(drawing=true, conf=0.90, pos=16)\n  Feature(generic_app=true, conf=0.50, pos=27)\n  Feature(share=true, conf=0.85, pos=2)\n\nTemplate Scores (top 5):\n    10.00  Drawing Canvas (drawing_canvas) \u2190 SELECTED\n     4.00  Generic Game (generic_game)\n  -994.00  Data Collection App (crud)\n  -997.03  Sliding Tile Puzzle (sliding_puzzle)\n  -998.02  Memory Match (memory_game)",
+    "constraints_solved": {
+      "backend": "Flask",
+      "database": "SQLite",
+      "realtime": "REST polling",
+      "frontend": "HTML + JavaScript (Vanilla or Htmx)",
+      "auth": "Session-based (secure)",
+      "notes": [
+        "SQLite (local-first, no server needed)"
+      ]
+    }
+  },
+  {
+    "idea": "a personal finance tracker",
+    "best_template": "crud",
+    "features": [
+      "data_app"
+    ],
+    "top_scores": [
+      [
+        "crud",
+        19.81
+      ],
+      [
+        "generic_game",
+        -2.4
+      ],
+      [
+        "sliding_puzzle",
+        -997.03
+      ]
+    ],
+    "explanation": "Description: \"a personal finance tracker\"\n\nExtracted Features:\n  Feature(data_app=true, conf=0.80, pos=19)\n\nTemplate Scores (top 5):\n    19.81  Data Collection App (crud) \u2190 SELECTED\n    -2.40  Generic Game (generic_game)\n  -997.03  Sliding Tile Puzzle (sliding_puzzle)\n  -998.02  Memory Match (memory_game)\n  -999.00  Image Puzzle / Jigsaw (jigsaw)",
+    "constraints_solved": {
+      "backend": "Flask",
+      "database": "SQLite",
+      "realtime": "REST polling",
+      "frontend": "HTML + JavaScript (Vanilla or Htmx)",
+      "auth": "Session-based (secure)",
+      "notes": [
+        "SQLite (local-first, no server needed)"
+      ]
+    }
+  }
+]

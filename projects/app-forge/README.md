@@ -1154,6 +1154,35 @@ Apps now get **automatic visual theming** based on their category:
 | Data | Sky `#0ea5e9` | Analytical, clear |
 | Ecommerce | Violet `#7c3aed` | Premium, trustworthy |
 
+## Mathematical Modeling for Enhanced Creativity and Constraint Solving
+
+Mathematical modeling can significantly improve app-forge's ability to generate creative, robust, and optimal app designs. Here are concrete ways to integrate mathematical models into the system:
+
+### 1. Constraint Satisfaction & Optimization
+- Use formal constraint satisfaction (CSP, SAT, ILP) to represent app requirements, features, and user goals.
+- Employ mathematical optimization to select the best combination of features, UI elements, or code modules under user-specified constraints.
+
+### 2. Information Theory & Entropy
+- Apply information-theoretic measures to guide template selection, code recombination, or user questioning (e.g., maximize novelty, minimize redundancy).
+- Use entropy to identify the most informative questions or the most uncertain design decisions.
+
+### 3. Graph Theory & Network Analysis
+- Model code modules, templates, or features as nodes in a graph, with edges for compatibility, dependency, or synergy.
+- Use graph algorithms to find novel or efficient recombinations and highlight reusable core components.
+
+### 4. Probabilistic & Bayesian Models
+- Use probabilistic models to handle uncertainty in user intent, feature interactions, or code behavior.
+- Bayesian inference can update beliefs about the best design as more information is gathered.
+
+### 5. Multi-Objective Optimization
+- Formulate app generation as a multi-objective problem (e.g., maximize usability, minimize code size, maximize novelty).
+- Use Pareto optimization to present trade-offs to the user.
+
+### 6. Formal Verification
+- Use formal methods to ensure generated apps meet safety, security, or correctness constraints.
+
+**Integrating these mathematical models will make app-forge more robust, explainable, and capable of discovering truly novel or optimal solutions.**
+
 ### Theme Variants
 
 Users can choose from 5 variants that preserve the category's identity:
@@ -1350,6 +1379,12 @@ Done. Your app is live on GitHub.
 - [ ] Custom components (user-defined patterns)
 - [ ] Iterate mode (change answer, regenerate)
 - [ ] Component marketplace (share custom generators)
+
+### Roadmap: Future Experiments & Features
+
+- [ ] **Self-modifying / Rule-breaking Logic**: Implement a module (e.g., `rule_breaker.py`) that allows the agent to modify its own symbolic rules, constraints, or templates, enabling experimentation with self-evolving logic and creative rule-breaking.
+- [ ] **Visualization / Dashboard**: Build a dashboard or visualization tool to display agent learning, creative tensions, failure memory, and hybrid proposals. This will help track the agent's evolution and surface insights from the imagination system.
+- [ ] **Further Experiments**: Continue expanding the system with new creative modules, abstraction layers, and user-driven experiments to push the boundaries of symbolic, transparent AI.
 
 ## Universal Kernel Integration
 

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>App Forge IDE</title>
+  <style>
+    body { margin: 0; font-family: sans-serif; }
+    #container { display: flex; height: 100vh; }
+    #sidebar { width: 220px; background: #23272e; color: #fff; overflow-y: auto; }
+    #main { flex: 1; display: flex; flex-direction: column; }
+    #editor { flex: 1; background: #1e1e1e; color: #fff; }
+    #bottom { height: 180px; background: #181a20; display: flex; }
+    #problems, #terminal { flex: 1; border-right: 1px solid #333; overflow-y: auto; }
+    #chat { width: 320px; background: #23272e; color: #fff; border-left: 1px solid #333; display: flex; flex-direction: column; }
+    #chat-messages { flex: 1; overflow-y: auto; padding: 8px; }
+    #chat-input { border: none; padding: 8px; width: 100%; background: #181a20; color: #fff; }
+    .file { padding: 4px 12px; cursor: pointer; }
+    .file:hover { background: #2c313a; }
+    .dir { font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="sidebar"></div>
+    <div id="main">
+      <div id="editor" contenteditable="true"></div>
+      <div id="bottom">
+        <div id="problems">Problems</div>
+        <div id="terminal">Terminal</div>
+        <div id="chat">
+          <div id="chat-messages"></div>
+          <input id="chat-input" placeholder="Ask the agent..." />
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    // File browser
+    async function loadFiles(path = 'C:/Users/DJMcC/Desktop') {
+      const res = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
+      const data = await res.json();
+      const sidebar = document.getElementById('sidebar');
+      sidebar.innerHTML = '';
+      data.files.forEach(f => {
+        const el = document.createElement('div');
+        el.className = 'file' + (f.is_dir ? ' dir' : '');
+        el.textContent = f.name;
+        el.onclick = () => {
+          if (f.is_dir) loadFiles(f.path);
+          else openFile(f.path);
+        };
+        sidebar.appendChild(el);
+      });
+    }
+    loadFiles();
+
+    // Code editor
+    let currentFile = null;
+    async function openFile(path) {
+      const res = await fetch(`/api/file?path=${encodeURIComponent(path)}`);
+      const text = await res.text();
+      document.getElementById('editor').textContent = text;
+      currentFile = path;
+    }
+    document.getElementById('editor').addEventListener('input', () => {
+      // Optionally: mark as dirty
+    });
+    // Save on Ctrl+S
+    document.addEventListener('keydown', e => {
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        if (currentFile) {
+          fetch('/api/file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: currentFile, content: document.getElementById('editor').textContent })
+          });
+        }
+      }
+    });
+
+    // Agent chat
+    const ws = new WebSocket(`ws://${location.host}/ws/agent`);
+    ws.onmessage = e => {
+      const chat = document.getElementById('chat-messages');
+      chat.innerHTML += `<div>${e.data}</div>`;
+      chat.scrollTop = chat.scrollHeight;
+    };
+    document.getElementById('chat-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        ws.send(e.target.value);
+        e.target.value = '';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -123,6 +123,7 @@ class Imagination:
         
         # Step 1: Detect features from description
         if HAS_SYSTEMS:
+            # Use optimized extract_features
             tension.detected_features = extract_features(description)
         
         # Step 2: Calculate resonance with EVERY template (not just best)

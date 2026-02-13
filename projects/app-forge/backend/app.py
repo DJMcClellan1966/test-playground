@@ -1,3 +1,11 @@
+# Connection Monitor integration
+try:
+    from connection_monitor import ConnectionMonitor
+    CONNECTION_MONITOR_ENABLED = True
+    connection_monitor = ConnectionMonitor()
+except ImportError:
+    CONNECTION_MONITOR_ENABLED = False
+    connection_monitor = None
 """App Forge - Natural language app builder."""
 
 from flask import Flask, render_template, request, jsonify, session
@@ -12,6 +20,18 @@ from codegen import generator, detect_app_type
 from project_manager import manager
 from preview_server import preview
 from template_registry import match_template, extract_features, explain_match
+
+# Dynamic corpus/model modules
+try:
+    from corpus_search import CorpusSearch
+    from template_filler import TemplateFiller
+    from dynamic_model import DynamicModelBuilder
+    CORPUS_MODULES_ENABLED = True
+except ImportError:
+    CORPUS_MODULES_ENABLED = False
+    CorpusSearch = None
+    TemplateFiller = None
+    DynamicModelBuilder = None
 
 # Try to use neural-enhanced matching (hybrid router)
 try:
@@ -91,6 +111,27 @@ def init_session():
 # =============================================================================
 # API Endpoints
 # =============================================================================
+
+# Example endpoint: Dynamic template filling and model building
+@app.route('/api/dynamic_fill', methods=['POST'])
+def dynamic_fill():
+    """Fill a template using corpus search and build a model dynamically."""
+    if not CORPUS_MODULES_ENABLED:
+        return jsonify({"error": "Corpus/template/model modules not available"}), 500
+    data = request.get_json() or {}
+    template = data.get('template', {})
+    user_input = data.get('user_input', '')
+    corpus_dirs = data.get('corpus_dirs', ["../patterns", "../docs"])
+    # Fill template
+    tf = TemplateFiller(corpus_dirs)
+    filled = tf.fill_template(template, user_input)
+    # Build model
+    dmb = DynamicModelBuilder()
+    model = dmb.build_model(filled)
+    return jsonify({
+        "filled_template": filled,
+        "model": model
+    })
 
 @app.route('/')
 def index():
@@ -264,10 +305,34 @@ def generate_project():
     tech_stack = solver.solve(answered, profile.description)
     
     # Detect template for history (neural-enhanced)
-    best_template, features, _ = smart_match_template(profile.description)
+    best_template, features, scores = smart_match_template(profile.description)
+    if CONNECTION_MONITOR_ENABLED:
+        connection_monitor.log_template_match(best_template, {k: f.value for k, f in features.items()}, scores[0][1])
+        # Feedback loop: analyze after match
+        analysis = connection_monitor.analyze()
+        unused_features = analysis.get("unused_features", [])
+        hybrid_suggestions = analysis.get("hybrid_suggestions", [])
+        # If unused features exist, surface them in response
+        if unused_features:
+            print(f"Unused features detected: {unused_features}")
+        # If hybrid suggestions exist, adapt template selection
+        if hybrid_suggestions:
+            print(f"Hybrid template suggestions: {hybrid_suggestions}")
+            # Optionally, select a hybrid template if confidence is high
+            # (Placeholder logic)
+            best_template = hybrid_suggestions[0] if hybrid_suggestions else best_template
     
     # Generate code — pass description for domain-aware models
     app_name = request.get_json().get('app_name', 'My App')
+    if CONNECTION_MONITOR_ENABLED:
+        connection_monitor.log_interaction("generator", "generate_app_py", {"app_name": app_name, "answers": answered})
+    # Endpoint: Retrieve connection monitor analysis
+    @app.route('/api/connection_analysis', methods=['GET'])
+    def connection_analysis():
+        if not CONNECTION_MONITOR_ENABLED:
+            return jsonify({"error": "Connection monitor not available"}), 500
+        summary = connection_monitor.analyze()
+        return jsonify(summary)
     
     # Check if this is a data app requiring multi-file generation
     needs_db = answered.get('has_data', False)
@@ -322,6 +387,10 @@ def generate_project():
         "files": files,
         "preview_url": preview_url,
         "preview_error": preview_error,
+        "connection_monitor": {
+            "unused_features": unused_features if CONNECTION_MONITOR_ENABLED else [],
+            "hybrid_suggestions": hybrid_suggestions if CONNECTION_MONITOR_ENABLED else []
+        }
     })
 
 
