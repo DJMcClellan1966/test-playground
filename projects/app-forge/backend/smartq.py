@@ -26,6 +26,13 @@ except ImportError:
     HAS_KERNEL_MEMORY = False
     app_memory = None
 
+# Import unified agent for semantic inference + template evolution
+try:
+    from unified_agent import enhance_smartq_inference, unified_infer
+    HAS_UNIFIED_AGENT = True
+except ImportError:
+    HAS_UNIFIED_AGENT = False
+
 
 @dataclass
 class Question:
@@ -242,6 +249,13 @@ def infer_from_description(description: str) -> Dict[str, bool]:
         inferred.setdefault("needs_auth", False)
     if inferred.get("has_data") is False:
         inferred.setdefault("complex_queries", False)
+
+    # NEW: Enhance with unified agent (semantic + evolution + memory)
+    if HAS_UNIFIED_AGENT:
+        try:
+            inferred = enhance_smartq_inference(description, inferred)
+        except Exception:
+            pass  # Graceful fallback if agent has issues
 
     return inferred
 
