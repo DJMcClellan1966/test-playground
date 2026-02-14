@@ -1,3 +1,164 @@
+# ---------------------------------------------------------------------
+# HybridBrain: Combine Symbolic and Semantic Matching
+# ---------------------------------------------------------------------
+class HybridBrain:
+    """Combines Brain (Jaccard) and SemanticMemory (GloVe) for template selection."""
+    def __init__(self, semantic_memory=None, symbolic_weight=0.5, semantic_weight=0.5):
+        self.symbolic_weight = symbolic_weight
+        self.semantic_weight = semantic_weight
+        self.semantic_memory = semantic_memory  # Should be a SemanticMemory instance
+
+    def score_templates(self, user_input: str):
+        # Symbolic (Jaccard) scores
+        best_symbolic, symbolic_scores, user_params = Brain.map_user_intent(user_input)
+        # Semantic (GloVe) scores
+        semantic_scores = {}
+        if self.semantic_memory:
+            for tpl in Brain.template_params:
+                # Use template name as label, or a description if available
+                label = tpl
+                # If template descriptions are available, use them here
+                sim = 0.0
+                if self.semantic_memory.db:
+                    sim = max((score for l, score in self.semantic_memory.explain(user_input) if l == label), default=0.0)
+                semantic_scores[tpl] = sim
+        else:
+            for tpl in Brain.template_params:
+                semantic_scores[tpl] = 0.0
+        # Combine scores
+        hybrid_scores = {}
+        for tpl in Brain.template_params:
+            hybrid_scores[tpl] = (
+                self.symbolic_weight * symbolic_scores.get(tpl, 0.0) +
+                self.semantic_weight * semantic_scores.get(tpl, 0.0)
+            )
+        # Select best
+        best = max(hybrid_scores, key=hybrid_scores.get)
+        return {
+            "input": user_input,
+            "user_params": list(user_params),
+            "symbolic_scores": symbolic_scores,
+            "semantic_scores": semantic_scores,
+            "hybrid_scores": hybrid_scores,
+            "best_template": best
+        }
+# ---------------------------------------------------------------------
+# Semantic Memory: GloVe Embedding + Attention + Similarity Search
+# ---------------------------------------------------------------------
+import numpy as np
+import os
+
+class SemanticMemory:
+    """Semantic memory using GloVe embeddings and cosine similarity."""
+    def __init__(self, glove_path=None, dim=50):
+        self.glove = None
+        self.dim = dim
+        self.db = []  # List of (label, vector)
+        if glove_path and os.path.exists(glove_path):
+            self.glove = self.load_glove(glove_path)
+
+    def load_glove(self, path):
+        glove = {}
+        with open(path, 'r', encoding='utf8') as f:
+            for line in f:
+                parts = line.split()
+                word = parts[0]
+                vec = np.array(parts[1:], dtype=np.float32)
+                glove[word] = vec
+        return glove
+
+    def embed_sentence(self, sentence, attention=None):
+        if self.glove is None:
+            return np.zeros(self.dim)
+        words = sentence.lower().split()
+        vectors = [self.glove[w] for w in words if w in self.glove]
+        if not vectors:
+            return np.zeros(self.dim)
+        if attention:
+            weights = np.array([attention.get(w, 1.0) for w in words if w in self.glove])
+            return np.average(vectors, axis=0, weights=weights)
+        return np.mean(vectors, axis=0)
+
+    def add(self, label, sentence, attention=None):
+        vec = self.embed_sentence(sentence, attention)
+        self.db.append((label, vec))
+
+    def cosine_similarity(self, a, b):
+        return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-8))
+
+    def find_most_similar(self, sentence, attention=None):
+        query_vec = self.embed_sentence(sentence, attention)
+        if not self.db:
+            return None, 0.0
+        best = max(self.db, key=lambda x: self.cosine_similarity(query_vec, x[1]))
+        score = self.cosine_similarity(query_vec, best[1])
+        return best[0], score
+
+    def explain(self, sentence, attention=None):
+        query_vec = self.embed_sentence(sentence, attention)
+        sims = [(label, self.cosine_similarity(query_vec, vec)) for label, vec in self.db]
+        sims.sort(key=lambda x: x[1], reverse=True)
+        return sims
+
+# Example usage (requires GloVe file):
+# mem = SemanticMemory('glove.6B.50d.txt')
+# mem.add('todo list', 'todo list')
+# mem.add('note app', 'note taking application')
+# print(mem.find_most_similar('I want a task tracker'))
+# ---------------------------------------------------------------------
+# Brain: User Intent Mapping via Jaccard Similarity
+# ---------------------------------------------------------------------
+from typing import Set
+
+def jaccard_similarity(set1: Set[str], set2: Set[str]) -> float:
+    """Compute Jaccard similarity: |A ∩ B| / |A ∪ B|."""
+    if not set1 or not set2:
+        return 0.0
+    intersection = len(set1 & set2)
+    union = len(set1 | set2)
+    return intersection / union if union > 0 else 0.0
+
+class Brain:
+    """Maps user input to template parameters using Jaccard similarity."""
+    param_table = {
+        "login": "auth",
+        "list": "list",
+        "dark mode": "theme_dark",
+        "api": "api",
+        "form": "form",
+        "todo": "list",
+        "register": "auth",
+        "notes": "crud",
+        # Add more mappings as needed
+    }
+
+    template_params = {
+        "react": {"list", "form", "theme_dark", "api"},
+        "flask": {"auth", "list", "form"},
+        "fastapi": {"api", "auth", "list"},
+    }
+
+    @classmethod
+    def map_user_intent(cls, user_input: str):
+        # Simple keyword extraction (split, can be replaced with NLP)
+        keywords = set(user_input.lower().split())
+        # Map keywords to parameters
+        user_params = set(cls.param_table.get(k, k) for k in keywords)
+        # Score each template
+        scores = {tpl: jaccard_similarity(user_params, params) for tpl, params in cls.template_params.items()}
+        # Select best template(s)
+        best = max(scores, key=scores.get)
+        return best, scores, user_params
+
+    @classmethod
+    def explain(cls, user_input: str):
+        best, scores, user_params = cls.map_user_intent(user_input)
+        return {
+            "input": user_input,
+            "extracted_params": list(user_params),
+            "scores": scores,
+            "best_template": best
+        }
 import json
 from pathlib import Path
 import types
